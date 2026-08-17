@@ -69,7 +69,8 @@ If `README.md` exists in the project root:
 
 ### Step 4: Generate README Based on Fidelity Level
 
-## BASIC Level Template
+**BASIC Level Template:**
+
 ---
 # <project_name>
 
@@ -153,7 +154,8 @@ cd {project_directory}
 
 ---
 
-## STANDARD Level Template
+**STANDARD Level Template:**
+
 ---
 Includes all BASIC sections plus:
 
@@ -236,7 +238,9 @@ This project is licensed under the {license_name} License - see the [LICENSE](LI
 *Generated with STANDARD fidelity level*
 ---
 
-## ADVANCE Level Template
+**ADVANCE Level Template:**
+
+---
 
 Includes all STANDARD sections plus:
 
