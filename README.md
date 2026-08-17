@@ -71,7 +71,7 @@ skills/
 | Skill | Description | Key Files |
 |--------|-------------|-----------|
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
-| generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md` |
+| generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 
 ### Skill Details
 
@@ -101,6 +101,7 @@ Generates professional README documentation with three fidelity levels. All diag
 - `SKILL.md`: Skill definition with templates and workflow
 - `references/basic-level-template.md`: BASIC level template
 - `references/standard-level-template.md`: STANDARD level template
+- `references/advance-level-template.md`: ADVANCE level template
 
 **Fidelity Levels:**
 - **BASIC**: Project name, tech stack, quick start, installation, usage
