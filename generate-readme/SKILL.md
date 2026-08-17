@@ -99,7 +99,7 @@ cd {project_directory}
 
 # Run the application
 {run_command}
-```
+
 
 ## Installation
 
@@ -107,6 +107,7 @@ cd {project_directory}
 
 - {prerequisite_1}
 - {prerequisite_2}
+```
 
 ### Steps
 
@@ -157,7 +158,6 @@ cd {project_directory}
 ---
 
 *Generated with BASIC fidelity level*
-```
 
 ---
 
@@ -165,12 +165,11 @@ cd {project_directory}
 
 Includes all BASIC sections plus:
 
-```markdown
 ---
 
 ## Project Structure
 
-```
+```text
 {project_root}/
 ├── {key_directory_1}/    # {purpose_1}
 ├── {key_directory_2}/    # {purpose_2}
@@ -183,7 +182,7 @@ Includes all BASIC sections plus:
 ## Modules
 
 | Module | Description | Key Files |
-|--------|-------------|-----------|
+|-------|-------------|-----------|
 | {module_1} | {description_1} | `{file_1}`, `{file_2}` |
 | {module_2} | {description_2} | `{file_3}`, `{file_4}` |
 | {module_3} | {description_3} | `{file_5}` |
@@ -251,7 +250,6 @@ This project is licensed under the {license_name} License - see the [LICENSE](LI
 ---
 
 *Generated with STANDARD fidelity level*
-```
 
 ---
 
@@ -595,7 +593,6 @@ Enable debug logging:
 ---
 
 *Generated with ADVANCE fidelity level*
-```
 
 ---
 
