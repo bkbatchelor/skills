@@ -69,12 +69,9 @@ If `README.md` exists in the project root:
 
 ### Step 4: Generate README Based on Fidelity Level
 
----
-
 ## BASIC Level Template
-
-```markdown
-# {project_name}
+---
+# <project_name>
 
 {one_line_description}
 
@@ -89,10 +86,10 @@ If `README.md` exists in the project root:
 
 ## Quick Start
 
-```bash
 # Clone the repository
 git clone {repository_url}
 cd {project_directory}
+
 
 # Install dependencies
 {install_command}
@@ -104,11 +101,10 @@ cd {project_directory}
 ## Installation
 
 ### Prerequisites
-
+```bash
 - {prerequisite_1}
 - {prerequisite_2}
 ```
-
 ### Steps
 
 1. Clone the repository:
@@ -149,33 +145,25 @@ cd {project_directory}
 
 ### Examples
 
-```bash
-{example_1_with_output_or_description}
+- {example_1_with_output_or_description}
+- {example_2_with_output_or_description}
 
-{example_2_with_output_or_description}
-```
-
----
 
 *Generated with BASIC fidelity level*
 
 ---
 
 ## STANDARD Level Template
-
-Includes all BASIC sections plus:
-
 ---
+Includes all BASIC sections plus:
 
 ## Project Structure
 
-```text
 {project_root}/
 ├── {key_directory_1}/    # {purpose_1}
 ├── {key_directory_2}/    # {purpose_2}
 ├── {config_file}         # {purpose}
 └── {other_notable_files}
-```
 
 *Note: Files and directories matching .gitignore patterns are excluded from this view.*
 
@@ -205,17 +193,15 @@ Includes all BASIC sections plus:
 - `{component_1}`: {purpose}
 - `{component_2}`: {purpose}
 
----
-
 ## Contributing
 
 ### Development Setup
 
 1. Fork the repository
 2. Create a feature branch:
-   ```bash
-   git checkout -b feature/{branch_name}
-   ```
+  ```bash
+      git checkout -b feature/{branch_name}
+  ```
 3. Make your changes
 4. Run tests:
    ```bash
@@ -235,31 +221,26 @@ Includes all BASIC sections plus:
 
 This project follows [Conventional Commits](https://www.conventionalcommits.org/):
 
-```
+```text
 <type>(<scope>): <description>
 ```
 
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
----
+
 
 ## License
 
 This project is licensed under the {license_name} License - see the [LICENSE](LICENSE) file for details.
 
----
-
 *Generated with STANDARD fidelity level*
-
 ---
 
 ## ADVANCE Level Template
 
 Includes all STANDARD sections plus:
 
-```markdown
 ---
-
 ## Architecture
 
 ### System Overview
@@ -331,7 +312,7 @@ graph LR
     end
 ```
 
----
+
 
 ## Configuration
 
@@ -359,8 +340,6 @@ graph LR
   {nested_key_1}: {nested_value_1}
   {nested_key_2}: {nested_value_2}
 ```
-
----
 
 ## API Reference
 
@@ -404,13 +383,9 @@ graph LR
 | 200 | Success |
 | 400 | Bad Request |
 | 401 | Unauthorized |
-| 500 | Internal Server Error |
-
----
+| 500 | Internal Server Error | 
 
 {Repeat for each endpoint}
-
----
 
 ### Error Handling
 
@@ -426,8 +401,6 @@ flowchart TD
     E --> G
     F --> G
 ```
-
----
 
 ## Testing
 
@@ -482,8 +455,6 @@ describe('{ComponentName}', () => {
   });
 });
 ```
-
----
 
 ## Deployment
 
@@ -546,8 +517,6 @@ docker run -d \
 | Staging | {staging_url} | {staging_db} | Pre-production |
 | Production | {prod_url} | {prod_db} | Live environment |
 
----
-
 ## Troubleshooting
 
 ### Common Issues
@@ -573,7 +542,6 @@ Enable debug logging:
 | Error | `{log_path}/error.log` |
 | Access | `{log_path}/access.log` |
 
----
 
 ## Performance
 
@@ -590,10 +558,8 @@ Enable debug logging:
 - {tip_2}
 - {tip_3}
 
----
 
 *Generated with ADVANCE fidelity level*
-
 ---
 
 ## Mermaid Diagram Guidelines
