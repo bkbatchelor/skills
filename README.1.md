@@ -1,11 +1,12 @@
 # Skills
 
-A collection of reusable skills for AI-powered development workflows.
+A collection of reusable skills for AI-powered development workflows with [opencode](https://opencode.ai).
 
 ## Tech Stack
 
 | Category | Technology |
 |----------|------------|
+| Platform | [opencode](https://opencode.ai) |
 | Format | Markdown |
 | Version Control | Git |
 
@@ -20,6 +21,8 @@ cd skills
 ## Installation
 
 ### Prerequisites
+
+- [opencode](https://opencode.ai) installed and configured
 - Git
 
 ### Steps
@@ -51,8 +54,6 @@ cd skills
    }
    ```
 
----
-
 ## Project Structure
 
 ```text
@@ -60,25 +61,17 @@ skills/
 ├── commit-staged-changes/    # Git commit skill
 │   ├── SKILL.md              # Skill definition
 │   └── references/           # Reference materials
-│       └── git-commit-template.md
 └── generate-readme/          # README generation skill
     ├── SKILL.md              # Skill definition
     └── references/           # Reference materials
-        ├── basic-level-template.md
-        ├── standard-level-template.md
-        └── advance-level-template.md
 ```
-
----
 
 ## Available Skills
 
 | Skill | Description | Key Files |
-|-------|-------------|-----------|
+|--------|-------------|-----------|
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
-
----
 
 ### Skill Details
 
