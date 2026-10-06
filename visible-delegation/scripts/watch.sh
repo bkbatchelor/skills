@@ -1,73 +1,76 @@
 #!/usr/bin/env bash
-# Block until a delegate session needs the supervisor's attention, then print one
-# event line plus context and exit. Run it in the background and re-arm after
-# handling each event.
+# Block until a delegate needs the supervisor's attention, then print one event line
+# plus context and exit. Run it in the background; re-arm after handling each event.
 #
-# Usage: watch.sh <session> [heartbeat_secs=300] [idle_secs=60]
+# Usage: watch.sh <name> [heartbeat_secs=300]
 #
 # Events (first line of output):
-#   COMPLETE <DONE|BLOCKED>  the delegate printed its DELEGATE-STATUS line
-#   PROMPT                   a permission or choice prompt is waiting for an answer
-#   DANGER <text>            a risky-looking command appeared on screen
-#   IDLE <secs>              the screen has not changed for idle_secs (stuck, asking, or waiting)
-#   HEARTBEAT <secs>         nothing notable happened; routine check-in
-#   GONE                     the tmux session no longer exists
+#   COMPLETE <DONE|BLOCKED>  the delegate printed a new DELEGATE-STATUS line
+#   PROMPT                   herdr reports the agent blocked on an approval/question dialog
+#   IDLE                     the agent finished a turn without a status line (question? stalled?)
+#   DANGER <command>         the delegate ran or proposed a risky shell command (claude transcript)
+#   HEARTBEAT <secs>         still working; routine check-in
+#   GONE                     the agent is no longer running in its pane
 set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+source "$here/lib.sh"
 
-session=${1:?usage: watch.sh <session> [heartbeat_secs] [idle_secs]}
+name=${1:?usage: watch.sh <name> [heartbeat_secs]}
 heartbeat=${2:-300}
-idle_limit=${3:-60}
-root=${VISIBLE_DELEGATION_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/visible-delegation}
-seen=$root/$session/danger-seen
-mkdir -p "$root/$session"; touch "$seen"
+require_tools
+load_meta "$name"
 
-target="=$session:"
-danger_re='rm -[a-zA-Z]*[rf][a-zA-Z]* |git push|push --force|--force-with-lease|reset --hard|git clean -[a-z]*f|git checkout -- \.|git branch -D|drop (table|database)|truncate table|mkfs|dd if=|chmod -R 777|curl [^|]*\| *(ba|z)?sh|wget [^|]*\| *(ba|z)?sh|sudo |npm publish|cargo publish|twine upload|kubectl (delete|apply)|terraform (apply|destroy)'
-prompt_re='Do you want to (proceed|make this edit|create|allow)|Do you trust the files|❯ *1\. Yes|Permission required|Allow once|\[y/n\]|\(y/N\)|\(Y/n\)'
+danger_re='rm -[a-zA-Z]*[rRf]|git push|--force|reset --hard|git clean|git checkout -- |git branch -D|drop (table|database)|truncate table|mkfs|dd if=|chmod -R|chown -R|curl [^|]*\| *(ba|z)?sh|wget [^|]*\| *(ba|z)?sh|sudo |npm publish|cargo publish|twine upload|kubectl (delete|apply)|terraform (apply|destroy)'
+seen_status=$RUNDIR/status-seen     # how many DELEGATE-STATUS lines were already reported
+seen_cmds=$RUNDIR/commands-seen     # how many transcript commands were already scanned
+[[ -f $seen_status ]] || echo 0 > "$seen_status"
+[[ -f $seen_cmds ]] || echo 0 > "$seen_cmds"
 
-context() {
-  echo "--- screen (last 40 lines) ---"
-  tmux capture-pane -p -J -t "$target" 2>/dev/null | sed '/^[[:space:]]*$/d' | tail -40
-  local dir
-  dir=$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null)
-  if [[ -n $dir ]] && git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
-    echo "--- git status --short ($dir) ---"
-    git -C "$dir" status --short | head -30
-  fi
+transcript() {
+  [[ -n ${VD_CLAUDE_SESSION_ID:-} ]] || return 0
+  ls "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$VD_CLAUDE_SESSION_ID".jsonl 2>/dev/null | head -1
 }
 
-start=$(date +%s); last_change=$start; last_hash=""
+check_danger() {
+  # Claude collapses shell calls on screen ("Ran 1 shell command"), so read the exact
+  # commands from its session transcript instead of scraping the terminal.
+  local t; t=$(transcript); [[ -n $t ]] || return 1
+  local cmds n hit
+  cmds=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Bash") | .input.command | gsub("\n"; " ")' "$t" 2>/dev/null)
+  n=$(grep -c . <<<"$cmds" || true)
+  hit=$(tail -n +"$(( $(cat "$seen_cmds") + 1 ))" <<<"$cmds" | grep -E "$danger_re" | head -1)
+  echo "$n" > "$seen_cmds"
+  [[ -n $hit ]] || return 1
+  echo "DANGER $hit"
+}
+
+start=$(date +%s)
 while :; do
-  if ! tmux has-session -t "=$session" 2>/dev/null; then echo "GONE"; exit 0; fi
+  # Waits for the first settled state (idle, done or blocked); a timeout means "still working".
+  herdr agent wait "$name" --timeout 20000 >/dev/null 2>&1
+  status=$(agent_status "$name")
 
-  screen=$(tmux capture-pane -p -J -t "$target")
-  history=$(tmux capture-pane -p -J -S -300 -t "$target")
-  now=$(date +%s)
+  if [[ $status == gone ]]; then echo "GONE"; exit 0; fi
+  if check_danger; then context "$name"; exit 0; fi
 
-  # The addendum describes the status line without ever spelling a literal match,
-  # so only the delegate's own report can trigger this.
-  if status=$(grep -oE 'DELEGATE-STATUS: (DONE|BLOCKED)\b' <<<"$history" | tail -1) && [[ -n $status ]]; then
-    echo "COMPLETE ${status#DELEGATE-STATUS: }"; context; exit 0
-  fi
+  case $status in
+    blocked) echo "PROMPT"; context "$name"; exit 0 ;;
+    idle|done)
+      # The addendum describes the status line without spelling a literal match, so only
+      # the delegate's own report counts. Count occurrences so a status already reported
+      # (still in scrollback after a follow-up message) isn't reported twice.
+      statuses=$(screen "$name" | grep -oE 'DELEGATE-STATUS: (DONE|BLOCKED)\b')
+      count=$(grep -c . <<<"$statuses" || true)
+      if (( count > $(cat "$seen_status") )); then
+        echo "$count" > "$seen_status"
+        echo "COMPLETE $(tail -1 <<<"$statuses" | sed 's/DELEGATE-STATUS: //')"
+      else
+        echo "IDLE"
+      fi
+      context "$name"; exit 0 ;;
+  esac
 
-  if grep -qE "$prompt_re" <<<"$screen"; then
-    echo "PROMPT"; context; exit 0
+  if (( $(date +%s) - start >= heartbeat )); then
+    echo "HEARTBEAT $(( $(date +%s) - start ))"; context "$name"; exit 0
   fi
-
-  # Only lines that look like commands being run or proposed, not prose about them.
-  hit=$(grep -E '(Bash\(|^\s*[$#] |^\s*│? *\$ |Run(ning)? command|Shell)' <<<"$screen" | grep -iE "$danger_re" | head -1)
-  if [[ -n $hit ]] && ! grep -qxF "$hit" "$seen"; then
-    printf '%s\n' "$hit" >> "$seen"
-    echo "DANGER $hit"; context; exit 0
-  fi
-
-  hash=$(md5sum <<<"$screen" | cut -d' ' -f1)
-  if [[ $hash != "$last_hash" ]]; then last_hash=$hash; last_change=$now; fi
-  if (( now - last_change >= idle_limit )); then
-    echo "IDLE $((now - last_change))"; context; exit 0
-  fi
-  if (( now - start >= heartbeat )); then
-    echo "HEARTBEAT $((now - start))"; context; exit 0
-  fi
-  sleep 5
 done
