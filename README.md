@@ -61,12 +61,25 @@ skills/
 │   ├── SKILL.md              # Skill definition
 │   └── references/           # Reference materials
 │       └── git-commit-template.md
-└── generate-readme/          # README generation skill
+├── generate-readme/          # README generation skill
+│   ├── SKILL.md              # Skill definition
+│   └── references/           # Reference materials
+│       ├── basic-level-template.md
+│       ├── standard-level-template.md
+│       └── advance-level-template.md
+├── goal-prompt-generator/    # Goal prompt generation skill
+│   ├── SKILL.md              # Skill definition
+│   └── references/           # Reference materials
+│       └── goal-prompt-template.md
+└── visible-delegation/       # Visible agent delegation skill
     ├── SKILL.md              # Skill definition
-    └── references/           # Reference materials
-        ├── basic-level-template.md
-        ├── standard-level-template.md
-        └── advance-level-template.md
+    ├── references/           # Reference materials
+    │   └── delegate-addendum.md
+    └── scripts/              # Helper scripts
+        ├── launch.sh
+        ├── watch.sh
+        ├── say.sh
+        └── cleanup.sh
 ```
 
 ---
@@ -77,6 +90,8 @@ skills/
 |-------|-------------|-----------|
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
+| goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
+| visible-delegation | Delegates work to another agent session in a watchable tmux session | `SKILL.md`, `references/delegate-addendum.md`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -120,6 +135,44 @@ Generates professional README documentation with three fidelity levels. All diag
 - Automatic `.gitignore` parsing and exclusion
 - README backup with incrementing numbers
 - Mermaid diagram generation (ADVANCE level)
+
+#### goal-prompt-generator
+
+---
+
+Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously. The user can then check the result pass/fail without re-deriving the plan.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with drafting workflow and quality checks
+- `references/goal-prompt-template.md`: Required goal prompt structure
+
+**Features:**
+- Required sections: objective, background, definition of done, repo constraints, verification gates, stop conditions, completion report
+- Grounds paths, commands, and baseline test state in the actual repository
+- Requires every definition-of-done item to be objectively checkable and mapped to a gate
+- Self-containment pass removes references to the originating conversation
+- Delivers the prompt as a single copyable markdown block without executing the task
+
+#### visible-delegation
+
+---
+
+Delegates a bounded task to another coding-agent session (Claude Code or opencode) running in a named tmux session the user can attach to and watch. The supervising agent launches, monitors, verifies, and cleans up the delegate.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with supervision workflow, approval policy, and reporting format
+- `references/delegate-addendum.md`: Supervision instructions appended to the delegate's goal prompt
+- `scripts/launch.sh`: Starts the delegate agent in a detached, logged tmux session
+- `scripts/watch.sh`: Background watcher that reports completion, prompts, risky commands, idling, and heartbeats
+- `scripts/say.sh`: Sends messages or keys to the delegate session
+- `scripts/cleanup.sh`: Saves the transcript and closes the session
+
+**Features:**
+- Visible execution in a `deleg-<slug>` tmux session, never a hidden background run
+- Supports Claude Code (default) and opencode delegates
+- Monitoring with clear intervene-vs-wait rules and an approval policy for delegate prompts
+- Independently re-runs every verification gate before reporting results
+- Refuses to close a session while the user is attached unless forced
 
 ---
 
