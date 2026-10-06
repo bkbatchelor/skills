@@ -76,6 +76,7 @@ skills/
     ├── references/           # Reference materials
     │   └── delegate-addendum.md
     └── scripts/              # Helper scripts
+        ├── lib.sh
         ├── launch.sh
         ├── watch.sh
         ├── say.sh
@@ -91,7 +92,7 @@ skills/
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
-| visible-delegation | Delegates work to another agent session in a watchable tmux session | `SKILL.md`, `references/delegate-addendum.md`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -157,18 +158,23 @@ Turns an implementation plan or task description into a bounded, self-contained 
 
 ---
 
-Delegates a bounded task to another coding-agent session (Claude Code or opencode) running in a named tmux session the user can attach to and watch. The supervising agent launches, monitors, verifies, and cleans up the delegate.
+Delegates a bounded task to another coding-agent session (Claude Code or opencode) running in a [herdr](https://herdr.dev) pane the user can watch. Inside herdr, the delegate gets a sibling pane in the supervisor's tab; outside herdr, it gets a workspace in a dedicated `delegates` session the user attaches to with `herdr session attach delegates`. The supervising agent launches, monitors, verifies, and cleans up the delegate.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with supervision workflow, approval policy, and reporting format
 - `references/delegate-addendum.md`: Supervision instructions appended to the delegate's goal prompt
-- `scripts/launch.sh`: Starts the delegate agent in a detached, logged tmux session
-- `scripts/watch.sh`: Background watcher that reports completion, prompts, risky commands, idling, and heartbeats
-- `scripts/say.sh`: Sends messages or keys to the delegate session
-- `scripts/cleanup.sh`: Saves the transcript and closes the session
+- `scripts/lib.sh`: Shared helpers sourced by the other scripts (run metadata, agent status, screen reading, event context)
+- `scripts/launch.sh`: Creates the pane, starts the agent with `herdr agent start`, and submits the goal prompt with `herdr agent prompt` (adds destructive-command deny rules and a fixed session id for Claude)
+- `scripts/watch.sh`: Background watcher that blocks on `herdr agent wait` and reports completion, prompts, risky commands, idling, heartbeats, and a vanished agent
+- `scripts/say.sh`: Sends messages, files, or keys to the delegate through herdr
+- `scripts/cleanup.sh`: Saves the screen and Claude transcript, exits the agent, closes its pane or workspace, and stops the delegates session when empty
+
+**Requirements:**
+- `herdr`: Terminal workspace manager that hosts the delegate
+- `jq`: Parses herdr's JSON output
 
 **Features:**
-- Visible execution in a `deleg-<slug>` tmux session, never a hidden background run
+- Visible execution in a `deleg-<slug>` herdr pane, never a hidden background run
 - Supports Claude Code (default) and opencode delegates
 - Monitoring with clear intervene-vs-wait rules and an approval policy for delegate prompts
 - Independently re-runs every verification gate before reporting results

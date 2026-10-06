@@ -1,25 +1,38 @@
 #!/usr/bin/env bash
-# Type a message into a delegate session and submit it.
+# Send input to a delegate.
 #
-# Usage: say.sh <session> <message...>
-#        say.sh <session> --key <tmux-key>...   (raw keys, e.g. --key Escape, --key 1)
+# Usage: say.sh <name> <message...>      submit a message (refused while a dialog is open)
+#        say.sh <name> --file <path>      submit a file's contents (e.g. the goal prompt)
+#        say.sh <name> --key <key>...     press keys, e.g. --key 1 · --key esc · --key down enter
 #
-# Agent TUIs treat fast multi-char input as a paste, and an Enter arriving in the same
-# burst can be swallowed into the paste. So the text is sent literally, then Enter
-# after a short pause.
+# Messages go through `herdr agent prompt`, which handles bracketed paste and refuses to
+# type into an open approval dialog. After keys, waits briefly for herdr to see the
+# dialog close, since its state lags a second or two behind the screen.
 set -euo pipefail
-session=${1:?usage: say.sh <session> <message...> | --key <key>...}; shift
-target="=$session:"
-tmux has-session -t "=$session" 2>/dev/null || { echo "no such session: $session" >&2; exit 1; }
+here=$(cd "$(dirname "$0")" && pwd)
+source "$here/lib.sh"
 
-if [[ ${1:-} == --key ]]; then
-  shift
-  for k in "$@"; do tmux send-keys -t "$target" "$k"; sleep 0.3; done
-  exit 0
-fi
+name=${1:?usage: say.sh <name> <message...> | --file <path> | --key <key>...}; shift
+require_tools
+load_meta "$name"
+[[ $(agent_status "$name") != gone ]] || die "agent '$name' is not running"
 
-msg="$*"
-[[ -n $msg ]] || { echo "empty message" >&2; exit 1; }
-tmux send-keys -t "$target" -l "$msg"
-sleep 0.6
-tmux send-keys -t "$target" Enter
+case ${1:-} in
+  --key)
+    shift; [[ $# -gt 0 ]] || die "no keys given"
+    before=$(agent_status "$name")
+    for k in "$@"; do herdr agent send-keys "$name" "$k" >/dev/null; sleep 0.3; done
+    if [[ $before == blocked ]]; then
+      for _ in $(seq 1 20); do [[ $(agent_status "$name") != blocked ]] && break; sleep 0.25; done
+    fi
+    echo "status: $(agent_status "$name")"
+    ;;
+  --file)
+    [[ -f ${2:-} ]] || die "file not found: ${2:-}"
+    herdr agent prompt "$name" "$(cat "$2")" 2>&1 | jq -c '{status: (.result.agent.agent_status // .error.code)}'
+    ;;
+  *)
+    msg="$*"; [[ -n $msg ]] || die "empty message"
+    herdr agent prompt "$name" "$msg" 2>&1 | jq -c '{status: (.result.agent.agent_status // .error.code)}'
+    ;;
+esac
