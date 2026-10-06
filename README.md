@@ -57,6 +57,11 @@ cd skills
 
 ```text
 skills/
+├── .githooks/                # Shared git hooks (enable per clone)
+│   ├── commit-msg            # Validates the message, records a pending bump
+│   └── post-commit           # Sets skill versions and amends them in
+├── scripts/
+│   └── bump-version.sh       # Version bump logic and manual bumps
 ├── commit-staged-changes/    # Git commit skill
 │   ├── SKILL.md              # Skill definition
 │   └── references/           # Reference materials
@@ -87,12 +92,12 @@ skills/
 
 ## Available Skills
 
-| Skill | Description | Key Files |
-|-------|-------------|-----------|
-| commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
-| generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
-| goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
-| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| Skill | Version | Description | Key Files |
+|-------|---------|-------------|-----------|
+| commit-staged-changes | 1.0.0 | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
+| generate-readme | 1.0.0 | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
+| goal-prompt-generator | 1.0.0 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
+| visible-delegation | 1.0.0 | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -187,13 +192,17 @@ Delegates a bounded task to another coding-agent session (Claude Code or opencod
 ### Development Setup
 
 1. Fork the repository
-2. Create a feature branch:
+2. Enable the shared git hooks (once per clone, since git does not copy hooks):
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+3. Create a feature branch:
    ```bash
    git checkout -b feature/add-new-skill
    ```
-3. Make your changes
-4. Test your skill in an opencode session
-5. Submit a pull request
+4. Make your changes
+5. Test your skill in an opencode session
+6. Submit a pull request
 
 ### Code Style
 
@@ -210,7 +219,7 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 <type>(<scope>): <description>
 ```
 
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`
 
 Examples:
 ```
@@ -218,6 +227,55 @@ feat(skill): Add new skill for code review
 docs(skill): Update generate-readme documentation
 fix(skill): Resolve commit-staged-changes validation
 ```
+
+The `commit-msg` hook rejects messages that don't match this format: a known type, optional lowercase scope, capitalized summary, no trailing period, and a subject of at most 50 characters.
+
+### Versioning
+
+Every skill has a [Semantic Versioning](https://semver.org) number in its `SKILL.md` frontmatter:
+
+```yaml
+---
+name: visible-delegation
+description: ...
+metadata:
+  version: 1.0.0
+---
+```
+
+Bump it by how much the change affects people and agents using the skill:
+
+| Level | When | Examples |
+|-------|------|----------|
+| **Major** (`X.0.0`) | The change breaks how the skill is used or what it depends on. | Renaming the skill; removing or renaming a script, argument, or output format; adding or swapping a required external tool; changing a structure another skill depends on. |
+| **Minor** (`x.Y.0`) | New, backwards-compatible capability. | A new optional script, flag, mode, or reference file; support for another agent CLI; broader trigger conditions. |
+| **Patch** (`x.y.Z`) | Fixes and wording that don't change the interface. | Script bug fixes; clarified instructions; typo and formatting fixes; description tweaks. |
+
+The level follows the commit type:
+
+- `feat` means minor.
+- `fix`, `docs`, `style`, `refactor`, `perf`, and `revert` mean patch.
+- `chore`, `test`, `ci`, and `build` mean no bump.
+- `feat!:` (any type with `!`) or a `BREAKING CHANGE:` footer means major.
+
+Each skill is bumped **at most once per pull request**, at the highest level of any commit in the PR that touches it. For example, `fix` + `fix` + `feat` on a skill at `1.2.3` merges as `1.3.0`. A change touching several skills bumps each one separately; a change touching only repo files such as `README.md` bumps nothing. A new skill starts at `1.0.0`.
+
+With the hooks enabled, this happens automatically. After each commit on a feature branch, the `post-commit` hook sets every skill the commit touched to its target version and amends it into the same commit:
+
+```text
+target = (version at the merge-base with origin/main)
+         bumped once by the highest level among the branch's commits touching the skill
+```
+
+Because the target is recomputed from the base each time, amending or rebasing gives the same result instead of stacking bumps. The hook skips merges, rebases, cherry-picks, and commits made directly on `main`, and keeps a version set by hand above the target. To use a base branch other than `origin/main`, run `git config skills.versionBase <ref>`.
+
+To bump by hand, for example to fix a wrong level or declare a breaking change the commit messages don't mark:
+
+```bash
+scripts/bump-version.sh <skill> <major|minor|patch>
+```
+
+Update the **Version** column in [Available Skills](#available-skills) when a skill's version changes.
 
 ---
 
