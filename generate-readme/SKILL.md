@@ -1,6 +1,8 @@
 ---
 name: generate-readme
 description: Generates and updates README files with configurable fidelity levels. Use when creating or updating project README documentation. Supports BASIC, STANDARD, and ADVANCE levels with mermaid diagrams. Automatically handles existing README backups and respects .gitignore.
+metadata:
+  version: 1.0.0
 ---
 
 # Generate README Skill
