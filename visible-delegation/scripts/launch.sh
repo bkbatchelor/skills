@@ -1,93 +1,144 @@
 #!/usr/bin/env bash
-# Start a delegate agent in a named, detached tmux session that anyone can attach to.
+# Start a delegate agent in a herdr pane that the user can watch.
 #
-# Usage: launch.sh <session> <workdir> <goal-file> [claude|opencode] [-- extra agent args...]
+# Usage: launch.sh <name> <workdir> <goal-file> [claude|opencode] [-- extra agent args...]
 #
-# Creates a run dir (goal, full prompt, raw pane log), opens the tmux session in
-# <workdir> with a clean environment, starts the agent with the goal prompt plus the
-# supervision addendum, and prints how to attach.
+#   <name>  herdr agent name, e.g. deleg-readme  ([a-z][a-z0-9_-]{0,31})
+#
+# Inside herdr (HERDR_ENV=1) the delegate gets a sibling pane next to the supervisor.
+# Outside herdr it gets its own workspace in a dedicated named session ("delegates" by
+# default, VISIBLE_DELEGATION_SESSION to override), never the user's focused session.
+#
+# Exit codes: 0 started and prompted · 4 agent blocked at startup (prompt NOT sent yet)
 set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+source "$here/lib.sh"
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 [[ $# -ge 3 ]] || usage
-session=$1 workdir=$2 goal=$3; shift 3
-cli=claude
-if [[ $# -gt 0 && $1 != -- ]]; then cli=$1; shift; fi
+name=$1 workdir=$2 goal=$3; shift 3
+kind=claude
+if [[ $# -gt 0 && $1 != -- ]]; then kind=$1; shift; fi
 [[ ${1:-} == -- ]] && shift
 extra=("$@")
 
-here=$(cd "$(dirname "$0")/.." && pwd)
-root=${VISIBLE_DELEGATION_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/visible-delegation}
-rundir=$root/$session
-
-command -v tmux >/dev/null || { echo "tmux is not installed" >&2; exit 1; }
-command -v "$cli" >/dev/null || { echo "agent CLI '$cli' not found on PATH" >&2; exit 1; }
-[[ -d $workdir ]] || { echo "workdir not found: $workdir" >&2; exit 1; }
-[[ -f $goal ]] || { echo "goal file not found: $goal" >&2; exit 1; }
-[[ $session =~ ^[A-Za-z0-9_-]+$ ]] || { echo "session name must be [A-Za-z0-9_-]" >&2; exit 1; }
-if tmux has-session -t "=$session" 2>/dev/null; then
-  echo "tmux session '$session' already exists; pick another name or clean it up" >&2; exit 1
-fi
+require_tools
+[[ $name =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || die "name must match [a-z][a-z0-9_-]{0,31}"
+[[ $kind == claude || $kind == opencode ]] || die "unsupported agent '$kind' (claude or opencode)"
+command -v "$kind" >/dev/null || die "agent CLI '$kind' not found on PATH"
+[[ -d $workdir ]] || die "workdir not found: $workdir"
+[[ -f $goal ]] || die "goal file not found: $goal"
 workdir=$(cd "$workdir" && pwd)
 
+if [[ ${HERDR_ENV:-} == 1 ]]; then mode=pane; session=""; else mode=session; session=$VD_HERDR_SESSION; fi
+
+# --- herdr session (outside-herdr mode only) -----------------------------------------
+if [[ $mode == session ]]; then
+  if ! herdr session list 2>/dev/null | awk -v s="$session" '$1==s && $2=="running"{f=1} END{exit !f}'; then
+    # Panes inherit the server's environment. The supervisor's own harness exports
+    # CLAUDE* variables (session ids, messaging sockets) that would make the delegate
+    # think it is a nested child session, so start the server without them.
+    # CLAUDE_CONFIG_DIR is user configuration and stays.
+    unset_args=()
+    while IFS= read -r v; do
+      [[ $v == CLAUDE_CONFIG_DIR ]] || unset_args+=(-u "$v")
+    done < <(env | grep -oE '^CLAUDE[A-Za-z0-9_]*' || true)
+    (setsid env "${unset_args[@]}" herdr --session "$session" server >/dev/null 2>&1 &)
+    for _ in $(seq 1 40); do
+      herdr session list 2>/dev/null | awk -v s="$session" '$1==s && $2=="running"{f=1} END{exit !f}' && break
+      sleep 0.25
+    done
+    herdr session list 2>/dev/null | awk -v s="$session" '$1==s && $2=="running"{f=1} END{exit !f}' \
+      || die "could not start herdr session '$session'"
+    mkdir -p "$VD_ROOT"; touch "$VD_ROOT/.owns-session-$session"
+  fi
+  export HERDR_SESSION=$session
+fi
+
+[[ $(agent_status "$name") == gone ]] || die "a live agent named '$name' already exists; pick another name or clean it up"
+
+rundir=$VD_ROOT/$name
+if [[ -e $rundir ]]; then mv "$rundir" "$rundir.$(date +%Y%m%d-%H%M%S)"; fi
 mkdir -p "$rundir"
 cp "$goal" "$rundir/goal.md"
-{ cat "$goal"; sed "s/{{SESSION}}/$session/g" "$here/references/delegate-addendum.md"; } > "$rundir/prompt.md"
-printf '%s\n' "$session" > "$rundir/session"
-printf '%s\n' "$workdir" > "$rundir/workdir"
-printf '%s\n' "$cli" > "$rundir/cli"
+{ cat "$goal"; sed "s/{{NAME}}/$name/g" "$here/../references/delegate-addendum.md"; } > "$rundir/prompt.md"
 
-# The supervisor's own agent harness exports CLAUDE* variables (session ids, messaging
-# sockets). Inherited by the delegate they make it think it is a nested child session,
-# so strip them. Keep CLAUDE_CONFIG_DIR, which is user configuration.
-unset_args=()
-while IFS= read -r v; do
-  [[ $v == CLAUDE_CONFIG_DIR ]] || unset_args+=(-u "$v")
-done < <(env | grep -oE '^CLAUDE[A-Za-z0-9_]*' || true)
-shell=${SHELL:-/bin/bash}
+# --- pane ----------------------------------------------------------------------------
+if [[ $mode == session ]]; then
+  out=$(herdr workspace create --cwd "$workdir" --label "$name" --no-focus)
+  pane=$(jq -r '.result.root_pane.pane_id' <<<"$out")
+  workspace=$(jq -r '.result.workspace.workspace_id' <<<"$out")
+else
+  out=$(herdr pane split --current --direction "${VD_SPLIT:-right}" --cwd "$workdir" --no-focus)
+  pane=$(jq -r '.result.pane.pane_id' <<<"$out")
+  workspace=""
+fi
+[[ -n $pane && $pane != null ]] || die "herdr did not return a pane: $out"
 
-tmux new-session -d -s "$session" -x 220 -y 50 -c "$workdir" \
-  "$(printf '%q ' env "${unset_args[@]}" "$shell" -l)"
-# Raw byte log of everything the pane prints: an audit trail that survives scrollback limits.
-tmux pipe-pane -t "=$session:" -o "cat >> $(printf '%q' "$rundir/pane.log")"
+sid=""; [[ $kind == claude ]] && sid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)
+{
+  printf 'VD_NAME=%q\nVD_MODE=%q\nVD_SESSION=%q\nVD_WORKSPACE=%q\nVD_PANE=%q\n' "$name" "$mode" "$session" "$workspace" "$pane"
+  printf 'VD_KIND=%q\nVD_WORKDIR=%q\nVD_CLAUDE_SESSION_ID=%q\n' "$kind" "$workdir" "$sid"
+} > "$rundir/meta.env"
 
-prompt_q=$(printf '%q' "$rundir/prompt.md")
-extra_q=""
-[[ ${#extra[@]} -gt 0 ]] && extra_q=$(printf ' %q' "${extra[@]}")
-case $cli in
-  claude)
-    # acceptEdits: file edits flow, shell commands stop at a visible approval prompt.
-    has_mode=0
-    for a in "${extra[@]}"; do [[ $a == --permission-mode* || $a == --dangerously-skip-permissions ]] && has_mode=1; done
-    mode=""; [[ $has_mode == 0 ]] && mode=" --permission-mode acceptEdits"
-    # The prompt goes first: --add-dir and --allowedTools are variadic and would
-    # swallow a trailing positional prompt as one of their values.
-    cmd="claude \"\$(cat $prompt_q)\"$mode -n $(printf '%q' "$session") --add-dir $(printf '%q' "$rundir")$extra_q"
-    ;;
-  opencode)
-    cmd="opencode$extra_q --prompt \"\$(cat $prompt_q)\" $(printf '%q' "$workdir")"
-    ;;
-  *)
-    echo "unsupported CLI '$cli' (expected claude or opencode)" >&2
-    tmux kill-session -t "=$session"; exit 1
-    ;;
-esac
-printf '%s\n' "$cmd" > "$rundir/command"
-
-# Give the login shell a moment to draw its prompt so the keystrokes aren't eaten.
-for _ in $(seq 1 20); do
-  [[ -n $(tmux capture-pane -p -t "=$session:" | tr -d '[:space:]') ]] && break
+# `agent start` needs the pane's shell at its interactive prompt.
+for _ in $(seq 1 40); do
+  [[ -n $(herdr pane read "$pane" --source visible 2>/dev/null | tr -d '[:space:]') ]] && break
   sleep 0.25
 done
-tmux send-keys -t "=$session:" -l "$cmd"
-tmux send-keys -t "=$session:" Enter
+
+# --- agent ---------------------------------------------------------------------------
+agent_args=()
+if [[ $kind == claude ]]; then
+  # acceptEdits: file edits flow; most shell commands stop at an approval prompt that
+  # herdr reports as "blocked". acceptEdits still auto-allows some file commands (rm,
+  # mkdir...) inside the workdir, so the riskiest ones are denied outright.
+  has_mode=0
+  for a in "${extra[@]}"; do [[ $a == --permission-mode* || $a == --dangerously-skip-permissions ]] && has_mode=1; done
+  [[ $has_mode == 0 ]] && agent_args+=(--permission-mode acceptEdits)
+  agent_args+=(-n "$name" --session-id "$sid" --add-dir "$rundir")
+  agent_args+=(--disallowedTools
+    "Bash(git push:*)" "Bash(git reset --hard:*)" "Bash(git clean:*)" "Bash(git branch -D:*)"
+    "Bash(rm -r:*)" "Bash(rm -rf:*)" "Bash(rm -fr:*)" "Bash(rm -Rf:*)" "Bash(sudo:*)"
+    "Bash(npm publish:*)" "Bash(cargo publish:*)")
+fi
+agent_args+=("${extra[@]}")
+
+start=$(herdr agent start "$name" --kind "$kind" --pane "$pane" --timeout 60000 -- "${agent_args[@]}" 2>&1 || true)
+err=$(jq -r '.error.code // empty' <<<"$start" 2>/dev/null || true)
+
+watch_hint() {
+  if [[ $mode == session ]]; then
+    echo "Watch    : herdr session attach $session    (in another terminal; open the '$name' workspace)"
+  else
+    echo "Watch    : the new pane beside this one, in the current herdr tab"
+  fi
+}
+
+if [[ $err == agent_not_ready ]]; then
+  cat <<EOF
+BLOCKED_AT_STARTUP: '$name' is waiting on a dialog before it can take the goal prompt.
+  run dir : $rundir
+$(watch_hint)
+Inspect the screen, answer the dialog (say.sh $name --key ...), then send the goal:
+  say.sh $name --file $rundir/prompt.md
+--- screen ---
+$(screen "$name" 40)
+EOF
+  exit 4
+elif [[ -n $err ]]; then
+  die "herdr agent start failed: $start"
+fi
+
+sent=$(herdr agent prompt "$name" "$(cat "$rundir/prompt.md")" 2>&1 || true)
+perr=$(jq -r '.error.code // empty' <<<"$sent" 2>/dev/null || true)
+[[ -z $perr ]] || die "agent started but the goal prompt was not accepted: $sent"
 
 cat <<EOF
 Delegate started.
-  session : $session
-  agent   : $cli
+  name    : $name ($kind)
   workdir : $workdir
+  herdr   : ${session:+session $session, }${workspace:+workspace $workspace, }pane $pane
   run dir : $rundir
-Watch    : tmux attach -r -t $session     (read-only, safe for watching)
-Take over: tmux attach -t $session        (you can type; detach with Ctrl-b d)
+$(watch_hint)
 EOF
