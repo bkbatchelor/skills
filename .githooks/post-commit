@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Set touched skills to their target version and amend it into the commit.
+exec "$(git rev-parse --show-toplevel)/scripts/bump-version.sh" --post-commit

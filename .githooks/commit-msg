@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Validate the commit message and record a pending skill version bump.
+exec "$(git rev-parse --show-toplevel)/scripts/bump-version.sh" --commit-msg "$1"
