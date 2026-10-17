@@ -1,6 +1,8 @@
 ---
 name: visible-delegation
 description: Delegate work to another coding-agent session (Claude Code or opencode) running in a herdr pane the user can watch, never as a hidden background run. Covers building a goal prompt, launching, monitoring with clear intervention rules, independently verifying the delegate's claimed results, and closing the session afterward. Use whenever the user asks to delegate a task, hand work off to another agent or session, run something in parallel with another Claude/agent, "spin up a second agent", "have another session do X while we do Y", or farm out a subtask, even if they don't mention herdr or visibility.
+metadata:
+  version: 1.0.0
 ---
 
 # Visible Delegation
