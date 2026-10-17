@@ -1,6 +1,8 @@
 ---
 name: commit-staged-changes
 description: Commits only staged changes using a specific commit message template. Use when the user wants to commit staged changes without adding untracked files. Never stages new files.
+metadata:
+  version: 1.0.0
 ---
 
 # Commit Staged Changes Skill
@@ -171,3 +173,7 @@ When instructed to commit changes:
 - **Only commit already staged changes**
 - **Ignore untracked files entirely**
 - If no staged changes exist, inform the user and stop
+
+## Repository Hooks
+
+Some repositories enable git hooks that amend extra changes into the commit, such as this repository's `post-commit` hook, which sets a skill's `metadata.version`. Those changes are made by the hook, not by this skill, and are expected. Do not undo them or treat them as staging.
