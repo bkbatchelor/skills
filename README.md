@@ -76,6 +76,12 @@ skills/
 │   ├── SKILL.md              # Skill definition
 │   └── references/           # Reference materials
 │       └── goal-prompt-template.md
+├── mermaid-to-svg/           # Mermaid diagram rendering skill
+│   ├── SKILL.md              # Skill definition
+│   ├── references/           # Reference materials
+│   │   └── troubleshooting.md
+│   └── scripts/              # Helper scripts
+│       └── render.sh
 └── visible-delegation/       # Visible agent delegation skill
     ├── SKILL.md              # Skill definition
     ├── references/           # Reference materials
@@ -92,12 +98,13 @@ skills/
 
 ## Available Skills
 
-| Skill | Version | Description | Key Files |
-|-------|---------|-------------|-----------|
-| commit-staged-changes | 1.0.0 | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
-| generate-readme | 1.0.0 | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
-| goal-prompt-generator | 1.0.0 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
-| visible-delegation | 1.0.0 | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| Skill | Description | Key Files |
+|-------|-------------|-----------|
+| commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
+| generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
+| goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
+| mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
+| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -158,6 +165,27 @@ Turns an implementation plan or task description into a bounded, self-contained 
 - Requires every definition-of-done item to be objectively checkable and mapped to a gate
 - Self-containment pass removes references to the originating conversation
 - Delivers the prompt as a single copyable markdown block without executing the task
+
+#### mermaid-to-svg
+
+---
+
+Converts Mermaid diagrams to SVG with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli). Takes standalone `.mmd` files, every ```` ```mermaid ```` block in a Markdown file, or diagram text on stdin, and checks that each output is valid before reporting it.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with the source, output, render, verify, and fix workflow
+- `references/troubleshooting.md`: Common Mermaid syntax pitfalls, rendering problems, Chrome/environment fixes, and a Docker fallback
+- `scripts/render.sh`: Wraps `mmdc` (pinned version via `npx`), reuses a system Chromium, applies sandbox flags when needed, and validates the SVG output
+
+**Requirements:**
+- `node` / `npx`: Runs mermaid-cli
+- Chrome or Chromium: Used by mermaid-cli to draw diagrams (downloaded by puppeteer if none is installed)
+
+**Features:**
+- `--portable` mode draws labels as SVG `<text>` instead of HTML `<foreignObject>`, so they show up in Inkscape, Office, ImageMagick, rsvg, and PDF tools
+- Theme, background, and Mermaid config options, with any other `mmdc` flag passed through
+- Optional PNG/PDF output, plus a preview step for checking the result visually
+- Never rewrites the source Markdown in place
 
 #### visible-delegation
 
