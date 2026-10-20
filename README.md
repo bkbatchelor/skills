@@ -85,6 +85,13 @@ skills/
 │   │   └── format.md
 │   └── scripts/              # Helper scripts
 │       └── transcribe.py
+├── image-gateway/            # Image generation and editing skill
+│   ├── SKILL.md              # Skill definition
+│   ├── config.env            # Saved defaults (model, output dir, key file)
+│   ├── references/           # Reference materials
+│   │   └── api.md
+│   └── scripts/              # Helper scripts
+│       └── generate.sh
 ├── mermaid-to-svg/           # Mermaid diagram rendering skill
 │   ├── SKILL.md              # Skill definition
 │   ├── references/           # Reference materials
@@ -113,6 +120,7 @@ skills/
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
 | media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
+| image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -207,6 +215,36 @@ Turns a local audio or video file into a transcription package with one command,
 - Speaker diarization and word-level timestamps in verbatim mode, with chapters from `gemini-3.8-flash`
 - `--rerender --speakers 'S1=Name,…'` renames speakers in every file without another API call
 - Skips files it has already transcribed (matched by file hash), and estimates cost at about $0.005 per minute of audio
+
+#### image-gateway
+
+---
+
+Generates or edits images with one command through Google's Gemini API (Interactions API), using saved defaults so routine requests need no setup. Other skills that need an image call this skill instead of writing their own image API code.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, workflow, cost notes, and troubleshooting
+- `config.env`: Saved preferences: default model (`gemini-3-pro-image`, Nano Banana Pro), fallback model (`gemini-nano-banana-2.1`), output directory (`~/Pictures/ai-generated`), and the env file that holds the API key
+- `references/api.md`: Current Gemini image request and response shape, model IDs and prices, error meanings, and a raw curl example
+- `scripts/generate.sh`: Builds the request, calls the API, saves the image(s), and prints a JSON summary with file paths and estimated cost
+
+**Requirements:**
+- `curl`, `jq`, `base64`
+- A Gemini API key from a billing-enabled Google project, stored as `GEMINI_API_KEY=...` in `~/.config/gemini/.env` (chmod 600). The image models have no free tier.
+
+**Features:**
+- Text-to-image and image editing with up to 14 reference images (local files or URLs)
+- Aspect ratio, 1K/2K/4K resolution, PNG/JPEG output, and multiple images per run
+- Reads the key from the env file without sourcing it and keeps it out of the process list
+- Retries 429/5xx errors with backoff, then falls back once to the cheaper model
+- Estimates cost from token usage (about $0.14 per 1K/2K Pro image) and logs every run to `.image-gateway-log.jsonl`
+- `--dry-run` prints the request body without calling the API
+
+**Usage:**
+```bash
+image-gateway/scripts/generate.sh -a 16:9 -o ./assets/hero.png "misty pine forest at sunrise, cinematic"
+image-gateway/scripts/generate.sh -i ./photo.jpg "remove the person on the left, keep everything else unchanged"
+```
 
 #### mermaid-to-svg
 
