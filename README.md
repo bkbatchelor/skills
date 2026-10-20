@@ -57,6 +57,7 @@ cd skills
 
 ```text
 skills/
+├── .gitignore                # Ignores Python bytecode caches
 ├── .githooks/                # Shared git hooks (enable per clone)
 │   ├── commit-msg            # Validates the message, records a pending bump
 │   └── post-commit           # Sets skill versions and amends them in
@@ -76,6 +77,14 @@ skills/
 │   ├── SKILL.md              # Skill definition
 │   └── references/           # Reference materials
 │       └── goal-prompt-template.md
+├── media-transcription/      # Audio/video transcription skill
+│   ├── SKILL.md              # Skill definition
+│   ├── config.env            # Saved defaults (models, key location, prices)
+│   ├── references/           # Reference materials
+│   │   ├── api.md
+│   │   └── format.md
+│   └── scripts/              # Helper scripts
+│       └── transcribe.py
 ├── mermaid-to-svg/           # Mermaid diagram rendering skill
 │   ├── SKILL.md              # Skill definition
 │   ├── references/           # Reference materials
@@ -103,6 +112,7 @@ skills/
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
+| media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -165,6 +175,38 @@ Turns an implementation plan or task description into a bounded, self-contained 
 - Requires every definition-of-done item to be objectively checkable and mapped to a gate
 - Self-containment pass removes references to the originating conversation
 - Delivers the prompt as a single copyable markdown block without executing the task
+
+#### media-transcription
+
+---
+
+Turns a local audio or video file into a transcription package with one command, using Google's [Gemini 3.5 Transcribe](https://ai.google.dev/gemini-api/docs/transcribe) model (`gemini-3.5-transcribe`). For `talk.mp4`, the package goes in `talk.transcript/` next to the media. The package format is versioned (schema 1.0), so editing and research skills can read it without guessing.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, workflow, limits, and rules for skills that consume the package
+- `config.env`: Saved defaults: speech and chapter models, API key env file, chunk length, and prices
+- `references/format.md`: Package contract, covering every file's schema, the invariants consumers can rely on, and versioning rules
+- `references/api.md`: Files API upload, transcribe request and response shapes (including where the live API differs from Google's docs), limits, prices, and a raw curl example
+- `scripts/transcribe.py`: Extracts audio with ffmpeg, uploads it, transcribes it, writes chapters, and builds the package (Python standard library only)
+
+**Output Package:**
+- `<stem>.transcript.md`: Readable transcript with a chapter list and timestamped speaker turns
+- `<stem>.words.json`: Every word with start/end seconds, speaker, and turn
+- `<stem>.speakers.json`: Speakers (`S1`, `S2`, …) and their turns
+- `<stem>.chapters.json`: Semantic chapters with title, summary, keywords, and time range
+- `<stem>.srt` / `<stem>.vtt`: Captions with speaker names
+- `manifest.json` and `_raw/`: Source hash, models, cost estimate, and the untouched API responses
+
+**Requirements:**
+- `python3`, `ffmpeg`, `ffprobe`
+- A Gemini API key as `GEMINI_API_KEY=` in `~/.config/gemini/.env` (shared with image-gateway)
+
+**Features:**
+- Converts any video or audio input to mono 16 kHz FLAC before uploading
+- Splits media longer than about 26 minutes near silences, staying under the API's 30-minute limit when diarization is on
+- Speaker diarization and word-level timestamps in verbatim mode, with chapters from `gemini-3.8-flash`
+- `--rerender --speakers 'S1=Name,…'` renames speakers in every file without another API call
+- Skips files it has already transcribed (matched by file hash), and estimates cost at about $0.005 per minute of audio
 
 #### mermaid-to-svg
 
