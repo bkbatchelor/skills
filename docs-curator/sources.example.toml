@@ -1,0 +1,27 @@
+# Declare the document sources to curate, then run:
+#   curate.py analyze --sources sources.toml
+# Each [[source]] needs a name and exactly one of `path` (a folder or a git
+# repo, read in place) or `url` (shallow-cloned into docs-curator-out/sources/<name>/
+# with your existing git credentials, and fetched again on re-runs).
+# Sources are never modified.
+
+# `priority` is an integer; higher wins. It decides which copy is kept among
+# duplicates, and it suggests the winner of a conflict.
+
+[[source]]
+name = "official-docs"
+url = "git@github.com:acme/official-docs.git"
+ref = "main"                    # optional branch or tag
+priority = 100
+exclude = ["archive/**", "*.tmp"]
+
+[[source]]
+name = "shared-drive"
+path = "~/Exports/shared-drive"
+priority = 50
+
+[[source]]
+name = "personal"
+path = "~/Documents/work-notes"
+priority = 10
+include = ["**/*.md", "**/*.pptx", "**/*.pdf"]     # optional; matches the path or the file name
