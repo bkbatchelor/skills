@@ -85,6 +85,20 @@ skills/
 │   │   └── format.md
 │   └── scripts/              # Helper scripts
 │       └── transcribe.py
+├── docs-curator/             # Document source curation skill
+│   ├── SKILL.md              # Skill definition
+│   ├── config.env            # Saved defaults (thresholds, format rank, scope tokens)
+│   ├── sources.example.toml  # Annotated example of a sources file
+│   ├── references/           # Reference materials
+│   │   ├── format.md
+│   │   ├── heuristics.md
+│   │   └── review.md
+│   ├── scripts/              # Helper scripts
+│   │   ├── curate.py
+│   │   └── curator/          # Modules (sources, inventory, extract, fingerprint, duplicates, ...)
+│   └── tests/                # Fixture generator and smoke test
+│       ├── make_fixtures.py
+│       └── smoke_test.py
 ├── image-gateway/            # Image generation and editing skill
 │   ├── SKILL.md              # Skill definition
 │   ├── config.env            # Saved defaults (model, output dir, key file)
@@ -120,6 +134,7 @@ skills/
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
 | media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
+| docs-curator | Curates document sources before knowledge-graph ingestion: finds duplicates, superseded revisions and contradictions, then builds a clean `curated/` tree of Markdown and linked native files | `SKILL.md`, `config.env`, `sources.example.toml`, `references/format.md`, `references/heuristics.md`, `references/review.md`, `scripts/curate.py`, `tests/smoke_test.py` |
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
@@ -215,6 +230,40 @@ Turns a local audio or video file into a transcription package with one command,
 - Speaker diarization and word-level timestamps in verbatim mode, with chapters from `gemini-3.8-flash`
 - `--rerender --speakers 'S1=Name,…'` renames speakers in every file without another API call
 - Skips files it has already transcribed (matched by file hash), and estimates cost at about $0.005 per minute of audio
+
+#### docs-curator
+
+---
+
+Curates one or more document sources (local folders and git repos, local or remote, 1k to 10k files) before they are ingested into Graphify or another knowledge-graph or RAG tool. It finds duplicates (including the same content in different formats), outdated or superseded revisions and contradictions, and never modifies a source. `analyze` writes proposals to a `decisions.json` the user reviews, and `apply` builds `docs-curator-out/curated/` from the accepted ones, ready for `/graphify docs-curator-out/curated`. The file formats are versioned (schema 1.0).
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, the analyze, review, record, apply workflow, limits, and rules for skills that consume `curated/`
+- `config.env`: Saved defaults: similarity thresholds, format rank, environment scope tokens, packet cap, OCR, row cap
+- `sources.example.toml`: Annotated example declaring sources with priorities, refs and include/exclude globs
+- `references/format.md`: Schemas for `decisions.json`, review packets, verdict files, `_manifest.json`, `quarantine.json` and the frontmatter
+- `references/heuristics.md`: What is pre-accepted vs proposed, revision ranking, scope-aware config conflicts, thresholds
+- `references/review.md`: How Claude reviews packets, writes verdicts, and fans out to subagents above about 20 packets
+- `scripts/curate.py` and `scripts/curator/`: The CLI (`analyze`, `record`, `apply`, `status`) and its modules (Python standard library only)
+- `tests/make_fixtures.py` and `tests/smoke_test.py`: Generates a three-source corpus (a folder, a git repo, a `file://` remote) and checks the whole flow
+
+**Output Package:**
+- `decisions.json`, `REPORT.md`, `report.html`: Proposals with evidence and `status` (`proposed`, `accept`, `reject`), and the report
+- `packets/` and `verdicts/`: Review packets for ambiguous revisions and prose contradictions, and the verdicts recorded for them
+- `curated/<source>/<relpath>`: Native Graphify-readable files, hard-linked; pptx, docx, xlsx, pdf and other formats as `<relpath>.md` with provenance frontmatter
+- `curated/_manifest.json` and `quarantine.json`: Every curated and unhandled file, and every excluded file with its reason and proposal id
+
+**Requirements:**
+- `python3` 3.11 or newer
+- `pdftotext` and `pdfinfo` (poppler) for PDFs, `soffice` (LibreOffice) for legacy `.doc`, `.xls` and `.ppt`, `git` for repos
+- Optional: `tesseract` for OCR (`DOCS_CURATOR_OCR=1`)
+
+**Features:**
+- Sources are read-only; remote URLs are shallow-cloned with the user's git credentials and fetched on re-runs
+- Exact, normalized-text and near-duplicate detection across formats, with the keeper chosen by source priority, then format, then recency
+- Revision families ranked by explicit markers, version tokens, commit or content dates, and mtime only as a tie-break; low-confidence rankings go to review
+- Config conflicts compared per logical file and environment scope, so `application-dev` vs `application-prod` is never flagged
+- Re-running `analyze` keeps the user's earlier statuses, and results are cached by sha256 so re-runs are incremental
 
 #### image-gateway
 
