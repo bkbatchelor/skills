@@ -2,7 +2,7 @@
 name: media-transcription
 description: Transcribes a local audio or video file into a standard transcription package (readable Markdown transcript, word-level timestamp JSON, speaker labels and turns, semantic chapters, SRT/VTT captions) with one command, using Google's Gemini 3.5 Transcribe API and ffmpeg. Use whenever the user gives a media file (mp3, wav, m4a, flac, ogg, opus, mp4, mov, mkv, webm, a voice memo, podcast, meeting or Zoom recording, interview, lecture, screen recording, video call) and asks for a transcript, transcription, captions, subtitles, chapters, timestamps, speaker labels, "who said what", meeting notes or a summary that needs the words first, or to "make this searchable". Also use when another skill (video editing, clipping, research, note-taking, summarizing, quote finding) needs the words or timings of a recording. Those should read this package instead of calling a speech API themselves. Not for live microphone or streaming dictation, text-to-speech, or media files that already have a transcript package next to them.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Media Transcription

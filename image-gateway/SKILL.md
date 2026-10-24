@@ -2,7 +2,7 @@
 name: image-gateway
 description: Generates or edits images through Google's Gemini API (Nano Banana Pro) with one command, using saved defaults (model, output folder, API key location) so no per-call setup is needed. Use whenever the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, illustration, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or asks to edit, restyle, recolor, extend, or remove things from an existing image. Also use whenever another skill or workflow needs a raster image produced (slides, READMEs, docs, websites, social posts, placeholder art). Those should call this skill instead of writing their own image API code. Not for charts, diagrams, or SVG drawn from code; render those directly.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Image Gateway
