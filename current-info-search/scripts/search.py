@@ -152,8 +152,10 @@ def nlm(cfg, *argv, check=True, timeout=900):
     except subprocess.TimeoutExpired:
         die(f"`{' '.join(cmd)}` timed out after {timeout}s")
     if check and p.returncode != 0:
-        msg = (p.stderr or p.stdout).strip()[:600]
-        hint = f" Try `{cmd[0]} login`." if re.search(r"auth|login|expired|sign", msg, re.I) else ""
+        text = (p.stdout + "\n" + p.stderr).strip()
+        m = re.search(r"^Error:.*?(?=\n\s*\n|\Z)", text, re.S | re.M)
+        msg = re.sub(r"\s+", " ", m.group(0) if m else text[-400:])[:400]
+        hint = f" Run `{cmd[0]} login` and retry." if re.search(r"auth|login|cookie|expired|sign", text, re.I) else ""
         die(f"`{' '.join(cmd[:3])}` failed: {msg}{hint}")
     return p
 
@@ -196,7 +198,7 @@ def cmd_notebook(args, cfg):
     title = f"{prefix} {topic} {today}"
     timeout = int(cfg.get("CURRENT_INFO_NOTEBOOK_TIMEOUT", 300))
 
-    nlm(cfg, "auth", "check")  # fail early with a login hint if signed out
+    nlm(cfg, "auth", "check", "--test")  # fail early with a login hint if signed out or expired
     created = parse_json(nlm(cfg, "create", title, "--json").stdout)
     nb_id = find_key(created, "id", "notebook_id")
     if not nb_id:
