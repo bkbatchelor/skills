@@ -1,13 +1,25 @@
 ---
 name: commit-staged-changes
-description: Commits only staged changes using a specific commit message template. Use when the user wants to commit staged changes without adding untracked files. Never stages new files.
+description: Commits only the already-staged changes with a conventional message (Type(Scope): Summary), never staging files itself. Use only when the user explicitly asks to commit what is staged: "commit my staged changes", "commit what I've staged", "commit this with a good message" after they staged files. Never trigger proactively or after finishing work unprompted. Not for staging files, `git commit -a`, amending, pushing, or opening a PR (use commit-commands:commit or commit-commands:commit-push-pr when the user wants those).
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Commit Staged Changes Skill
 
 This skill provides instructions for committing only staged changes using a specific commit message format. It never stages new files or modifies the working directory.
+
+## Triggers
+
+Narrow on purpose: committing changes history, so run this skill only on an explicit request.
+
+Use when the user says things like:
+- "commit my staged changes", "commit what I've staged", "commit this"
+- asks for a commit message for, or a commit of, the staged diff
+
+Skip when:
+- The user has not asked to commit. Never commit proactively after finishing work.
+- They want files staged, `git commit -a`, an amend, a push, or a PR. Use `commit-commands:commit` or `commit-commands:commit-push-pr` for stage-and-commit or PR flows.
 
 ## Reference
 See [git-commit-template.md](references/git-commit-template.md) for the complete template.
@@ -96,33 +108,27 @@ Cover edge cases for user creation and update operations.
 
 ### Bad Commit Messages (Rule Violations)
 
-**Missing parentheses:**
-```
-feat: Add user authentication
-```
-*Incorrect: Missing parentheses around type*
-
 **Lowercase subject:**
 ```
-(feat): add user authentication
+feat(auth): add user authentication
 ```
 *Incorrect: Subject must start with uppercase*
 
 **Period at end:**
 ```
-(feat): Add user authentication.
+feat(auth): Add user authentication.
 ```
 *Incorrect: No period at end of subject*
 
 **Too long:**
 ```
-(feat): Add user authentication and improve security and fix bugs
+feat(auth): Add user authentication and improve security and fix bugs
 ```
 *Incorrect: Exceeds 50 character limit*
 
 **Past tense:**
 ```
-(feat): Added user authentication
+feat(auth): Added user authentication
 ```
 *Incorrect: Must use imperative mood*
 
@@ -134,7 +140,7 @@ Add user authentication
 
 **Bad body (explains how, not what/why):**
 ```
-(feat): Add user authentication
+feat(auth): Add user authentication
 
 Changed the code to use JWT tokens instead of sessions.
 Added new middleware and updated routes.

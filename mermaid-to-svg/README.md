@@ -2,6 +2,10 @@
 
 Renders Mermaid diagrams to SVG files with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) (`mmdc`), then checks that the output is valid and actually shows the diagram.
 
+## Triggers
+
+Asks to render, convert, or export Mermaid diagrams as SVG (or PNG/PDF), including mermaid blocks in Markdown. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash
