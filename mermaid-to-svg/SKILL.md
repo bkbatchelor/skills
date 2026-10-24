@@ -2,7 +2,7 @@
 name: mermaid-to-svg
 description: Converts Mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, and the rest) into SVG files using mermaid-cli, then checks that the output is valid and actually sh[...]
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Mermaid to SVG

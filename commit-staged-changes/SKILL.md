@@ -2,7 +2,7 @@
 name: commit-staged-changes
 description: Commits only staged changes using a specific commit message template. Use when the user wants to commit staged changes without adding untracked files. Never stages new files.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Commit Staged Changes Skill
