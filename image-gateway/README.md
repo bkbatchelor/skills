@@ -2,6 +2,10 @@
 
 Generates or edits images through Google's Gemini API (Nano Banana Pro) with one command, using saved defaults so no per-call setup is needed. Other skills can call it instead of writing their own image API code.
 
+## Triggers
+
+Asks to generate, draw, make, or edit an image, icon, logo, banner, or artwork, or another skill needs a raster image. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash

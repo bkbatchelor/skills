@@ -9,6 +9,10 @@ Answers questions about fast-changing facts (model releases, pricing, limits, li
 
 The skill also tells the agent to check a version, price or date it is about to write from memory.
 
+## Triggers
+
+Questions about recent or fast-moving facts (releases, pricing, versions, news, "latest", "still true?"), or when a remembered fact might be stale. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash

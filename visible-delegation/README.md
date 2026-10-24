@@ -10,6 +10,10 @@ Delegates a bounded task to another coding-agent session (Claude Code or opencod
 4. **Verify:** independently re-run the delegate's verification gates before reporting its results.
 5. **Clean up:** close the session.
 
+## Triggers
+
+Asks to delegate a task or run work in parallel with another agent session. Never launches unprompted. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash
