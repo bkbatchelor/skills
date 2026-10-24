@@ -77,6 +77,11 @@ skills/
 │   ├── SKILL.md              # Skill definition
 │   └── references/           # Reference materials
 │       └── goal-prompt-template.md
+├── current-info-search/      # Live search for fast-changing facts
+│   ├── SKILL.md              # Skill definition
+│   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
+│   └── scripts/              # Helper scripts
+│       └── search.py
 ├── media-transcription/      # Audio/video transcription skill
 │   ├── SKILL.md              # Skill definition
 │   ├── config.env            # Saved defaults (models, key location, prices)
@@ -119,6 +124,7 @@ skills/
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
 | generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
+| current-info-search | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `config.env`, `scripts/search.py` |
 | media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
@@ -183,6 +189,28 @@ Turns an implementation plan or task description into a bounded, self-contained 
 - Requires every definition-of-done item to be objectively checkable and mapped to a gate
 - Self-containment pass removes references to the originating conversation
 - Delivers the prompt as a single copyable markdown block without executing the task
+
+#### current-info-search
+
+---
+
+Looks up fast-changing facts (model releases, pricing, software versions, news, APIs) live instead of answering from training data. Gemini with Google Search grounding runs first; NotebookLM web research runs second for questions that need synthesis across many sources.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, the Gemini curl example, the `notebooklm` command sequence, and the answering rules
+- `config.env`: Saved defaults: Gemini model, API key env file, NotebookLM CLI name and timeout
+- `scripts/search.py`: `gemini` and `notebook` subcommands (Python standard library only)
+
+**Requirements:**
+- `python3`
+- A Gemini API key as `GEMINI_API_KEY`, exported or in `~/.config/gemini/.env` (shared with image-gateway)
+- For the `notebook` subcommand: the `notebooklm` CLI (notebooklm-py), signed in with `notebooklm login`
+
+**Features:**
+- Defaults to `gemini-3.8-flash`, overridable per call with `--model`
+- Resolves Google's grounding redirect links to the real source URLs
+- NotebookLM runs use a throwaway notebook that is deleted afterward, so existing notebooks are never touched
+- Answers must cite dates and primary sources, and search results win over training data
 
 #### media-transcription
 
