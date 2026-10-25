@@ -81,7 +81,11 @@ skills/
 │   │   │   └── troubleshooting.md
 │   │   └── scripts/              # Helper scripts
 │   │       └── render.sh
-│   └── docs-curator/
+│   ├── docs-curator/
+│   └── html-artifacts/           # HTML artifact skill
+│       ├── SKILL.md              # Skill definition
+│       ├── references/template.html
+│       └── scripts/verify.sh
 ├── media/                    # Image and audio/video skills
 │   ├── image-gateway/            # Image generation and editing skill
 │   │   ├── SKILL.md              # Skill definition
@@ -137,6 +141,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
+| html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
