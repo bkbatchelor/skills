@@ -1,8 +1,8 @@
 ---
 name: goal-prompt-generator
-description: Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously and be checked against — objective, definition of done, repo constraints, verification gates, and stop conditions. Use whenever the user asks to package work for another session/agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, write a prompt for a subagent/cloud agent/worktree session, or says things like "turn this plan into something another Claude can run" or "make this a task I can kick off later" — even if they don't say "goal prompt".
+description: Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously and be checked against: objective, definition of done, repo constraints, verification gates, and stop conditions. Use whenever the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, write a prompt for a subagent, cloud agent, or worktree session, or says "turn this plan into something another Claude can run" or "make this a task I can kick off later", even without saying "goal prompt". Only writes the prompt; to launch a watched delegate use visible-delegation.
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Goal Prompt Generator
@@ -10,6 +10,14 @@ metadata:
 Convert a plan or task into a **goal prompt**: a document another agent session can pick up cold, work on without supervision, and that the user can later grade pass/fail without re-deriving the plan.
 
 The receiving session has **none of this conversation's context**. It cannot see the plan you discussed, the files you read, the decisions you made, or what "the bug" refers to. Everything it needs must be in the prompt. Everything the user needs to check the result must be in the prompt too.
+
+## Triggers
+
+Use when the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, or write a prompt for a subagent, cloud agent, or worktree session. Also use for "turn this plan into something another Claude can run" or "make this a task I can kick off later".
+
+Skip when:
+- The user wants the task done in this session.
+- They want a delegate launched and watched. Use `visible-delegation`, which calls for a goal prompt first.
 
 ## Workflow
 

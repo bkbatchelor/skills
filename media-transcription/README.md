@@ -25,6 +25,10 @@ A package for an unchanged file is reused; pass `--force` to redo it.
 3. Each part is uploaded to the Gemini Files API and transcribed with speaker labels and word timestamps.
 4. A second model writes the chapters.
 
+## Triggers
+
+Gives an audio or video file and asks for a transcript, captions, chapters, speaker labels, or meeting notes. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash

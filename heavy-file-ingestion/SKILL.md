@@ -1,8 +1,8 @@
 ---
 name: heavy-file-ingestion
-description: Converts heavy or binary documents (PDF, PPTX, XLSX, DOCX, legacy Office, big CSV/TSV, large text dumps) into chunked Markdown/CSV artifacts plus an INDEX.md BEFORE any analysis. Use whenever the user shares, mentions, or asks anything about such a file (summarize, analyze, extract, compare, review, answer questions from it), or when a text/CSV file exceeds ~200 KB or ~2,000 lines. Never read or analyze the original file directly; all analysis reads the converted artifacts. Skip for small plain-text files.
+description: Converts heavy or binary documents (PDF, PPTX, XLSX, DOCX, legacy Office, big CSV/TSV, large text dumps) into chunked Markdown/CSV artifacts plus an INDEX.md BEFORE any analysis. Use whenever the user shares, mentions, or asks anything about such a file (summarize, analyze, extract, compare, review, answer questions from it), or when a text/CSV file exceeds ~200 KB or ~2,000 lines. Never read or analyze the original file directly; all analysis reads the converted artifacts. Skip for small plain-text files, and for creating or editing PDF, Word, or PowerPoint files (use the pdf, docx, or pptx skills).
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Heavy File Ingestion
@@ -16,7 +16,7 @@ Run this skill when any of these is true, before any analysis:
 - A text/CSV/TSV/JSON/log file is over ~200 KB or ~2,000 lines.
 - An analysis request touches such a file (summarize, compare, extract, "what does slide 12 say").
 
-Small plain-text files (e.g. a 5 KB Markdown file) are read directly.
+Small plain-text files (e.g. a 5 KB Markdown file) are read directly. Creating or editing PDF, Word, or PowerPoint files is not ingestion; use the `pdf`, `docx`, or `pptx` skills.
 
 ## Workflow
 
