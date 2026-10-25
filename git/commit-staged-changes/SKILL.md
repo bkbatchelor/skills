@@ -1,8 +1,9 @@
 ---
 name: commit-staged-changes
-description: Commits only the already-staged changes with a conventional message (Type(Scope): Summary), never staging files itself. Use only when the user explicitly asks to commit what is staged: "commit my staged changes", "commit what I've staged", "commit this with a good message" after they staged files. Never trigger proactively or after finishing work unprompted. Not for staging files, `git commit -a`, amending, pushing, or opening a PR (use commit-commands:commit or commit-commands:commit-push-pr when the user wants those).
+description: >-
+  Commits only the already-staged changes with a conventional message (Type(Scope): Summary), never staging files itself. Use only when the user explicitly asks to commit what is staged: "commit my staged changes", "commit what I've staged", "commit this with a good message" after they staged files. Never trigger proactively or after finishing work unprompted. Not for staging files, `git commit -a`, amending, pushing, or opening a PR (use commit-commands:commit or commit-commands:commit-push-pr when the user wants those).
 metadata:
-  version: 1.0.3
+  version: 1.0.4
 ---
 
 # Commit Staged Changes Skill
