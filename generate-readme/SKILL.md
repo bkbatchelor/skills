@@ -1,8 +1,8 @@
 ---
 name: generate-readme
-description: Generates and updates README files with configurable fidelity levels. Use when creating or updating project README documentation. Supports BASIC, STANDARD, and ADVANCE levels with mermaid diagrams. Automatically handles existing README backups and respects .gitignore.
+description: Generates or updates a project's README.md at BASIC, STANDARD, or ADVANCE fidelity, with Mermaid diagrams at ADVANCE, backing up any existing README and respecting .gitignore. Use whenever the user asks to write, create, generate, draft, refresh, rewrite, or update a README, or says a repo "needs a README" or "project docs", even without naming a fidelity level. Not for API reference sites, changelogs, or tweaking one section of an existing README (edit it directly). Hand SVG output of diagrams to mermaid-to-svg and banner or hero images to image-gateway.
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Generate README Skill
@@ -10,6 +10,17 @@ metadata:
 This skill generates professional README documentation with three fidelity levels. All diagrams use Mermaid chart format.
 
 ---
+
+## Triggers
+
+Use when the user:
+- asks to write, create, generate, draft, refresh, rewrite, or update a README
+- says a repo or project "needs a README" or "needs docs", even without naming a fidelity level (ask for the level in step 1)
+
+Skip when:
+- They want one section of an existing README changed. Edit it directly.
+- They want API reference sites, changelogs, or other docs. This skill only writes `README.md`.
+- They want diagrams as SVG files (use `mermaid-to-svg`) or banner or hero images (use `image-gateway`).
 
 ## Workflow
 

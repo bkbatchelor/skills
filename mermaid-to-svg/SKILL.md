@@ -1,13 +1,25 @@
 ---
 name: mermaid-to-svg
-description: Converts Mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, and the rest) into SVG files using mermaid-cli, then checks that the output is valid and actually sh[...]
+description: Renders Mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, and more) to validated SVG files with mermaid-cli, from .mmd files, mermaid blocks in Markdown, or pasted source. Use whenever the user asks to convert, render, export, or save a Mermaid diagram as SVG (or PNG/PDF), to turn a README's mermaid blocks into images, or to get a diagram that opens in Figma, Inkscape, Word, PowerPoint, or LaTeX. Also use when another skill needs Mermaid turned into an image file. Not for designing a diagram from a description with no Mermaid involved (use archify), charts of numeric data, or raster art (use image-gateway).
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Mermaid to SVG
 
 Render Mermaid source to SVG files with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) (`mmdc`), which draws each diagram in headless Chrome. The bundled script, `scripts/render.sh`, wraps `mmdc` and provides sanity checks and portability options so the resulting SVGs work well in non-browser tools.
+
+## Triggers
+
+Use when the user:
+- asks to convert, render, export, or save a Mermaid diagram as SVG (or PNG or PDF)
+- wants a README's or doc's mermaid blocks as image files
+- needs a diagram that opens in Figma, Inkscape, Word, PowerPoint, LaTeX, or other non-browser tools
+- or another skill needs Mermaid turned into an image file
+
+Skip when:
+- There is no Mermaid and the user wants a diagram designed from a description. Use `archify`.
+- The request is a chart of numeric data, or raster art (use `image-gateway`).
 
 ## Requirements
 

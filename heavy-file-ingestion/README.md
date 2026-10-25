@@ -10,6 +10,10 @@ Converts heavy or binary documents into chunked Markdown/CSV artifacts plus a st
 
 Small plain-text files are read directly.
 
+## Triggers
+
+Shares or asks about a PDF, Office document, or large CSV/text file. Converts it before any analysis. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash

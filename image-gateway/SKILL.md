@@ -1,8 +1,8 @@
 ---
 name: image-gateway
-description: Generates or edits images through Google's Gemini API (Nano Banana Pro) with one command, using saved defaults (model, output folder, API key location) so no per-call setup is needed. Use whenever the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, illustration, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or asks to edit, restyle, recolor, extend, or remove things from an existing image. Also use whenever another skill or workflow needs a raster image produced (slides, READMEs, docs, websites, social posts, placeholder art). Those should call this skill instead of writing their own image API code. Not for charts, diagrams, or SVG drawn from code; render those directly.
+description: Generates or edits raster images through Google's Gemini API (Nano Banana Pro) with one command and saved defaults. Use whenever the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or to edit, restyle, recolor, extend, or remove things from an existing image. Also use when another skill (slides, READMEs, docs, websites, social posts) needs a raster image, instead of writing its own image API code. Not for charts, diagrams, or SVG drawn from code (render those directly; use mermaid-to-svg for Mermaid).
 metadata:
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Image Gateway
@@ -14,6 +14,13 @@ One command turns a prompt (and optionally reference images) into image files th
 ```
 
 The script is in this skill's `scripts/` folder. Use the absolute path of the directory this SKILL.md was loaded from, since the skill may be linked into several places. It needs `curl`, `jq` and `base64`.
+
+## Triggers
+
+Use when the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or to edit, restyle, recolor, extend, or remove things from an existing image. Also use when another skill needs a raster image, such as slides, READMEs, docs, websites, or social posts, instead of writing its own image API code.
+
+Skip when:
+- The request is a chart, diagram, or SVG drawn from code. Render it directly, or use `mermaid-to-svg` for Mermaid.
 
 ## Saved preferences
 

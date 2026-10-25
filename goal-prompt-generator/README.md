@@ -14,6 +14,10 @@ Turns an implementation plan or task description into a bounded, self-contained 
 
 Use it when you want to hand work to another session, subagent, cloud agent or worktree session, or prepare a task to kick off later. The `visible-delegation` skill depends on it.
 
+## Triggers
+
+Asks to hand off a task, write a goal prompt, or package a plan for another session or agent. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash

@@ -16,6 +16,10 @@ Generates and updates README files at a chosen fidelity level, with Mermaid diag
 - Respects `.gitignore` when scanning the project.
 - Follows its own Mermaid diagram guidelines.
 
+## Triggers
+
+Asks to write, generate, refresh, or update a README, or says a repo needs one. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash

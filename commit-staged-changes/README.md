@@ -6,6 +6,10 @@ Commits only what is already staged, using a fixed commit message template. It n
 
 Use it when you want to commit staged changes without sweeping in anything else, for example after a partial `git add -p`.
 
+## Triggers
+
+Only on an explicit request to commit staged changes ("commit my staged changes"). Never proactive. See `SKILL.md` for the full list, including when to skip it.
+
 ## Install
 
 ```bash
