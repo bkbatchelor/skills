@@ -3,6 +3,7 @@
 #
 # Usage:
 #   scripts/bump-version.sh <skill> <major|minor|patch>   bump a skill by hand
+#                                         (<skill> is a name or path, e.g. docs/generate-readme)
 #   scripts/bump-version.sh --commit-msg <file>           commit-msg hook entry
 #   scripts/bump-version.sh --post-commit                 post-commit hook entry
 #
@@ -150,19 +151,45 @@ in_sequence_operation() {
 
 # --- Target version ----------------------------------------------------------
 
-# Top-level skill directories (containing SKILL.md at HEAD) touched by HEAD.
+# Skill directories (containing SKILL.md at HEAD) touched by HEAD. A skill may
+# sit at any depth, e.g. docs/generate-readme; each changed path maps to its
+# nearest ancestor directory holding a SKILL.md.
 skills_in_head() {
+  local path dir
   git diff-tree --root --no-commit-id --name-only -r HEAD |
-    awk -F/ 'NF > 1 { print $1 }' | sort -u |
-    while read -r dir; do
-      git cat-file -e "HEAD:$dir/SKILL.md" 2>/dev/null && echo "$dir"
-    done
+    while read -r path; do
+      dir=$(dirname "$path")
+      while [[ $dir != . ]]; do
+        if git cat-file -e "HEAD:$dir/SKILL.md" 2>/dev/null; then
+          echo "$dir"; break
+        fi
+        dir=$(dirname "$dir")
+      done
+    done | sort -u
+}
+
+# Resolve a skill name or path (docs/generate-readme or generate-readme) to its
+# directory relative to the repo root; fail if missing or ambiguous.
+resolve_skill() {
+  local skill=${1%/} root matches
+  root=$(repo_root)
+  if [[ -f $root/$skill/SKILL.md ]]; then echo "$skill"; return; fi
+  matches=$(cd "$root" && find . -mindepth 2 -name SKILL.md -path "*/$skill/SKILL.md" \
+    -not -path './.git/*' | sed -e 's#^\./##' -e 's#/SKILL\.md$##')
+  [[ -n $matches ]] || die "no such skill: $skill"
+  [[ $(printf '%s\n' "$matches" | wc -l) -eq 1 ]] ||
+    die "ambiguous skill $skill: $(printf '%s' "$matches" | tr '\n' ' ')"
+  echo "$matches"
 }
 
 # target_version <skill> <merge-base>
 target_version() {
   local skill=$1 mb=$2 base_ver level=0 sha l
   base_ver=$(git show "$mb:$skill/SKILL.md" 2>/dev/null | read_version || true)
+  if ! valid_semver "$base_ver"; then
+    # The skill may have lived at the repo top level before being grouped.
+    base_ver=$(git show "$mb:${skill##*/}/SKILL.md" 2>/dev/null | read_version || true)
+  fi
   if ! valid_semver "$base_ver"; then
     # New or not-yet-versioned skill: its first version is 1.0.0.
     echo 1.0.0; return
@@ -177,11 +204,11 @@ target_version() {
 # --- Commands ----------------------------------------------------------------
 
 cmd_manual() {
-  local skill=${1%/} level file cur new
+  local skill level file cur new
   level=$(level_num "${2:-}")
   ((level > 0)) || die "usage: $0 <skill> <major|minor|patch>"
+  skill=$(resolve_skill "${1:-}")
   file="$(repo_root)/$skill/SKILL.md"
-  [[ -f $file ]] || die "no such skill: $skill"
   cur=$(read_version <"$file")
   if valid_semver "$cur"; then
     new=$(bump_semver "$cur" "$level")
@@ -291,6 +318,6 @@ cmd_post_commit() {
 case "${1:-}" in
   --commit-msg) unset GIT_INDEX_FILE; cmd_commit_msg "${2:?message file required}" ;;
   --post-commit) unset GIT_INDEX_FILE; cmd_post_commit ;;
-  -h|--help|"") sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) cmd_manual "$@" ;;
 esac

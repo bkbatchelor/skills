@@ -37,8 +37,8 @@ cd skills
 3. Copy skills to your opencode configuration:
    ```bash
    # Copy individual skills to your project
-   cp -r generate-readme /path/to/your/project/.opencode/skills/
-   cp -r commit-staged-changes /path/to/your/project/.opencode/skills/
+   cp -r docs/generate-readme /path/to/your/project/.opencode/skills/
+   cp -r git/commit-staged-changes /path/to/your/project/.opencode/skills/
    ```
 
 4. Or add the skills directory to your global opencode config:
@@ -63,56 +63,63 @@ skills/
 │   └── post-commit           # Sets skill versions and amends them in
 ├── scripts/
 │   └── bump-version.sh       # Version bump logic and manual bumps
-├── commit-staged-changes/    # Git commit skill
-│   ├── SKILL.md              # Skill definition
-│   └── references/           # Reference materials
-│       └── git-commit-template.md
-├── generate-readme/          # README generation skill
-│   ├── SKILL.md              # Skill definition
-│   └── references/           # Reference materials
-│       ├── basic-level-template.md
-│       ├── standard-level-template.md
-│       └── advance-level-template.md
-├── goal-prompt-generator/    # Goal prompt generation skill
-│   ├── SKILL.md              # Skill definition
-│   └── references/           # Reference materials
-│       └── goal-prompt-template.md
-├── current-info-search/      # Live search for fast-changing facts
-│   ├── SKILL.md              # Skill definition
-│   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
-│   └── scripts/              # Helper scripts
-│       └── search.py
-├── media-transcription/      # Audio/video transcription skill
-│   ├── SKILL.md              # Skill definition
-│   ├── config.env            # Saved defaults (models, key location, prices)
-│   ├── references/           # Reference materials
-│   │   ├── api.md
-│   │   └── format.md
-│   └── scripts/              # Helper scripts
-│       └── transcribe.py
-├── image-gateway/            # Image generation and editing skill
-│   ├── SKILL.md              # Skill definition
-│   ├── config.env            # Saved defaults (model, output dir, key file)
-│   ├── references/           # Reference materials
-│   │   └── api.md
-│   └── scripts/              # Helper scripts
-│       └── generate.sh
-├── mermaid-to-svg/           # Mermaid diagram rendering skill
-│   ├── SKILL.md              # Skill definition
-│   ├── references/           # Reference materials
-│   │   └── troubleshooting.md
-│   └── scripts/              # Helper scripts
-│       └── render.sh
-└── visible-delegation/       # Visible agent delegation skill
-    ├── SKILL.md              # Skill definition
-    ├── references/           # Reference materials
-    │   └── delegate-addendum.md
-    └── scripts/              # Helper scripts
-        ├── lib.sh
-        ├── launch.sh
-        ├── watch.sh
-        ├── say.sh
-        └── cleanup.sh
+├── git/                      # Git workflow skills
+│   └── commit-staged-changes/    # Git commit skill
+│       ├── SKILL.md              # Skill definition
+│       └── references/           # Reference materials
+│           └── git-commit-template.md
+├── docs/                     # Documentation skills
+│   ├── generate-readme/          # README generation skill
+│   │   ├── SKILL.md              # Skill definition
+│   │   └── references/           # Reference materials
+│   │       ├── basic-level-template.md
+│   │       ├── standard-level-template.md
+│   │       └── advance-level-template.md
+│   ├── mermaid-to-svg/           # Mermaid diagram rendering skill
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── references/           # Reference materials
+│   │   │   └── troubleshooting.md
+│   │   └── scripts/              # Helper scripts
+│   │       └── render.sh
+│   └── docs-curator/
+├── media/                    # Image and audio/video skills
+│   ├── image-gateway/            # Image generation and editing skill
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── config.env            # Saved defaults (model, output dir, key file)
+│   │   ├── references/           # Reference materials
+│   │   │   └── api.md
+│   │   └── scripts/              # Helper scripts
+│   │       └── generate.sh
+│   └── media-transcription/      # Audio/video transcription skill
+│       ├── SKILL.md              # Skill definition
+│       ├── config.env            # Saved defaults (models, key location, prices)
+│       ├── references/           # Reference materials
+│       │   ├── api.md
+│       │   └── format.md
+│       └── scripts/              # Helper scripts
+│           └── transcribe.py
+├── research/                 # Research and ingestion skills
+│   ├── current-info-search/      # Live search for fast-changing facts
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
+│   │   └── scripts/              # Helper scripts
+│   │       └── search.py
+│   └── heavy-file-ingestion/
+└── delegation/               # Agent delegation skills
+    ├── goal-prompt-generator/    # Goal prompt generation skill
+    │   ├── SKILL.md              # Skill definition
+    │   └── references/           # Reference materials
+    │       └── goal-prompt-template.md
+    └── visible-delegation/       # Visible agent delegation skill
+        ├── SKILL.md              # Skill definition
+        ├── references/           # Reference materials
+        │   └── delegate-addendum.md
+        └── scripts/              # Helper scripts
+            ├── lib.sh
+            ├── launch.sh
+            ├── watch.sh
+            ├── say.sh
+            └── cleanup.sh
 ```
 
 ---
@@ -215,6 +222,24 @@ Looks up fast-changing facts (model releases, pricing, software versions, news, 
 - NotebookLM runs use a throwaway notebook that is deleted afterward, so existing notebooks are never touched
 - Answers must cite dates and primary sources, and search results win over training data
 
+#### heavy-file-ingestion
+
+Converts PDFs, Office documents, and large CSV/text files into chunked Markdown plus an `INDEX.md` before any analysis, so the original file is never read directly.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, the ingest command, and the rules for reading the artifacts
+- `scripts/ingest.py`: Converts the source and writes the chunked artifacts and `INDEX.md`
+
+**Requirements:**
+- `uv` and `python3`
+- `pdftotext` and `pdfinfo` (poppler) for PDFs
+- `markitdown` for Office files; `libreoffice` for legacy formats; `tesseract` for scanned pages
+
+**Features:**
+- Splits PDFs, decks, spreadsheets, CSVs, and text into chunks of about 25k characters or less
+- Writes output to `_ingested/<source-stem>/` next to the source, or `~/.cache/heavy-file-ingestion/<hash>/` if that folder is not writable
+- Skips re-ingesting a source whose SHA-256 is unchanged
+
 #### media-transcription
 
 ---
@@ -273,8 +298,8 @@ Generates or edits images with one command through Google's Gemini API (Interact
 
 **Usage:**
 ```bash
-image-gateway/scripts/generate.sh -a 16:9 -o ./assets/hero.png "misty pine forest at sunrise, cinematic"
-image-gateway/scripts/generate.sh -i ./photo.jpg "remove the person on the left, keep everything else unchanged"
+media/image-gateway/scripts/generate.sh -a 16:9 -o ./assets/hero.png "misty pine forest at sunrise, cinematic"
+media/image-gateway/scripts/generate.sh -i ./photo.jpg "remove the person on the left, keep everything else unchanged"
 ```
 
 #### mermaid-to-svg
@@ -411,7 +436,7 @@ Because the target is recomputed from the base each time, amending or rebasing g
 To bump by hand, for example to fix a wrong level or declare a breaking change the commit messages don't mark:
 
 ```bash
-scripts/bump-version.sh <skill> <major|minor|patch>
+scripts/bump-version.sh <skill> <major|minor|patch>   # <skill> is a name or a path such as docs/generate-readme
 ```
 
 Update the **Version** column in [Available Skills](#available-skills) when a skill's version changes.

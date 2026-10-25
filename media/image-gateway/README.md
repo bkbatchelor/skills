@@ -11,7 +11,7 @@ Asks to generate, draw, make, or edit an image, icon, logo, banner, or artwork, 
 ```bash
 /agentic-library use image-gateway
 # or link it manually
-ln -s ~/Projects/skills/image-gateway ~/.claude/skills/image-gateway
+ln -s ~/Projects/skills/media/image-gateway ~/.claude/skills/image-gateway
 ```
 
 ## Requirements

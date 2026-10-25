@@ -23,7 +23,7 @@ Asks to hand off a task, write a goal prompt, or package a plan for another sess
 ```bash
 /agentic-library use goal-prompt-generator
 # or link it manually
-ln -s ~/Projects/skills/goal-prompt-generator ~/.claude/skills/goal-prompt-generator
+ln -s ~/Projects/skills/delegation/goal-prompt-generator ~/.claude/skills/goal-prompt-generator
 ```
 
 ## Contents
