@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Screenshot an HTML artifact at desktop and mobile widths and report console errors.
+# Screenshot an HTML artifact at desktop and mobile widths, in default and forced-dark themes,
+# and report console errors.
 # Usage: verify.sh <file.html> [out-dir]   (out-dir defaults to the file's directory)
 set -euo pipefail
 
@@ -14,14 +15,24 @@ chrome=$(command -v chromium || command -v chromium-browser || command -v google
 
 stem=$(basename "${file%.html}")
 status=0
-for size in 1280x2600 390x3200; do
-  png="$out/$stem-${size%%x*}.png"
+# Light/OS default plus a forced-dark copy (headless Chromium ignores the OS scheme).
+dark_copy="$out/$stem.dark.html"
+sed 's/<html\([^>]*\)>/<html\1 data-theme="dark">/' "$file" > "$dark_copy"
+trap 'rm -f "$dark_copy"' EXIT
+
+shoot() { # <html file> <width x height> <png> <label>
+  local log
   log=$("$chrome" --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
     --enable-logging=stderr --v=0 --virtual-time-budget=3000 \
-    --window-size="${size/x/,}" --screenshot="$png" "file://$file" 2>&1 || true)
+    --window-size="${2/x/,}" --screenshot="$3" "file://$1" 2>&1 || true)
   if grep -E 'CONSOLE.*(Uncaught|error|Error)' <<<"$log" >&2; then status=1; fi
-  [[ -s $png ]] || { echo "FAIL: no screenshot at $size" >&2; status=1; continue; }
-  echo "shot: $png"
+  [[ -s $3 ]] || { echo "FAIL: no screenshot ($4)" >&2; status=1; return; }
+  echo "shot: $3"
+}
+
+for size in 1280x2600 390x3200; do
+  shoot "$file" "$size" "$out/$stem-${size%%x*}.png" "default ${size%%x*}"
+  shoot "$dark_copy" "$size" "$out/$stem-${size%%x*}-dark.png" "dark ${size%%x*}"
 done
 
 # Offline rule: no external URLs may be loaded by the file.
