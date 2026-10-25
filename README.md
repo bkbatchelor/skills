@@ -84,8 +84,10 @@ skills/
 │   ├── docs-curator/
 │   └── html-artifacts/           # HTML artifact skill
 │       ├── SKILL.md              # Skill definition
-│       ├── references/template.html
-│       └── scripts/verify.sh
+│       ├── references/           # Reference materials
+│       │   └── template.html     # Starter page: tokens, components, every layout pattern
+│       └── scripts/              # Helper scripts
+│           └── verify.sh         # Screenshots in light and dark, console and offline checks
 ├── media/                    # Image and audio/video skills
 │   ├── image-gateway/            # Image generation and editing skill
 │   │   ├── SKILL.md              # Skill definition
@@ -327,6 +329,33 @@ Converts Mermaid diagrams to SVG with [mermaid-cli](https://github.com/mermaid-j
 - Theme, background, and Mermaid config options, with any other `mmdc` flag passed through
 - Optional PNG/PDF output, plus a preview step for checking the result visually
 - Never rewrites the source Markdown in place
+
+#### html-artifacts
+
+---
+
+Renders dense or visual output (plans, reports, research explainers, review summaries, comparisons, timelines, diagrams, walkthroughs, dashboards) as one self-contained HTML file in a fixed house style, instead of a long chat reply. The chat gets a short summary and the file path.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, hard rules, the house style tokens, layout patterns, and the verify-before-done rule
+- `references/template.html`: Starter page with the tokens, components, theme toggle, print styles, and an example of each layout pattern
+- `scripts/verify.sh`: Renders the file with headless Chromium and checks the result
+
+**Requirements:**
+- Chromium or Chrome (`chromium`, `chromium-browser`, or `google-chrome`) for the verify step; without it the skill reports that the render could not be verified
+
+**Features:**
+- Produces an artifact on an explicit request, and offers one in a single line when an answer would run past about 40 lines or hold a table wider than 3 columns
+- One `.html` file with inline CSS and JS, no external dependencies, and full content with JS off
+- Dark-first teal on slate, with Inter and JetBrains Mono system stacks, a 4px spacing scale, and an OS-following theme with a toggle
+- Layout patterns for report, comparison table, timeline, diagram, dashboard, and walkthrough
+- `verify.sh` takes full-height screenshots at 1280 and 390 px in the default and a forced-dark theme, fails on console errors or any external URL, and the skill requires reading the screenshots before declaring the artifact done
+- Saves to `~/artifacts/<YYYY-MM-DD>-<slug>.html` (or `./artifacts/` for project-specific work) and always prints the path
+
+**Usage:**
+```bash
+docs/html-artifacts/scripts/verify.sh ~/artifacts/2026-10-24-my-report.html
+```
 
 #### visible-delegation
 
