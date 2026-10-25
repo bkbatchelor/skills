@@ -10,7 +10,7 @@ metadata:
 One command turns a recording into a transcription package next to it:
 
 ```bash
-~/Projects/skills/media-transcription/scripts/transcribe.py ~/Videos/standup-2026-10-19.mp4
+~/Projects/skills/media/media-transcription/scripts/transcribe.py ~/Videos/standup-2026-10-19.mp4
 ```
 
 The script is in this skill's `scripts/` folder. Use the absolute path of the directory this SKILL.md was loaded from, since the skill may be linked into several places. It needs `python3` (standard library only), `ffmpeg` and `ffprobe`.

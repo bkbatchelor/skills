@@ -10,7 +10,7 @@ metadata:
 Training data goes stale. For anything that changes quickly, look it up live with `scripts/search.py` before answering:
 
 ```bash
-~/Projects/skills/current-info-search/scripts/search.py gemini "latest stable Python release and its date"
+~/Projects/skills/research/current-info-search/scripts/search.py gemini "latest stable Python release and its date"
 ```
 
 The script is in this skill's `scripts/` folder. Use the absolute path of the directory this SKILL.md was loaded from, since the skill may be linked into several places. It needs `python3` (standard library only).
