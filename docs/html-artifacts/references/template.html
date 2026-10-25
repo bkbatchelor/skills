@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artifact title</title>
+<style>
+/* ===== TOKENS: keep identical to SKILL.md ===== */
+:root {
+  --font-sans: Inter, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-sm: 0.875rem; --fs-base: 1rem; --fs-lg: 1.25rem; --fs-xl: 1.75rem; --fs-2xl: 2.5rem;
+  --lh-body: 1.6; --lh-tight: 1.2;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 40px; --s7: 64px;
+  --radius: 10px; --radius-sm: 6px;
+  --w-prose: 72ch; --w-wide: 1100px;
+  --bg: #0b1220; --surface: #121a2b; --surface-2: #19233a; --border: #26324a;
+  --text: #e6ebf5; --muted: #93a0b8;
+  --accent: #2dd4bf; --accent-ink: #04201c;
+  --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --info: #60a5fa;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f8fb; --surface: #ffffff; --surface-2: #eef2f7; --border: #d8e0ea;
+    --text: #0f172a; --muted: #536179;
+    --accent: #0f766e; --accent-ink: #ffffff;
+    --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --info: #1d4ed8;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f6f8fb; --surface: #ffffff; --surface-2: #eef2f7; --border: #d8e0ea;
+  --text: #0f172a; --muted: #536179;
+  --accent: #0f766e; --accent-ink: #ffffff;
+  --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --info: #1d4ed8;
+}
+
+/* ===== BASE ===== */
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body { margin: 0; background: var(--bg); color: var(--text); font: var(--fs-base)/var(--lh-body) var(--font-sans); }
+.page { max-width: var(--w-wide); margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); }
+@media (min-width: 720px) { .page { padding-inline: var(--s5); } }
+h1, h2, h3 { line-height: var(--lh-tight); letter-spacing: -0.01em; margin: var(--s6) 0 var(--s3); }
+h1 { font-size: var(--fs-xl); margin-top: 0; }
+@media (min-width: 720px) { h1 { font-size: var(--fs-2xl); } }
+h2 { font-size: var(--fs-lg); }
+h3 { font-size: var(--fs-base); }
+p, ul, ol { max-width: var(--w-prose); margin: 0 0 var(--s4); }
+a { color: var(--accent); }
+code, pre, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+code { background: var(--surface-2); padding: 1px var(--s2); border-radius: var(--radius-sm); }
+pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--s4); overflow-x: auto; margin: 0 0 var(--s4); }
+pre code { background: none; padding: 0; }
+.muted { color: var(--muted); }
+
+/* ===== COMPONENTS ===== */
+.top { display: flex; justify-content: space-between; align-items: start; gap: var(--s4); }
+.meta { color: var(--muted); font-size: var(--fs-sm); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--s4) var(--s5); margin: 0 0 var(--s4); }
+.card > :last-child { margin-bottom: 0; }
+.tldr { border-left: 3px solid var(--accent); }
+.callout { border-left: 3px solid var(--info); }
+.callout.warn { border-left-color: var(--warn); }
+.callout.bad { border-left-color: var(--bad); }
+.chip { display: inline-block; font-size: var(--fs-sm); padding: 0 var(--s2); border: 1px solid currentColor; border-radius: 999px; white-space: nowrap; }
+.chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); } .chip.info { color: var(--info); }
+button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--s1) var(--s3); cursor: pointer; transition: border-color 150ms; }
+button:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* table / comparison */
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin: 0 0 var(--s4); }
+table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+th, td { text-align: left; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border); vertical-align: top; }
+thead th { position: sticky; top: 0; background: var(--surface-2); }
+tbody th { position: sticky; left: 0; background: var(--surface); font-weight: 600; }
+tr:last-child > * { border-bottom: 0; }
+th.pick, td.pick { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+td.num { font-family: var(--font-mono); text-align: right; }
+th[data-sort] { cursor: pointer; }
+
+/* timeline */
+.timeline { list-style: none; padding: 0 0 0 var(--s5); margin: 0 0 var(--s4); border-left: 2px solid var(--border); max-width: var(--w-prose); }
+.timeline li { position: relative; padding: 0 0 var(--s5) var(--s4); }
+.timeline li::before { content: ""; position: absolute; left: calc(-1 * var(--s5) - 7px); top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); border: 2px solid var(--bg); }
+.timeline li.done::before { background: var(--ok); }
+.timeline li.now::before { background: var(--accent); }
+.timeline time { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--muted); display: block; }
+
+/* diagram */
+.diagram-wrap { overflow-x: auto; }
+.diagram { width: 100%; min-width: 640px; height: auto; display: block; }
+.diagram .box { fill: var(--surface-2); stroke: var(--border); }
+.diagram .box.hot { stroke: var(--accent); }
+.diagram text { fill: var(--text); font: 13px var(--font-mono); }
+.diagram .edge { stroke: var(--muted); fill: none; stroke-width: 1.5; }
+
+/* dashboard */
+.grid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 0 0 var(--s4); }
+.tile .label { color: var(--muted); font-size: var(--fs-sm); }
+.tile .value { font: 600 var(--fs-xl)/var(--lh-tight) var(--font-mono); margin: var(--s1) 0; }
+
+/* walkthrough */
+.steps { counter-reset: step; list-style: none; padding: 0; max-width: none; }
+.steps > li { counter-increment: step; }
+.steps > li > h3::before { content: counter(step); display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; margin-right: var(--s2); background: var(--accent); color: var(--accent-ink); border-radius: 50%; font-size: var(--fs-sm); }
+details summary { cursor: pointer; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --surface-2: #f3f4f6; --border: #d1d5db; --text: #111; --muted: #555; --accent: #0f766e; }
+  #theme, .copy { display: none; }
+  .card, tr { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+<!-- ===== HEADER (always) ===== -->
+<header>
+  <div class="top">
+    <h1>Artifact title</h1>
+    <button id="theme" type="button" aria-label="Toggle theme">Theme</button>
+  </div>
+  <p class="meta"><span>One-line summary</span><span class="mono">2026-01-01</span><span class="chip ok">status</span></p>
+</header>
+<section class="card tldr" aria-label="TL;DR">
+  <h2 style="margin-top:0">TL;DR</h2>
+  <ul><li>Point one</li><li>Point two</li><li>Point three</li></ul>
+</section>
+
+<!-- ===== REPORT ===== -->
+<section>
+  <h2>1. Section</h2>
+  <p>Prose at readable width.</p>
+  <div class="card callout warn"><strong>Caveat.</strong> Say what could be wrong.</div>
+</section>
+
+<!-- ===== COMPARISON TABLE ===== -->
+<section>
+  <h2>Comparison</h2>
+  <div class="scroll"><table id="cmp">
+    <thead><tr><th>Criterion</th><th class="pick">Option A (pick)</th><th>Option B</th></tr></thead>
+    <tbody>
+      <tr><th>Cost</th><td class="pick">Low <span class="chip ok">good</span></td><td>High <span class="chip bad">bad</span></td></tr>
+      <tr><th>Effort</th><td class="pick">Medium</td><td>Low</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Verdict:</strong> one line.</p>
+</section>
+
+<!-- ===== TIMELINE ===== -->
+<section>
+  <h2>Timeline</h2>
+  <ol class="timeline">
+    <li class="done"><time>Jan 1</time><strong>Done event</strong><br>Short body.</li>
+    <li class="now"><time>Jan 8</time><strong>Current event</strong><br>Short body.</li>
+    <li><time>Jan 15</time><strong>Next event</strong><br>Short body.</li>
+  </ol>
+</section>
+
+<!-- ===== DIAGRAM ===== -->
+<section>
+  <h2>Diagram</h2>
+  <div class="card diagram-wrap">
+    <svg class="diagram" viewBox="0 0 520 90" role="img" aria-label="A flows to B">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+      <rect class="box" x="10" y="25" width="190" height="40" rx="8"/><text x="105" y="50" text-anchor="middle">A</text>
+      <path class="edge" d="M200 45H320" marker-end="url(#ah)"/>
+      <rect class="box hot" x="320" y="25" width="190" height="40" rx="8"/><text x="415" y="50" text-anchor="middle">B</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ===== DASHBOARD ===== -->
+<section>
+  <h2>Dashboard</h2>
+  <div class="grid">
+    <div class="card tile"><div class="label">Metric</div><div class="value">1,234</div><span class="chip ok">+4%</span></div>
+    <div class="card tile"><div class="label">Metric</div><div class="value">56</div><span class="chip bad">-2</span></div>
+  </div>
+  <p class="muted">Data as of 2026-01-01, source: …</p>
+</section>
+
+<!-- ===== WALKTHROUGH ===== -->
+<section>
+  <h2>Walkthrough</h2>
+  <ol class="steps">
+    <li class="card"><h3>Do the thing</h3>
+      <pre><code>command --flag</code></pre><button class="copy" type="button">Copy</button>
+      <details><summary>Why</summary><p>Reason.</p></details>
+    </li>
+  </ol>
+</section>
+
+</main>
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var t = localStorage.getItem("theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  var btn = document.getElementById("theme");
+  if (btn) btn.addEventListener("click", function () {
+    var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+  });
+  document.querySelectorAll(".copy").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var c = b.previousElementSibling; if (!c) return;
+      navigator.clipboard && navigator.clipboard.writeText(c.textContent).then(function () { b.textContent = "Copied"; });
+    });
+  });
+  document.querySelectorAll("th[data-sort]").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var tb = th.closest("table").tBodies[0], i = th.cellIndex, dir = th.dataset.dir === "asc" ? -1 : 1;
+      th.dataset.dir = dir === 1 ? "asc" : "desc";
+      Array.from(tb.rows).sort(function (a, b) {
+        return dir * a.cells[i].textContent.localeCompare(b.cells[i].textContent, undefined, { numeric: true });
+      }).forEach(function (r) { tb.appendChild(r); });
+    });
+  });
+})();
+</script>
+</body>
+</html>
