@@ -222,6 +222,24 @@ Looks up fast-changing facts (model releases, pricing, software versions, news, 
 - NotebookLM runs use a throwaway notebook that is deleted afterward, so existing notebooks are never touched
 - Answers must cite dates and primary sources, and search results win over training data
 
+#### heavy-file-ingestion
+
+Converts PDFs, Office documents, and large CSV/text files into chunked Markdown plus an `INDEX.md` before any analysis, so the original file is never read directly.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with trigger conditions, the ingest command, and the rules for reading the artifacts
+- `scripts/ingest.py`: Converts the source and writes the chunked artifacts and `INDEX.md`
+
+**Requirements:**
+- `uv` and `python3`
+- `pdftotext` and `pdfinfo` (poppler) for PDFs
+- `markitdown` for Office files; `libreoffice` for legacy formats; `tesseract` for scanned pages
+
+**Features:**
+- Splits PDFs, decks, spreadsheets, CSVs, and text into chunks of about 25k characters or less
+- Writes output to `_ingested/<source-stem>/` next to the source, or `~/.cache/heavy-file-ingestion/<hash>/` if that folder is not writable
+- Skips re-ingesting a source whose SHA-256 is unchanged
+
 #### media-transcription
 
 ---

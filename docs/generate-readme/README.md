@@ -25,7 +25,7 @@ Asks to write, generate, refresh, or update a README, or says a repo needs one. 
 ```bash
 /agentic-library use generate-readme
 # or link it manually
-ln -s ~/Projects/skills/generate-readme ~/.claude/skills/generate-readme
+ln -s ~/Projects/skills/docs/generate-readme ~/.claude/skills/generate-readme
 ```
 
 ## Contents

@@ -2,7 +2,7 @@
 name: current-info-search
 description: Answers questions about fast-changing facts from live Google Search (Gemini API with grounding) and NotebookLM web research instead of training data or default web search. Use whenever the user asks about anything recent or fast-moving, such as AI model releases, model pricing, context windows or limits, software or library versions, changelogs, API changes or deprecations, security advisories, news, or "latest", "current", "new", "today", "this week", "still true?". Also use whenever the user's claim or your own knowledge of such a fact might be stale (a version number, price, model name or date from memory), and when another skill or task depends on a fact like that being current. Not for timeless facts, questions about the user's own code, or searching local files.
 metadata:
-  version: 1.0.2
+  version: 1.0.3
 ---
 
 # Current Info Search

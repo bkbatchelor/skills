@@ -11,7 +11,7 @@ Asks to render, convert, or export Mermaid diagrams as SVG (or PNG/PDF), includi
 ```bash
 /agentic-library use mermaid-to-svg
 # or link it manually
-ln -s ~/Projects/skills/mermaid-to-svg ~/.claude/skills/mermaid-to-svg
+ln -s ~/Projects/skills/docs/mermaid-to-svg ~/.claude/skills/mermaid-to-svg
 ```
 
 ## Requirements
