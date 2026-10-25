@@ -19,7 +19,7 @@ Shares or asks about a PDF, Office document, or large CSV/text file. Converts it
 ```bash
 /agentic-library use heavy-file-ingestion
 # or link it manually
-ln -s ~/Projects/skills/heavy-file-ingestion ~/.claude/skills/heavy-file-ingestion
+ln -s ~/Projects/skills/research/heavy-file-ingestion ~/.claude/skills/heavy-file-ingestion
 ```
 
 ## Requirements

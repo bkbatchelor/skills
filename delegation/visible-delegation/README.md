@@ -19,7 +19,7 @@ Asks to delegate a task or run work in parallel with another agent session. Neve
 ```bash
 /agentic-library use visible-delegation   # also pulls goal-prompt-generator
 # or link it manually
-ln -s ~/Projects/skills/visible-delegation ~/.claude/skills/visible-delegation
+ln -s ~/Projects/skills/delegation/visible-delegation ~/.claude/skills/visible-delegation
 ```
 
 ## Requirements

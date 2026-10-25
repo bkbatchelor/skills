@@ -15,7 +15,7 @@ Only on an explicit request to commit staged changes ("commit my staged changes"
 ```bash
 /agentic-library use commit-staged-changes
 # or link it manually
-ln -s ~/Projects/skills/commit-staged-changes ~/.claude/skills/commit-staged-changes
+ln -s ~/Projects/skills/git/commit-staged-changes ~/.claude/skills/commit-staged-changes
 ```
 
 ## Contents
