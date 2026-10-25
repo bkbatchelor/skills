@@ -2,7 +2,7 @@
 name: html-artifacts
 description: "Renders dense or visual output (plans, reports, research explainers, review summaries, comparisons, timelines, diagrams, walkthroughs, dashboards) as one self-contained, offline HTML file in the user's house style, then screenshots it to verify it renders. Use whenever the user asks for a plan, report, comparison, review summary, explainer, diagram, walkthrough, or dashboard, or when a chat answer would run past roughly 40 lines or hold a table wider than 3 columns: produce on explicit request, offer in one line otherwise. Also use when the result is worth keeping or sharing. Not for short answers, code edits, numeric charts that need a charting library, or Mermaid-to-SVG file conversion (use mermaid-to-svg)."
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # HTML Artifacts
@@ -95,8 +95,8 @@ Every artifact opens with the same header: title, one-line summary, date, and (w
 
 Never say the artifact is finished until it has been rendered and checked:
 
-1. Run `scripts/verify.sh <file>`. It full-height screenshots at 1280px and 390px with headless Chromium, collects console errors, and fails on any external URL.
-2. **Read both screenshots** and check for: blank or unstyled page, horizontal overflow at 390px, clipped or overlapping text, unreadable contrast, a diagram that is empty or cut off, and broken tables.
+1. Run `scripts/verify.sh <file>`. It takes full-height screenshots at 1280px and 390px with headless Chromium, each in the default and a forced-dark theme (four PNGs), collects console errors, and fails on any external URL.
+2. **Read all four screenshots** and check for: blank or unstyled page, horizontal overflow at 390px, clipped or overlapping text, unreadable contrast, a diagram that is empty or cut off, broken tables, and anything unreadable or low-contrast in dark.
 3. Fix and re-run until clean. If Chromium is missing, say that the render could not be verified; do not claim success.
 4. Only then run `xdg-open <file>` and report: the absolute path, a one or two sentence summary, and what the check covered.
 
