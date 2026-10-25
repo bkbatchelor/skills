@@ -10,7 +10,7 @@ metadata:
 One command turns a prompt (and optionally reference images) into image files through Google's Gemini API (the Interactions API, `POST generativelanguage.googleapis.com/v1beta/interactions`):
 
 ```bash
-~/Projects/skills/image-gateway/scripts/generate.sh "a lighthouse at dawn, oil painting"
+~/Projects/skills/media/image-gateway/scripts/generate.sh "a lighthouse at dawn, oil painting"
 ```
 
 The script is in this skill's `scripts/` folder. Use the absolute path of the directory this SKILL.md was loaded from, since the skill may be linked into several places. It needs `curl`, `jq` and `base64`.
@@ -62,7 +62,7 @@ It also appends that line to `.image-gateway-log.jsonl` in the output folder, wh
 ### Examples
 
 ```bash
-G=~/Projects/skills/image-gateway/scripts/generate.sh
+G=~/Projects/skills/media/image-gateway/scripts/generate.sh
 
 # New image, square, straight into a project
 $G -a 1:1 -o ./public/og-image.png "flat vector icon of a paper plane, teal on white"
@@ -117,7 +117,7 @@ For the full request and response shape, model IDs and prices, error meanings, a
 If you're another skill (or an agent running one) and need an image, call this script. Don't write your own Gemini, OpenAI, OpenRouter or other image API code. That way there's one key location, one set of defaults, one cost log, and retry/fallback handling in one place. Pass the destination with `-o` and read the `files` array from the JSON on stdout:
 
 ```bash
-out=$(~/Projects/skills/image-gateway/scripts/generate.sh -a 16:9 -o ./slides/img/title.png "...") \
+out=$(~/Projects/skills/media/image-gateway/scripts/generate.sh -a 16:9 -o ./slides/img/title.png "...") \
   && path=$(jq -r '.files[0]' <<<"$out")
 ```
 
