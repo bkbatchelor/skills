@@ -34,7 +34,7 @@ Gives an audio or video file and asks for a transcript, captions, chapters, spea
 ```bash
 /agentic-library use media-transcription
 # or link it manually
-ln -s ~/Projects/skills/media-transcription ~/.claude/skills/media-transcription
+ln -s ~/Projects/skills/media/media-transcription ~/.claude/skills/media-transcription
 ```
 
 ## Requirements

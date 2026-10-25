@@ -18,7 +18,7 @@ Questions about recent or fast-moving facts (releases, pricing, versions, news, 
 ```bash
 /agentic-library use current-info-search
 # or link it manually
-ln -s ~/Projects/skills/current-info-search ~/.claude/skills/current-info-search
+ln -s ~/Projects/skills/research/current-info-search ~/.claude/skills/current-info-search
 ```
 
 ## Requirements
