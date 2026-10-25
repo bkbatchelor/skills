@@ -1,8 +1,9 @@
 ---
 name: goal-prompt-generator
-description: Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously and be checked against: objective, definition of done, repo constraints, verification gates, and stop conditions. Use whenever the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, write a prompt for a subagent, cloud agent, or worktree session, or says "turn this plan into something another Claude can run" or "make this a task I can kick off later", even without saying "goal prompt". Only writes the prompt; to launch a watched delegate use visible-delegation.
+description: >-
+  Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously and be checked against: objective, definition of done, repo constraints, verification gates, and stop conditions. Use whenever the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, write a prompt for a subagent, cloud agent, or worktree session, or says "turn this plan into something another Claude can run" or "make this a task I can kick off later", even without saying "goal prompt". Only writes the prompt; to launch a watched delegate use visible-delegation.
 metadata:
-  version: 1.0.3
+  version: 1.0.4
 ---
 
 # Goal Prompt Generator
