@@ -75,13 +75,15 @@ skills/
 │   │       ├── basic-level-template.md
 │   │       ├── standard-level-template.md
 │   │       └── advance-level-template.md
+│   ├── docs-curator/             # Document curation skill (skeleton)
+│   │   ├── SKILL.md              # Skill definition (placeholder)
+│   │   └── PLAN.md               # Build plan
 │   ├── mermaid-to-svg/           # Mermaid diagram rendering skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── references/           # Reference materials
 │   │   │   └── troubleshooting.md
 │   │   └── scripts/              # Helper scripts
 │   │       └── render.sh
-│   ├── docs-curator/
 │   └── html-artifacts/           # HTML artifact skill
 │       ├── SKILL.md              # Skill definition
 │       ├── references/           # Reference materials
@@ -144,6 +146,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
+| docs-curator | Curates a document folder into a deduplicated staging tree for Graphify (skeleton, not yet implemented) | `SKILL.md` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -329,6 +332,15 @@ Converts Mermaid diagrams to SVG with [mermaid-cli](https://github.com/mermaid-j
 - Theme, background, and Mermaid config options, with any other `mmdc` flag passed through
 - Optional PNG/PDF output, plus a preview step for checking the result visually
 - Never rewrites the source Markdown in place
+
+#### docs-curator
+
+---
+
+Skeleton only. Will curate a large, read-only folder of documents into a deduplicated staging tree for Graphify; the design is in `docs/docs-curator/PLAN.md`. No behavior is implemented yet.
+
+**Key Components:**
+- `SKILL.md`: Placeholder skill definition
 
 #### html-artifacts
 
