@@ -12,7 +12,7 @@ Ask Claude in plain language:
 - "Dedupe this repo and tell me which files are outdated."
 - "Prepare `~/handbook` for a knowledge graph. Put the result in `~/curated/handbook`."
 
-Tell Claude where to put the result, or it will pick something like `~/curated/<name>`. That folder must be outside the source folder.
+Everything generated goes to `~/curated/<project-name>/` by default, where `<project-name>` is the name of the source folder (`~/docs/handbook` becomes `~/curated/handbook/`). Name a different folder if you prefer; it must be outside the source folder. Staging, working files and the graph all live there, so the project folder stays clean.
 
 Don't use it for a single file, for building or querying the graph (that's `graphify`), or for editing or deleting your originals.
 
@@ -34,6 +34,7 @@ Don't use it for a single file, for building or querying the graph (that's `grap
 The skill is named `docs-curator` (with an `s`).
 
 ```text
+/docs-curator --source ~/docs
 /docs-curator --source ~/docs --out ~/curated/docs
 /docs-curator --source ~/docs --out ~/curated/docs --near-duplicate-action exclude
 /docs-curator --source ~/docs --out ~/curated/docs --embedding-backend tfidf
@@ -44,15 +45,15 @@ The skill is named `docs-curator` (with an `s`).
 | Argument | Meaning |
 |----------|---------|
 | `--source <dir>` | Folder of documents to curate. Read only. |
-| `--out <dir>` | Output folder. Must be outside `--source`. |
+| `--out <dir>` | Output folder, outside `--source`. Default `~/curated/<project-name>/`. |
 | `--near-duplicate-action flag\|exclude` | Written to `config.yaml`. Default `flag`. |
 | `--embedding-backend fastembed\|tfidf` | Written to `config.yaml`. `tfidf` skips the model download. |
 | `--continue` | Pick up groups left over from a capped run. |
 | `--apply-only` | Skip analyze and review. Re-build `staging/` from existing reviews and `overrides.yaml`. |
 
-These are not parsed by code. Claude reads the text after `/docs-curator` and acts on it, so natural language works too (`/docs-curator ~/docs into ~/curated/docs`). Only `--source` and `--out` are required. Any other `config.yaml` key can be passed the same way, with dashes for underscores.
+These are not parsed by code. Claude reads the text after `/docs-curator` and acts on it, so natural language works too (`/docs-curator ~/docs into ~/curated/docs`). Only `--source` is required. Any other `config.yaml` key can be passed the same way, with dashes for underscores.
 
-Whichever option you choose, Claude needs two things: the source folder and an output folder outside it. If either is missing, it asks.
+Whichever option you choose, Claude needs the source folder. If it is missing, it asks.
 
 ## What happens
 
@@ -65,7 +66,8 @@ Re-running on an unchanged folder is cheap, and earlier reviews are kept. Very l
 ## What you get
 
 ```text
-<out>/
+<out>/                       # default ~/curated/<project-name>/
+├── graphify-out/            # Graphify's output; see "Running Graphify"
 ├── staging/                 # give this to Graphify
 │   ├── <original path>.md   # each kept document, as Markdown with front matter
 │   ├── <name>.pptx.pdf      # kept decks, as a PDF
@@ -87,13 +89,15 @@ Staged Markdown is text only. Layout, images and formatting in PDF, Word and Exc
 
 ## Running Graphify
 
-The skill ends by printing a line like:
+Graphify writes `graphify-out/` into the directory you run it from. To keep that out of your project, the skill's last step creates `<out>/graphify-out/` and one symlink, `<source>/graphify-out`, pointing at it. It is the only thing the skill ever writes to the source folder.
+
+It then prints:
 
 ```text
-/graphify <out>/staging
+cd <source> && /graphify <out>/staging
 ```
 
-Run it yourself. Graphify writes `graphify-out/` into whatever directory you run it from, not into `<out>`. To keep the graph next to the curated output, `cd <out>` first and run `/graphify staging`.
+Run it yourself. Because of the symlink, the graph lands in `<out>/graphify-out/` and the project folder holds only the link. If the project already has a real `graphify-out` folder, the skill won't replace it. Move it aside and ask Claude to link again.
 
 ## Adjusting the result
 
