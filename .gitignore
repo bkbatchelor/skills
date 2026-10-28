@@ -1,3 +1,6 @@
 # Python bytecode cache
 __pycache__/
 *.py[cod]
+
+# Graphify output (a directory, or the symlink that docs-curator creates)
+graphify-out

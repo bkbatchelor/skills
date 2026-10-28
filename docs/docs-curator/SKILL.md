@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Docs Curator
@@ -31,7 +31,7 @@ System: `uv`, `python3` (3.10+), and `soffice` (LibreOffice, for `.pptx` to PDF)
 
 ## Workflow
 
-Pick an output folder outside the source, e.g. `~/curated/<name>`. It must not be inside `--source`.
+The output folder defaults to `~/curated/<project-name>/`, where `<project-name>` is the basename of `--source`. Omit `--out` to use it; a different `--out` must still be outside `--source`. Everything generated lives there: `staging/`, `.docs-curator/` and `graphify-out/`. Nothing generated goes in the project folder.
 
 1. **Analyze.** `$RUN python $SKILL/scripts/curate.py analyze --source <src> --out <out>`. It inventories and hashes the files, extracts text, groups duplicates, finds revision chains and topic clusters, and writes one queue item per cluster to `<out>/.docs-curator/work/queue/<cluster_id>.json`. Re-running costs nothing for unchanged files.
 2. **Review each queued cluster** (the LLM phase, done by you):
@@ -41,8 +41,9 @@ Pick an output folder outside the source, e.g. `~/curated/<name>`. It must not b
    - Quote contradicting statements verbatim; `apply` checks each quote against the document and marks misses `[quote not verified]`.
    - Only claim a supersession you can defend from the text. Give honest `confidence` (0 to 1). Below 0.75 the older file is kept and flagged.
    - Unique content in a superseded file goes in `unique_content`; that file also gets a copy under `_curated/historical/`.
-3. **Apply.** `$RUN python $SKILL/scripts/curate.py apply --source <src> --out <out>`. It builds `<out>/staging/`, writes `REPORT.md`, `decisions.jsonl` and `state.json` under `<out>/.docs-curator/`, and prints the Graphify command.
-4. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, and the printed `/graphify <out>/staging` line. Do not run Graphify.
+3. **Apply.** `$RUN python $SKILL/scripts/curate.py apply --source <src> --out <out>`. It builds `<out>/staging/`, writes `REPORT.md`, `decisions.jsonl` and `state.json` under `<out>/.docs-curator/`, and prints the next steps.
+4. **Link.** `$RUN python $SKILL/scripts/curate.py link --source <src> --out <out>`. It creates `<out>/graphify-out/` and one symlink, `<src>/graphify-out` pointing at it. Graphify writes `graphify-out/` into the directory it runs from, so running it from `<src>` sends its output to `<out>` instead of filling the project. It refuses to replace an existing `graphify-out` that is not that symlink; tell the user.
+5. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, and the printed `cd <src> && /graphify <out>/staging` line. Do not run Graphify.
 
 If the queue was capped (`max_llm_clusters_per_run`, default 25, largest clusters first), the rest are listed in the report. Tell the user, and run analyze, review, and apply again to pick them up; existing verdicts are kept.
 
@@ -64,7 +65,7 @@ Both files are optional and live in `<out>/`. Missing means defaults. The settin
 
 ## Hard rules
 
-- Never write under `--source`, and never pass an `--out` inside it. Graphify and the source documents are not yours to run or change.
+- Never write under `--source`, except the single `graphify-out` symlink that `link` creates. Never pass an `--out` inside it. Graphify and the source documents are not yours to run or change.
 - If `apply` says the source changed since analyze, run analyze again; do not edit the analysis files.
 - Stop and ask if: Graphify starts accepting `.pptx` (this design assumes it does not), the embedding model will not load and the user has not chosen tfidf, or a requirement is ambiguous in a way that would change which documents reach staging.
 - Thresholds were tuned on a synthetic corpus only. After the first real run, suggest the user spot-check "Flagged but kept" and the superseded list.

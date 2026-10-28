@@ -3,8 +3,10 @@
 
   curate.py analyze --source SRC --out OUT   deterministic analysis, writes the LLM queue
   curate.py apply   --source SRC --out OUT   applies verdicts, builds OUT/staging, REPORT.md
+  curate.py link    --source SRC --out OUT   symlinks SRC/graphify-out to OUT/graphify-out
 
-The source is only ever read. Graphify is never run; its command is printed.
+--out defaults to ~/curated/<basename of SRC>. The source is only ever read, except that
+`link` creates the one graphify-out symlink. Graphify is never run; its command is printed.
 Code is kept 3.10-compatible.
 """
 from __future__ import annotations
@@ -27,7 +29,7 @@ EXTRACT_VERSION = 1
 WORKDIR = ".docs-curator"
 SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx"}
 FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5}
-SKIP_DIRS = {".git", "node_modules", "__pycache__"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out"}
 IDENTICAL_TEXT_SIMILARITY = 0.999
 MIN_TOKENS = 5
 DEFAULT_ID_PATTERN = r"\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b"
@@ -123,6 +125,13 @@ def sha256_file(path):
 
 def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def resolve_out(args):
+    """--out, or ~/curated/<basename of --source> when it is not given."""
+    if args.out:
+        return Path(args.out).expanduser().resolve()
+    return (Path("~/curated").expanduser() / Path(args.source).expanduser().resolve().name).resolve()
 
 
 def check_paths(source, out):
@@ -570,8 +579,8 @@ def find_collisions(site_map):
 
 
 def cmd_analyze(args):
-    source = Path(args.source).resolve()
-    out = Path(args.out).resolve()
+    source = Path(args.source).expanduser().resolve()
+    out = resolve_out(args)
     check_paths(source, out)
     cfg = load_config(out, args.config)
     work = out / WORKDIR
@@ -1025,8 +1034,8 @@ def norm_ws(s):
 
 
 def cmd_apply(args):
-    source = Path(args.source).resolve()
-    out = Path(args.out).resolve()
+    source = Path(args.source).expanduser().resolve()
+    out = resolve_out(args)
     check_paths(source, out)
     cfg = load_config(out, args.config)
     overrides = load_overrides(out, args.overrides)
@@ -1160,7 +1169,31 @@ def cmd_apply(args):
     print(f"apply complete: {counts.get('include', 0) + counts.get('convert', 0)} staged, {counts.get('exclude', 0)} excluded, "
           f"{counts.get('unreadable', 0)} unreadable, {counts.get('not_ingestible', 0)} not ingestible")
     print(f"report: {work / 'REPORT.md'}")
-    print(f"next: /graphify {staging}")
+    print(f"next: curate.py link --source {source} --out {out}   (graphify-out/ then lands in {out}, not the project)")
+    print(f"then: cd {source} && /graphify {staging}")
+
+
+def cmd_link(args):
+    """Point <source>/graphify-out at <out>/graphify-out so Graphify's output stays out of the project.
+
+    This is the only write the skill makes under --source: one symlink.
+    """
+    source = Path(args.source).expanduser().resolve()
+    out = resolve_out(args)
+    check_paths(source, out)
+    target = out / "graphify-out"
+    target.mkdir(parents=True, exist_ok=True)
+    link = source / "graphify-out"
+    if link.is_symlink():
+        if Path(os.readlink(link)).resolve() == target.resolve():
+            print(f"link already in place: {link} -> {target}")
+            return
+        die(f"{link} is a symlink to {os.readlink(link)}; remove it yourself if you want it repointed")
+    if link.exists():
+        die(f"{link} already exists and is not a symlink; move it aside (it may be an earlier graph) and re-run")
+    link.symlink_to(target, target_is_directory=True)
+    print(f"linked: {link} -> {target}")
+    print(f"next: cd {source} && /graphify {out / 'staging'}")
 
 
 def _prep(path):
@@ -1259,10 +1292,11 @@ def build_parser():
     for name, fn, help_ in (
         ("analyze", cmd_analyze, "inventory, extract, group duplicates, find revision chains and clusters, write the LLM queue"),
         ("apply", cmd_apply, "apply verdicts and overrides, build staging/, REPORT.md and decisions.jsonl"),
+        ("link", cmd_link, "symlink <source>/graphify-out to <out>/graphify-out (the only write under --source)"),
     ):
         p = sub.add_parser(name, help=help_, description=help_)
         p.add_argument("--source", required=True, help="read-only source folder")
-        p.add_argument("--out", required=True, help="output folder (must be outside --source)")
+        p.add_argument("--out", help="output folder, outside --source (default: ~/curated/<basename of --source>)")
         p.add_argument("--config", help="config.yaml (default: <out>/config.yaml)")
         p.add_argument("--overrides", help="overrides.yaml (default: <out>/overrides.yaml)")
         p.set_defaults(fn=fn)
