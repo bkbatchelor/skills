@@ -49,3 +49,5 @@ Clustering cut `max(floor, mean + 1.0·stdev)` with floors 0.78 (fastembed) and 
 
 - Real-corpus dry runs (out of scope per Q5).
 - OCR for text-free documents (Q17).
+
+- **Default output and graphify-out link.** `--out` defaults to `~/curated/<basename of --source>`. A third command, `link`, creates `<out>/graphify-out/` and the symlink `<source>/graphify-out` pointing at it, so Graphify (which writes to the directory it runs from) never fills the project. This is the single, deliberate exception to "nothing under `--source` is written"; `apply` and `analyze` still write nothing there, and `graphify-out` is in `SKIP_DIRS` so the link is never inventoried. `link` refuses to replace a real directory or a symlink to somewhere else.

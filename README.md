@@ -84,7 +84,7 @@ skills/
 │   │   ├── references/           # Reference materials
 │   │   │   └── verdict-schema.md
 │   │   ├── scripts/              # Helper scripts
-│   │   │   ├── curate.py         # analyze and apply phases
+│   │   │   ├── curate.py         # analyze, apply and link commands
 │   │   │   └── check_env.sh      # Dependency check
 │   │   ├── docker/               # Reference image
 │   │   │   └── Dockerfile
@@ -358,12 +358,12 @@ Converts Mermaid diagrams to SVG with [mermaid-cli](https://github.com/mermaid-j
 
 ---
 
-Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. It never modifies the source and never runs Graphify; it prints `/graphify <out>/staging` for the user to run.
+Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and a `graphify-out` symlink in the project points there so Graphify's output stays out of it. Apart from that symlink it never modifies the source, and it never runs Graphify; it prints `cd <source> && /graphify <out>/staging` for the user to run.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
 - `README.md`: User-facing guide to invoking the skill, what Claude does at each phase, the output layout (where `.docs-curator/` and `staging/` are written), and how to adjust results
-- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue) and `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`)
+- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` to `<out>/graphify-out`)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
@@ -391,6 +391,7 @@ RUN="uv run --no-project --with-requirements docs/docs-curator/requirements.txt"
 $RUN python docs/docs-curator/scripts/curate.py analyze --source ~/docs --out ~/curated/docs
 # review each cluster in ~/curated/docs/.docs-curator/work/queue/, write verdicts, then:
 $RUN python docs/docs-curator/scripts/curate.py apply --source ~/docs --out ~/curated/docs
+$RUN python docs/docs-curator/scripts/curate.py link --source ~/docs --out ~/curated/docs   # ~/docs/graphify-out -> ~/curated/docs/graphify-out
 ```
 
 #### html-artifacts
