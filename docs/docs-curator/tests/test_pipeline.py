@@ -238,3 +238,18 @@ def test_fixture_cluster_ids_match_the_current_corpus(pipeline):
     analysis = json.loads((out / ".docs-curator/analysis.json").read_text(encoding="utf-8"))
     ids = {c["id"] for c in analysis["clusters"]}
     assert {f.stem for f in FIXTURES.glob("*.json")} == ids
+
+
+def test_link_points_source_graphify_out_at_out(corpus, tmp_path):
+    out = tmp_path / "out"
+    run("analyze", "--source", str(corpus), "--out", str(out))
+    run("link", "--source", str(corpus), "--out", str(out))
+    link = corpus / "graphify-out"
+    assert link.is_symlink() and link.resolve() == (out / "graphify-out").resolve()
+    run("link", "--source", str(corpus), "--out", str(out))  # idempotent
+
+
+def test_default_out_is_curated_basename(corpus, monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    run("analyze", "--source", str(corpus))
+    assert (tmp_path / "curated" / corpus.name / ".docs-curator").is_dir()

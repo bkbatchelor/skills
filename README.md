@@ -77,13 +77,14 @@ skills/
 │   │       └── advance-level-template.md
 │   ├── docs-curator/             # Document curation skill for Graphify
 │   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Skill overview, usage, and output layout
 │   │   ├── PLAN.md               # Build plan
 │   │   ├── DECISIONS.md          # Settled decisions and departures from the plan
 │   │   ├── requirements.txt      # Pinned Python dependencies
 │   │   ├── references/           # Reference materials
 │   │   │   └── verdict-schema.md
 │   │   ├── scripts/              # Helper scripts
-│   │   │   ├── curate.py         # analyze and apply phases
+│   │   │   ├── curate.py         # analyze, apply and link commands
 │   │   │   └── check_env.sh      # Dependency check
 │   │   ├── docker/               # Reference image
 │   │   │   └── Dockerfile
@@ -166,7 +167,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -357,11 +358,12 @@ Converts Mermaid diagrams to SVG with [mermaid-cli](https://github.com/mermaid-j
 
 ---
 
-Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. It never modifies the source and never runs Graphify; it prints `/graphify <out>/staging` for the user to run.
+Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and a `graphify-out` symlink in the project points there so Graphify's output stays out of it. Apart from that symlink it never modifies the source, and it never runs Graphify; it prints `cd <source> && /graphify <out>/staging` for the user to run.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
-- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue) and `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`)
+- `README.md`: User-facing guide to invoking the skill, what Claude does at each phase, the output layout (where `.docs-curator/` and `staging/` are written), and how to adjust results
+- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` to `<out>/graphify-out`)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
@@ -389,6 +391,7 @@ RUN="uv run --no-project --with-requirements docs/docs-curator/requirements.txt"
 $RUN python docs/docs-curator/scripts/curate.py analyze --source ~/docs --out ~/curated/docs
 # review each cluster in ~/curated/docs/.docs-curator/work/queue/, write verdicts, then:
 $RUN python docs/docs-curator/scripts/curate.py apply --source ~/docs --out ~/curated/docs
+$RUN python docs/docs-curator/scripts/curate.py link --source ~/docs --out ~/curated/docs   # ~/docs/graphify-out -> ~/curated/docs/graphify-out
 ```
 
 #### html-artifacts
