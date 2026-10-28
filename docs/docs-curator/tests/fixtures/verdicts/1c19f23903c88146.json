@@ -1,0 +1,13 @@
+{
+  "cluster_id": "1c19f23903c88146",
+  "reviewed": true,
+  "revisions": [
+    {
+      "superseded": "reports/status_report.md",
+      "superseded_by": "reports/status_report_final.md",
+      "confidence": 0.5,
+      "rationale": "The final report reads as a later phase, but nothing dates either file.",
+      "unique_content": []
+    }
+  ]
+}

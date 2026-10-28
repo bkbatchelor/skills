@@ -75,9 +75,26 @@ skills/
 │   │       ├── basic-level-template.md
 │   │       ├── standard-level-template.md
 │   │       └── advance-level-template.md
-│   ├── docs-curator/             # Document curation skill (skeleton)
-│   │   ├── SKILL.md              # Skill definition (placeholder)
-│   │   └── PLAN.md               # Build plan
+│   ├── docs-curator/             # Document curation skill for Graphify
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── PLAN.md               # Build plan
+│   │   ├── DECISIONS.md          # Settled decisions and departures from the plan
+│   │   ├── requirements.txt      # Pinned Python dependencies
+│   │   ├── references/           # Reference materials
+│   │   │   └── verdict-schema.md
+│   │   ├── scripts/              # Helper scripts
+│   │   │   ├── curate.py         # analyze and apply phases
+│   │   │   └── check_env.sh      # Dependency check
+│   │   ├── docker/               # Reference image
+│   │   │   └── Dockerfile
+│   │   └── tests/                # Dev only: corpus, answer key, scorer, pytest suite
+│   │       ├── make_corpus.py
+│   │       ├── corpus_expected.yaml
+│   │       ├── score.py
+│   │       ├── conftest.py
+│   │       ├── test_units.py
+│   │       ├── test_pipeline.py
+│   │       └── fixtures/verdicts/    # Hand-written verdicts, one per cluster
 │   ├── mermaid-to-svg/           # Mermaid diagram rendering skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── references/           # Reference materials
@@ -112,7 +129,10 @@ skills/
 │   │   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
 │   │   └── scripts/              # Helper scripts
 │   │       └── search.py
-│   └── heavy-file-ingestion/
+│   └── heavy-file-ingestion/     # PDF/Office/large text to chunked Markdown
+│       ├── SKILL.md              # Skill definition
+│       └── scripts/              # Helper scripts
+│           └── ingest.py
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -146,7 +166,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
-| docs-curator | Curates a document folder into a deduplicated staging tree for Graphify (skeleton, not yet implemented) | `SKILL.md` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -337,10 +357,39 @@ Converts Mermaid diagrams to SVG with [mermaid-cli](https://github.com/mermaid-j
 
 ---
 
-Skeleton only. Will curate a large, read-only folder of documents into a deduplicated staging tree for Graphify; the design is in `docs/docs-curator/PLAN.md`. No behavior is implemented yet.
+Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. It never modifies the source and never runs Graphify; it prints `/graphify <out>/staging` for the user to run.
 
 **Key Components:**
-- `SKILL.md`: Placeholder skill definition
+- `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
+- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue) and `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`)
+- `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
+- `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
+- `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
+- `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
+- `DECISIONS.md`: Every settled decision and where the build departed from `PLAN.md`
+- `tests/`: Dev-only synthetic corpus generator with an answer key, `score.py`, fixture verdicts, and a pytest suite (not needed at runtime)
+
+**Requirements:**
+- `uv` and Python 3.10+; run through `uv run --no-project --with-requirements requirements.txt python scripts/curate.py ...`
+- `soffice` (LibreOffice) to convert kept `.pptx` decks to PDF
+- First run downloads the `BAAI/bge-small-en-v1.5` embedding model; `embedding_backend: tfidf` in `config.yaml` avoids it
+
+**Features:**
+- Three phases: `analyze`, a per-cluster LLM review that writes verdict files, then `apply`
+- Exact, cross-format (for example a deck and its PDF export), and near-duplicate detection with MinHash and rapidfuzz; near duplicates are flagged and kept unless `near_duplicate_action: exclude`
+- Revision chains from filename markers, in-text versions and dates, document properties, and mtime; a file is excluded as superseded only with two agreeing signals or a confident verdict
+- Every kept document except `.pptx` is staged as Markdown with front matter (`source_path`, `source_format`, `sha256`, `status`, `description`); decks become a PDF plus a speaker-notes sidecar
+- `_curated/CONFLICTS.md` for contradictions (quotes are checked against the text) and `_curated/historical/` for superseded files with unique content
+- Optional `config.yaml` and `overrides.yaml` in the output folder; a second run on an unchanged corpus processes nothing new
+- Thresholds are tuned on a synthetic corpus only; spot-check the first real run
+
+**Usage:**
+```bash
+RUN="uv run --no-project --with-requirements docs/docs-curator/requirements.txt"
+$RUN python docs/docs-curator/scripts/curate.py analyze --source ~/docs --out ~/curated/docs
+# review each cluster in ~/curated/docs/.docs-curator/work/queue/, write verdicts, then:
+$RUN python docs/docs-curator/scripts/curate.py apply --source ~/docs --out ~/curated/docs
+```
 
 #### html-artifacts
 

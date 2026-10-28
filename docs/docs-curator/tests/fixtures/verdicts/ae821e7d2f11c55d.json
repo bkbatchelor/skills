@@ -1,0 +1,22 @@
+{
+  "cluster_id": "ae821e7d2f11c55d",
+  "reviewed": true,
+  "conflicts": [
+    {
+      "topic": "Remote work days per week",
+      "statements": [
+        {
+          "path": "policy/remote_work_policy.md",
+          "quote": "Employees may work remotely up to three days per week",
+          "location": "first paragraph"
+        },
+        {
+          "path": "hr/employee_handbook.md",
+          "quote": "Remote work is limited to two days per week",
+          "location": "first paragraph"
+        }
+      ],
+      "rationale": "The policy allows three remote days, the handbook two."
+    }
+  ]
+}

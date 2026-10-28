@@ -1,0 +1,15 @@
+{
+  "cluster_id": "adf3d9fe0529eefa",
+  "reviewed": true,
+  "revisions": [
+    {
+      "superseded": "policy/travel_policy.md",
+      "superseded_by": "policy/travel_policy_updated.md",
+      "confidence": 0.95,
+      "rationale": "The updated policy restates the same rules with a shorter claim window; only the older file keeps the Antarctic field station per diem.",
+      "unique_content": [
+        "Field station travel: staff travelling to Antarctic research stations receive a per diem of 85 USD"
+      ]
+    }
+  ]
+}

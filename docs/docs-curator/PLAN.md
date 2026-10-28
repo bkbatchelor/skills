@@ -1,6 +1,6 @@
 # doc-curator — build plan
 
-Status: design settled through a grilling session (Q1–Q24). Not built. The user paused to revisit one decision before approving the build.
+Status: built on branch `feat/docs-curator-skill` (see `DECISIONS.md` for what changed from this plan: location `docs/docs-curator/`, name `docs-curator`, no numpy pin). The earlier pause to revisit one decision was superseded by the instruction to build from this plan as written.
 
 Inputs:
 - Requirements: `/home/bkb/Documents/research/doc-curator-extraction.md`
@@ -85,7 +85,3 @@ Three phases: `curate.py analyze` (deterministic), an LLM phase (Claude, followi
 - Cluster IDs and boundaries are unstable across small input changes; fixtures named after cluster IDs break when corpus files change.
 - Identifier-collision detection only suits documents that describe work, not document libraries.
 - Thresholds are untuned on real data.
-
-## Open
-
-The user said "Not yet, I want to revisit something first" before approving the build. The topic has not been named yet; reopen that decision and anything downstream before building.
