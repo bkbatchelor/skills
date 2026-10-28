@@ -1,0 +1,13 @@
+{
+  "cluster_id": "0f1ac25b35abcb1e",
+  "reviewed": true,
+  "revisions": [
+    {
+      "superseded": "finance/headcount_plan_2024.xlsx",
+      "superseded_by": "finance/headcount_plan_2025.xlsx",
+      "confidence": 0.9,
+      "rationale": "The 2025 sheet states that it supersedes the 2024 headcount plan.",
+      "unique_content": []
+    }
+  ]
+}
