@@ -1,0 +1,22 @@
+{
+  "cluster_id": "4cda6dd2eea7bb9c",
+  "reviewed": true,
+  "conflicts": [
+    {
+      "topic": "Guaranteed monthly uptime",
+      "statements": [
+        {
+          "path": "ops/sla_standard.md",
+          "quote": "The platform is guaranteed 99.9% monthly uptime.",
+          "location": "first paragraph"
+        },
+        {
+          "path": "support/support_terms.md",
+          "quote": "Monthly uptime is guaranteed at 99.5% for standard plans.",
+          "location": "first paragraph"
+        }
+      ],
+      "rationale": "The two documents promise different uptime figures for the same service."
+    }
+  ]
+}
