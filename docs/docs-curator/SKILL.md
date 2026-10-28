@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.1.0
+  version: 1.1.1
 ---
 
 # Docs Curator

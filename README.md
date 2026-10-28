@@ -77,6 +77,7 @@ skills/
 │   │       └── advance-level-template.md
 │   ├── docs-curator/             # Document curation skill for Graphify
 │   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Skill overview, usage, and output layout
 │   │   ├── PLAN.md               # Build plan
 │   │   ├── DECISIONS.md          # Settled decisions and departures from the plan
 │   │   ├── requirements.txt      # Pinned Python dependencies
@@ -166,7 +167,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -361,6 +362,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
+- `README.md`: User-facing guide to invoking the skill, what Claude does at each phase, the output layout (where `.docs-curator/` and `staging/` are written), and how to adjust results
 - `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue) and `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
