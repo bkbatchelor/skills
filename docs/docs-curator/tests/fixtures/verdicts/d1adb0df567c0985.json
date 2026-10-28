@@ -1,0 +1,20 @@
+{
+  "cluster_id": "d1adb0df567c0985",
+  "reviewed": true,
+  "revisions": [
+    {
+      "superseded": "projects/atlas/design_spec_v2.md",
+      "superseded_by": "projects/atlas/design_spec_v3.md",
+      "confidence": 0.95,
+      "rationale": "v3 builds on v2 and keeps its design.",
+      "unique_content": []
+    },
+    {
+      "superseded": "projects/atlas/design_spec.md",
+      "superseded_by": "projects/atlas/design_spec_v3.md",
+      "confidence": 0.95,
+      "rationale": "v1 is the original design, replaced by v2 and v3.",
+      "unique_content": []
+    }
+  ]
+}

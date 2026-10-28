@@ -1,0 +1,68 @@
+# Answer key for the synthetic corpus (tests/make_corpus.py), assuming the
+# verdicts in tests/fixtures/verdicts (or an equivalent LLM phase) are applied.
+files:
+  hr/onboarding_guide.md: {action: include, reason: unique}
+  marketing/brand_voice.md: {action: include, reason: unique}
+  engineering/coding_standards.md: {action: include, reason: unique}
+  research/battery_chemistry.txt: {action: include, reason: unique}
+  legal/privacy_notice.pdf: {action: include, reason: unique}
+  ops/incident_runbook.docx: {action: include, reason: unique}
+  facilities/catering_schedule.xlsx: {action: include, reason: unique}
+  # byte-identical pairs
+  forms/FRM-1042.md: {action: exclude, reason: exact_duplicate, kept_instead: policies/vendor_onboarding_policy.md}
+  policies/vendor_onboarding_policy.md: {action: include, reason: unique}
+  finance/copy_of_expense_policy.txt: {action: exclude, reason: exact_duplicate, kept_instead: finance/expense_policy.txt}
+  finance/expense_policy.txt: {action: include, reason: unique}
+  # deck and its PDF export
+  decks/platform_roadmap.pptx: {action: convert, reason: unique}
+  decks/platform_roadmap.pdf: {action: exclude, reason: format_duplicate, kept_instead: decks/platform_roadmap.pptx}
+  # near duplicate: flagged and kept by default
+  notes/release_notes.md: {action: include, reason: unique}
+  notes/release_notes_edited.md: {action: include, reason: near_duplicate_flag, kept_instead: notes/release_notes.md}
+  # revision chain, two agreeing non-mtime signals
+  projects/atlas/design_spec.md: {action: exclude, reason: superseded, kept_instead: projects/atlas/design_spec_v3.md}
+  projects/atlas/design_spec_v2.md: {action: exclude, reason: superseded, kept_instead: projects/atlas/design_spec_v3.md}
+  projects/atlas/design_spec_v3.md: {action: include, reason: unique}
+  # xlsx pair superseded on the strength of a verdict alone
+  finance/headcount_plan_2024.xlsx: {action: exclude, reason: superseded, kept_instead: finance/headcount_plan_2025.xlsx}
+  finance/headcount_plan_2025.xlsx: {action: include, reason: unique}
+  # subsumed excerpt
+  wiki/deployment_overview.md: {action: include, reason: unique}
+  wiki/deployment_overview_summary.md: {action: include, reason: subsumed_flag, kept_instead: wiki/deployment_overview.md}
+  # planted contradictions: all four documents stay in staging
+  policy/remote_work_policy.md: {action: include, reason: unique}
+  hr/employee_handbook.md: {action: include, reason: unique}
+  ops/sla_standard.md: {action: include, reason: unique}
+  support/support_terms.md: {action: include, reason: unique}
+  # text-free PDF
+  scans/site_photo.pdf: {action: include, reason: unique}
+  # superseded, but holds unique content
+  policy/travel_policy.md: {action: exclude, reason: superseded, kept_instead: policy/travel_policy_updated.md}
+  policy/travel_policy_updated.md: {action: include, reason: unique}
+  # ambiguous marker, order known only from mtime
+  reports/status_report.md: {action: include, reason: low_confidence_keep, kept_instead: reports/status_report_final.md}
+  reports/status_report_final.md: {action: include, reason: unique}
+  # identifier collision (report only)
+  engineering/PRJ-204_banner_redesign.md: {action: include, reason: unique}
+  engineering/sprint_board.md: {action: include, reason: unique}
+  # unusable inputs
+  misc/diagram.png: {action: not_ingestible, reason: not_ingestible}
+  misc/corrupt.docx: {action: unreadable, reason: unreadable}
+
+conflicts:
+  - [policy/remote_work_policy.md, hr/employee_handbook.md]
+  - [ops/sla_standard.md, support/support_terms.md]
+
+collisions: [PRJ-204]
+
+# groups of paths filed under different names for the same content
+anomalies:
+  - [forms/FRM-1042.md, policies/vendor_onboarding_policy.md]
+
+text_free: [scans/site_photo.pdf]
+
+historical: [policy/travel_policy.md]
+
+staging_absent:
+  - decks/platform_roadmap.pptx
+  - projects/atlas/design_spec.md
