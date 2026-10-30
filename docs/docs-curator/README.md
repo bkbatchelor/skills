@@ -94,7 +94,9 @@ Staged Markdown is text only. Layout, images and formatting in PDF, Word and Exc
 
 ## Running Graphify
 
-Graphify writes `graphify-out/` into the directory you run it from. To keep that out of your project, the skill's last step creates `<out>/graphify-out/` and one symlink, `<source>/graphify-out`, pointing at it. It is the only thing the skill ever writes to the source folder.
+Graphify writes `graphify-out/` into the directory you run it from. To keep that out of your project, the skill's last step creates `<out>/graphify-out/` and two symlinks in the project root, `<source>/graphify-out` and `<source>/.docs-curator` (the working directory), pointing into `<out>`. Those links are the only things the skill writes to the source folder, plus a `.gitignore` entry if you opt in.
+
+To keep the `.docs-curator` link out of git, ask for `--gitignore project` (adds `.docs-curator` to `<source>/.gitignore`) or `--gitignore global` (adds it to your global git excludes file). Neither is done unless you ask.
 
 It then prints:
 

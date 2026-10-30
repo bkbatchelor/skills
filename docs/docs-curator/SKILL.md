@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Docs Curator
@@ -42,7 +42,7 @@ The output folder defaults to `~/curated/<project-name>/`, where `<project-name>
    - Only claim a supersession you can defend from the text. Give honest `confidence` (0 to 1). Below 0.75 the older file is kept and flagged.
    - Unique content in a superseded file goes in `unique_content`; that file also gets a copy under `_curated/historical/`.
 3. **Apply.** `$RUN python $SKILL/scripts/curate.py apply --source <src> --out <out>`. It builds `<out>/staging/`, writes `REPORT.md`, `decisions.jsonl` and `state.json` under `<out>/.docs-curator/`, and prints the next steps.
-4. **Link.** `$RUN python $SKILL/scripts/curate.py link --source <src> --out <out>`. It creates `<out>/graphify-out/` and one symlink, `<src>/graphify-out` pointing at it. Graphify writes `graphify-out/` into the directory it runs from, so running it from `<src>` sends its output to `<out>` instead of filling the project. It refuses to replace an existing `graphify-out` that is not that symlink; tell the user.
+4. **Link.** `$RUN python $SKILL/scripts/curate.py link --source <src> --out <out>`. It creates `<out>/graphify-out/` and two symlinks in the project root: `<src>/graphify-out` and `<src>/.docs-curator`, pointing at `<out>/graphify-out` and `<out>/.docs-curator` (the working directory). Graphify writes `graphify-out/` into the directory it runs from, so running it from `<src>` sends its output to `<out>` instead of filling the project. It refuses to replace an existing `graphify-out` that is not that symlink; tell the user. Offer `--gitignore project` (appends `.docs-curator` to `<src>/.gitignore`) or `--gitignore global` (appends it to the global git excludes file: `core.excludesFile`, else `~/.config/git/ignore`); only pass it if the user says yes. The entry has no trailing slash because git treats a symlink as a file.
 5. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, and the printed `cd <src> && /graphify <out>/staging` line. Do not run Graphify.
 
 If the queue was capped (`max_llm_clusters_per_run`, default 25, largest clusters first), the rest are listed in the report. Tell the user, and run analyze, review, and apply again to pick them up; existing verdicts are kept.

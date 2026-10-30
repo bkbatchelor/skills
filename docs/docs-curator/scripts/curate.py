@@ -3,10 +3,10 @@
 
   curate.py analyze --source SRC --out OUT   deterministic analysis, writes the LLM queue
   curate.py apply   --source SRC --out OUT   applies verdicts, builds OUT/staging, REPORT.md
-  curate.py link    --source SRC --out OUT   symlinks SRC/graphify-out to OUT/graphify-out
+  curate.py link    --source SRC --out OUT   symlinks SRC/graphify-out and SRC/.docs-curator into OUT
 
 --out defaults to ~/curated/<basename of SRC>. The source is only ever read, except that
-`link` creates the one graphify-out symlink. Graphify is never run; its command is printed.
+`link` creates the graphify-out and .docs-curator symlinks (and a .gitignore entry if asked). Graphify is never run; its command is printed.
 Code is kept 3.10-compatible.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ EXTRACT_VERSION = 1
 WORKDIR = ".docs-curator"
 SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx"}
 FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5}
-SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out", ".docs-curator"}
 IDENTICAL_TEXT_SIMILARITY = 0.999
 MIN_TOKENS = 5
 DEFAULT_ID_PATTERN = r"\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b"
@@ -1228,7 +1228,15 @@ def cmd_link(args):
     check_paths(source, out)
     target = out / "graphify-out"
     target.mkdir(parents=True, exist_ok=True)
-    link = source / "graphify-out"
+    _symlink(source / "graphify-out", target)
+    _symlink(source / ".docs-curator", out / ".docs-curator")
+    if args.gitignore:
+        _gitignore(source, args.gitignore)
+    print(f"next: cd {source} && /graphify {out / 'staging'}")
+
+
+def _symlink(link, target):
+    target.mkdir(parents=True, exist_ok=True)
     if link.is_symlink():
         if Path(os.readlink(link)).resolve() == target.resolve():
             print(f"link already in place: {link} -> {target}")
@@ -1238,7 +1246,31 @@ def cmd_link(args):
         die(f"{link} already exists and is not a symlink; move it aside (it may be an earlier graph) and re-run")
     link.symlink_to(target, target_is_directory=True)
     print(f"linked: {link} -> {target}")
-    print(f"next: cd {source} && /graphify {out / 'staging'}")
+
+
+def _gitignore(source, scope):
+    """Add `.docs-curator` to the project's .gitignore or to the global git excludes file.
+
+    No trailing slash: git treats a symlink as a file, so `.docs-curator/` would not match it.
+    """
+    entry = ".docs-curator"
+    if scope == "project":
+        path = source / ".gitignore"
+    else:
+        res = subprocess.run(["git", "config", "--global", "core.excludesFile"], capture_output=True, text=True)
+        configured = res.stdout.strip()
+        if configured:
+            path = Path(configured).expanduser()
+        else:
+            path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "git" / "ignore"
+    lines = path.read_text().splitlines() if path.exists() else []
+    if entry in (ln.strip().rstrip("/") for ln in lines):
+        print(f"gitignore already lists {entry}: {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text() if path.exists() else ""
+    path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + entry + "\n")
+    print(f"added {entry} to {path}")
 
 
 def _prep(path):
@@ -1338,13 +1370,15 @@ def build_parser():
         ("analyze", cmd_analyze, "inventory, extract, group duplicates, find revision chains and clusters, write the LLM queue"),
         ("update", cmd_update, "re-analyze after files were added, modified or removed; report the changes and queue only the affected clusters"),
         ("apply", cmd_apply, "apply verdicts and overrides, build staging/, REPORT.md and decisions.jsonl"),
-        ("link", cmd_link, "symlink <source>/graphify-out to <out>/graphify-out (the only write under --source)"),
+        ("link", cmd_link, "symlink <source>/graphify-out and <source>/.docs-curator into <out> (the only writes under --source, plus .gitignore if asked)"),
     ):
         p = sub.add_parser(name, help=help_, description=help_)
         p.add_argument("--source", required=True, help="read-only source folder")
         p.add_argument("--out", help="output folder, outside --source (default: ~/curated/<basename of --source>)")
         p.add_argument("--config", help="config.yaml (default: <out>/config.yaml)")
         p.add_argument("--overrides", help="overrides.yaml (default: <out>/overrides.yaml)")
+        if name == "link":
+            p.add_argument("--gitignore", choices=("project", "global"), help="also add .docs-curator to <source>/.gitignore or to the global git excludes file")
         p.set_defaults(fn=fn)
     return ap
 
