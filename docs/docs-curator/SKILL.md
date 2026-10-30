@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # Docs Curator
@@ -46,6 +46,17 @@ The output folder defaults to `~/curated/<project-name>/`, where `<project-name>
 5. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, and the printed `cd <src> && /graphify <out>/staging` line. Do not run Graphify.
 
 If the queue was capped (`max_llm_clusters_per_run`, default 25, largest clusters first), the rest are listed in the report. Tell the user, and run analyze, review, and apply again to pick them up; existing verdicts are kept.
+
+## Updating after the source changed
+
+When files were added, modified or removed after a finished run, use `update` instead of a full re-run: `$RUN python $SKILL/scripts/curate.py update --source <src> --out <out>`. It requires an earlier `analyze`, re-runs it, and writes `<out>/.docs-curator/changes.json` with `added`, `modified`, `removed`, `affected_clusters`, `queued_clusters` and `stale_verdicts`. Only clusters containing a new or modified file get a new id, so only they are queued; every other verdict is kept.
+
+1. Run `update` and tell the user the added, modified and removed counts.
+2. Review the queued clusters exactly as in step 2 above, then run `apply` and `link` (if needed).
+3. `stale_verdicts` are verdicts for clusters that no longer exist (a member changed or was removed). Leave the files in place; `apply` warns about them. Mention them to the user.
+4. A removed source file disappears from `staging/` when `apply` rebuilds it.
+
+If nothing changed, `update` says so and `staging/` is already current.
 
 ## Settings and overrides
 

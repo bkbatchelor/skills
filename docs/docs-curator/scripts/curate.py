@@ -802,6 +802,51 @@ def cmd_analyze(args):
     print(f"queue: {queue_dir}")
 
 
+def cmd_update(args):
+    """Re-analyze after the source changed and report what was added, modified or removed."""
+    out = resolve_out(args)
+    work = out / WORKDIR
+    ap = work / "analysis.json"
+    if not ap.exists():
+        die("no earlier analysis found; run 'analyze' first")
+    old = {f["path"]: f["sha256"] for f in json.loads(ap.read_text(encoding="utf-8"))["files"]}
+    cmd_analyze(args)
+    an = json.loads(ap.read_text(encoding="utf-8"))
+    new = {f["path"]: f["sha256"] for f in an["files"]}
+    added = sorted(p for p in new if p not in old)
+    modified = sorted(p for p in new if p in old and new[p] != old[p])
+    removed = sorted(p for p in old if p not in new)
+    touched = set(added) | set(modified)
+    affected = [c["id"] for c in an["clusters"] if touched & set(c["members"])]
+    queue = sorted(q.stem for q in (work / "work" / "queue").glob("*.json"))
+    known = {c["id"] for c in an["clusters"]}
+    vdir = work / "work" / "verdicts"
+    stale = sorted(v.stem for v in vdir.glob("*.json") if v.stem not in known) if vdir.exists() else []
+    changes = {
+        "added": added,
+        "modified": modified,
+        "removed": removed,
+        "unchanged": len(new) - len(added) - len(modified),
+        "affected_clusters": affected,
+        "queued_clusters": queue,
+        "stale_verdicts": stale,
+    }
+    write_json(work / "changes.json", changes)
+    write_state(work, load_config(out, args.config), {"update": {k: (len(v) if isinstance(v, list) else v) for k, v in changes.items()}})
+    print(f"update: {len(added)} added, {len(modified)} modified, {len(removed)} removed, {changes['unchanged']} unchanged")
+    for label, items in (("added", added), ("modified", modified), ("removed", removed)):
+        for item in items[:20]:
+            print(f"  {label}: {item}")
+        if len(items) > 20:
+            print(f"  ... {len(items) - 20} more {label}")
+    print(f"{len(queue)} cluster(s) need review ({len(affected)} contain a new or modified file); {len(stale)} stale verdict(s) match no current cluster")
+    print(f"changes: {work / 'changes.json'}")
+    if not (added or modified or removed):
+        print("nothing changed; staging is current")
+    else:
+        print("next: review the queued clusters, then run 'apply'")
+
+
 def write_state(work, cfg, extra):
     path = work / "state.json"
     state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -1291,6 +1336,7 @@ def build_parser():
     sub = ap.add_subparsers(dest="command", required=True)
     for name, fn, help_ in (
         ("analyze", cmd_analyze, "inventory, extract, group duplicates, find revision chains and clusters, write the LLM queue"),
+        ("update", cmd_update, "re-analyze after files were added, modified or removed; report the changes and queue only the affected clusters"),
         ("apply", cmd_apply, "apply verdicts and overrides, build staging/, REPORT.md and decisions.jsonl"),
         ("link", cmd_link, "symlink <source>/graphify-out to <out>/graphify-out (the only write under --source)"),
     ):

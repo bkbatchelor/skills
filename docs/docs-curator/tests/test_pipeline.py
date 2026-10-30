@@ -196,6 +196,30 @@ def test_verdicts_persist_across_analyze(pipeline, tmp_path):
     assert not list((out / ".docs-curator/work/queue").glob("*.json"))  # all clusters already reviewed
 
 
+def test_update_reports_added_modified_and_removed(pipeline, tmp_path):
+    corpus, out = clone(pipeline, tmp_path)
+    src = tmp_path / "src"
+    shutil.copytree(corpus, src)
+    run("analyze", "--source", str(src), "--out", str(out))
+    (src / "hr/onboarding_guide.md").write_text("Rewritten onboarding guide with new content about laptops and badges.\n" * 20)
+    (src / "brand_new_note.md").write_text("A brand new note about parking permits and visitor passes.\n" * 20)
+    victim = next(p for p in sorted(src.rglob("*.txt")))
+    gone = victim.relative_to(src).as_posix()
+    victim.unlink()
+    run("update", "--source", str(src), "--out", str(out))
+    changes = json.loads((out / ".docs-curator/changes.json").read_text(encoding="utf-8"))
+    assert changes["added"] == ["brand_new_note.md"]
+    assert changes["modified"] == ["hr/onboarding_guide.md"]
+    assert changes["removed"] == [gone]
+    run("apply", "--source", str(src), "--out", str(out))
+    assert (out / "staging/brand_new_note.md").is_file()
+
+
+def test_update_requires_an_earlier_analysis(corpus, tmp_path):
+    with pytest.raises(SystemExit):
+        run("update", "--source", str(corpus), "--out", str(tmp_path / "out"))
+
+
 def test_refuses_out_inside_source(corpus):
     with pytest.raises(SystemExit):
         run("analyze", "--source", str(corpus), "--out", str(corpus / "out"))
