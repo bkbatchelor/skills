@@ -270,7 +270,23 @@ def test_link_points_source_graphify_out_at_out(corpus, tmp_path):
     run("link", "--source", str(corpus), "--out", str(out))
     link = corpus / "graphify-out"
     assert link.is_symlink() and link.resolve() == (out / "graphify-out").resolve()
+    assert (corpus / ".docs-curator").resolve() == (out / ".docs-curator").resolve()
     run("link", "--source", str(corpus), "--out", str(out))  # idempotent
+
+
+def test_link_gitignore_project_and_global(corpus, tmp_path, monkeypatch):
+    src = tmp_path / "src"
+    shutil.copytree(corpus, src, symlinks=True, ignore=shutil.ignore_patterns("graphify-out", ".docs-curator"))
+    corpus = src
+    out = tmp_path / "out"
+    run("analyze", "--source", str(corpus), "--out", str(out))
+    run("link", "--source", str(corpus), "--out", str(out), "--gitignore", "project")
+    run("link", "--source", str(corpus), "--out", str(out), "--gitignore", "project")  # no duplicate
+    assert (corpus / ".gitignore").read_text().splitlines().count(".docs-curator") == 1
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    run("link", "--source", str(corpus), "--out", str(out), "--gitignore", "global")
+    assert ".docs-curator" in (tmp_path / "xdg/git/ignore").read_text().splitlines()
 
 
 def test_default_out_is_curated_basename(corpus, monkeypatch, tmp_path):
