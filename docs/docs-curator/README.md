@@ -24,6 +24,7 @@ Don't use it for a single file, for building or querying the graph (that's `grap
 | Slash command | `/docs-curator` followed by the source and output folders, or just `/docs-curator` and answer Claude's questions | Forcing the skill when plain language doesn't trigger it. |
 | Settings up front | Name them in the prompt: "curate `~/docs`, flag near duplicates but don't exclude them, use tfidf" | Runs where you already know the thresholds. Claude writes `config.yaml` before analyzing. |
 | Continue a capped run | "Continue curating `~/curated/docs`" | Large folders. Claude re-runs analyze, reviews the remaining groups and applies. Existing reviews are kept. |
+| Update after changes | "Update the curation of `~/docs`; I added and edited some files" | A folder that changed after a finished run. Claude reports what was added, modified and removed, reviews only the affected groups and rebuilds `staging/`. |
 | Re-apply after overrides | "I want `policies/travel_2022.docx` kept. Re-apply." | Fixing one file's fate without redoing the review. |
 | Watched delegate | "Delegate the curation of `~/docs` to another session" | Long runs. Uses the `visible-delegation` skill, so you can watch the session in a herdr pane. |
 | Headless | `claude -p "Curate ~/docs into ~/curated/docs"` | Scripts and scheduled jobs. Nobody is there to answer questions, so name both folders and any settings. |
@@ -40,6 +41,7 @@ The skill is named `docs-curator` (with an `s`).
 /docs-curator --source ~/docs --out ~/curated/docs --embedding-backend tfidf
 /docs-curator --source ~/docs --out ~/curated/docs --continue
 /docs-curator --source ~/docs --out ~/curated/docs --apply-only
+/docs-curator --source ~/docs --out ~/curated/docs --update
 ```
 
 | Argument | Meaning |
@@ -49,6 +51,7 @@ The skill is named `docs-curator` (with an `s`).
 | `--near-duplicate-action flag\|exclude` | Written to `config.yaml`. Default `flag`. |
 | `--embedding-backend fastembed\|tfidf` | Written to `config.yaml`. `tfidf` skips the model download. |
 | `--continue` | Pick up groups left over from a capped run. |
+| `--update` | The source gained, changed or lost files since the last run. Claude runs `update`, reviews only the affected groups, then applies. |
 | `--apply-only` | Skip analyze and review. Re-build `staging/` from existing reviews and `overrides.yaml`. |
 
 These are not parsed by code. Claude reads the text after `/docs-curator` and acts on it, so natural language works too (`/docs-curator ~/docs into ~/curated/docs`). Only `--source` is required. Any other `config.yaml` key can be passed the same way, with dashes for underscores.
@@ -60,6 +63,8 @@ Whichever option you choose, Claude needs the source folder. If it is missing, i
 1. **Analyze.** Claude scans the folder, reads every file, and groups exact duplicates, copies in different formats (a deck and its PDF export), near-identical text, revision chains (`v1`, `v2`, `final`, dated copies) and related topics.
 2. **Review.** Claude reads each group and decides whether one document supersedes another and whether any contradict each other. Contradictions are quoted word for word, and the quotes are checked against the documents afterwards. Claude only marks a file as superseded when it can defend that from the text.
 3. **Apply.** Claude builds the curated folder and a report, then gives you a summary and the Graphify command to run.
+
+After the folder changes, ask for an update. Claude lists the files added, modified and removed (saved in `.docs-curator/changes.json`), reviews only the groups that contain a new or modified file, and rebuilds `staging/`. Reviews of untouched groups are kept. Reviews of groups that changed are listed as stale and left in place.
 
 Re-running on an unchanged folder is cheap, and earlier reviews are kept. Very large folders are processed in batches of 25 groups. If some are left over, Claude tells you and you ask it to continue.
 
