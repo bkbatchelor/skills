@@ -78,8 +78,11 @@ skills/
 │   ├── docs-curator/             # Document curation skill for Graphify
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Skill overview, usage, and output layout
-│   │   ├── PLAN.md               # Build plan
-│   │   ├── DECISIONS.md          # Settled decisions and departures from the plan
+│   │   ├── plan/                 # Build plan and decisions
+│   │   │   ├── PLAN.md           # Build plan
+│   │   │   └── DECISIONS.md      # Settled decisions and departures from the plan
+│   │   ├── docs/                 # Supporting documentation
+│   │   │   └── How docs-curator works.md  # Technical walkthrough of curate.py, with Mermaid architecture diagram
 │   │   ├── requirements.txt      # Pinned Python dependencies
 │   │   ├── references/           # Reference materials
 │   │   │   └── verdict-schema.md
@@ -167,7 +170,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-svg | Renders Mermaid diagrams to validated SVG files with mermaid-cli | `SKILL.md`, `references/troubleshooting.md`, `scripts/render.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -363,12 +366,13 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
 - `README.md`: User-facing guide to invoking the skill, what Claude does at each phase, the output layout (where `.docs-curator/` and `staging/` are written), and how to adjust results
+- `docs/How docs-curator works.md`: Technical walkthrough of `curate.py` (analyze, update, decide, apply, link), with a Mermaid architecture diagram
 - `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `update` (re-analyze after files were added, modified or removed, report the changes, queue only affected clusters), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` and `<source>/.docs-curator` into `<out>`; `--gitignore project|global` adds `.docs-curator` to a gitignore)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
 - `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
-- `DECISIONS.md`: Every settled decision and where the build departed from `PLAN.md`
+- `plan/DECISIONS.md`: Every settled decision and where the build departed from `plan/PLAN.md`
 - `tests/`: Dev-only synthetic corpus generator with an answer key, `score.py`, fixture verdicts, and a pytest suite (not needed at runtime)
 
 **Requirements:**

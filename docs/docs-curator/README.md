@@ -143,8 +143,9 @@ Claude checks the environment before starting and names anything missing. A refe
 |------|---------|
 | [SKILL.md](SKILL.md) | What Claude follows: triggers, workflow, hard rules |
 | [references/verdict-schema.md](references/verdict-schema.md) | Format of Claude's per-group review results |
-| [DECISIONS.md](DECISIONS.md) | Settled design decisions and departures from the plan |
-| [PLAN.md](PLAN.md) | Original build plan |
+| [docs/How docs-curator works.md](<docs/How docs-curator works.md>) | Technical walkthrough of how `curate.py` works, with an architecture diagram |
+| [plan/DECISIONS.md](plan/DECISIONS.md) | Settled design decisions and departures from the plan |
+| [plan/PLAN.md](plan/PLAN.md) | Original build plan |
 | `scripts/`, `requirements.txt`, `docker/`, `tests/` | Implementation, dependencies, reference image and dev-only tests |
 
-Contributors: branch off `main`, use Conventional Commits, record design decisions in `DECISIONS.md`, and update the repository's top-level `README.md` when this skill changes.
+Contributors: branch off `main`, use Conventional Commits, record design decisions in `plan/DECISIONS.md`, and update the repository's top-level `README.md` when this skill changes.
