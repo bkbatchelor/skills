@@ -15,6 +15,12 @@
 #   -t, --theme T     default | neutral | dark | forest | base (and the other mmdc themes)
 #   -b, --background  Background colour, e.g. transparent, white, '#F0F0F0'
 #   -c, --config F    Mermaid JSON config file (merged with --portable when both are given)
+#   --style modern    Apply the Archify-inspired modern look (rounded tinted nodes, dashed
+#                     groups, monospace font). Forces the base theme; -c settings override it
+#   --style-mode M    dark (default) | light, for --style modern
+#   --canvas C        Background for --style modern (implies it): blank (default) | dots |
+#                     grid | blueprint | editorial, each in the dark or light mode.
+#                     Sets the background colour unless -b is given
 #   --png             Also write a PNG beside each SVG (same stem; Markdown gives <stem>-N.png).
 #                     PNG background is transparent unless -b is given
 #   --scale N         PNG pixel scale factor (default 2); implies --png
@@ -27,16 +33,26 @@
 # Exit codes: 0 rendered and valid · 1 mmdc failed · 2 usage · 3 nothing rendered or invalid SVG
 set -euo pipefail
 
-usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 die() { echo "render.sh: $1" >&2; exit "${2:-2}"; }
+# Prints the root viewBox size of an SVG as "W H", rounded up to whole pixels.
+svg_size() {
+  local w h
+  read -r w h <<< "$(grep -o -m1 '<svg [^>]*>' "$1" | sed -n 's/.*viewBox="[^ ]* [^ ]* \([0-9.]*\) \([0-9.]*\)".*/\1 \2/p')"
+  [[ -n ${w:-} && -n ${h:-} ]] || die "cannot read the viewBox of $1" 3
+  awk -v w="$w" -v h="$h" 'BEGIN { print int(w + 0.999), int(h + 0.999) }'
+}
 
-portable=0 theme="" background="" config="" png=0 scale="" size=""
+portable=0 theme="" background="" config="" png=0 scale="" size="" style="" style_mode=dark canvas=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --portable) portable=1; shift ;;
     -t|--theme) [[ $# -ge 2 ]] || usage; theme=$2; shift 2 ;;
     -b|--background) [[ $# -ge 2 ]] || usage; background=$2; shift 2 ;;
     -c|--config) [[ $# -ge 2 ]] || usage; config=$2; shift 2 ;;
+    --style) [[ $# -ge 2 ]] || usage; style=$2; shift 2 ;;
+    --canvas) [[ $# -ge 2 ]] || usage; canvas=$2; shift 2 ;;
+    --style-mode) [[ $# -ge 2 ]] || usage; style_mode=$2; shift 2 ;;
     --png) png=1; shift ;;
     --scale) [[ $# -ge 2 ]] || usage; scale=$2; png=1; shift 2 ;;
     --size) [[ $# -ge 2 ]] || usage; size=$2; png=1; shift 2 ;;
@@ -65,6 +81,27 @@ fi
 [[ -z $size || $size =~ ^[0-9]+$ ]] || die "--size must be an integer: $size"
 [[ $png == 0 || $output == *.svg || $input == *.md || $input == *.markdown ]] || die "--png needs an .svg output path"
 [[ -z $config || -f $config ]] || die "config file not found: $config"
+[[ -z $style || $style == modern ]] || die "--style must be 'modern': $style"
+[[ $style_mode == dark || $style_mode == light ]] || die "--style-mode must be dark or light: $style_mode"
+[[ -z $canvas ]] || style=${style:-modern}
+style_file="" canvas_css="" canvas_bg=""
+if [[ -n $style ]]; then
+  styles_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/styles"
+  style_file="$styles_dir/$style-$style_mode.json"
+  [[ -f $style_file ]] || die "style file not found: $style_file"
+  theme=base
+  canvas=${canvas:-blank}
+  # Prints the canvas page colour, then its root-element CSS (empty for blank).
+  canvas_info=$(node -e '
+    const [file, name, mode] = process.argv.slice(1);
+    const all = JSON.parse(require("fs").readFileSync(file, "utf8"));
+    if (!all[name]) { console.error("--canvas must be one of: " + Object.keys(all).join(" | ")); process.exit(2); }
+    console.log(all[name][mode].background + "\n" + all[name][mode].css);
+  ' "$styles_dir/canvases.json" "$canvas" "$style_mode") || exit 2
+  canvas_bg=$(sed -n 1p <<< "$canvas_info")
+  canvas_css=$(sed -n 2p <<< "$canvas_info")
+  [[ -n $background ]] || background=$canvas_bg
+fi
 outdir=$(dirname "$output")
 mkdir -p "$outdir"
 
@@ -94,19 +131,39 @@ if [[ -z ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
   done
 fi
 
+# mmdc's own PDF export can't paint the canvas pattern, so render an SVG and print it with Chrome.
+pdf_final=""
+if [[ -n $canvas_css && $output == *.pdf && $input != *.md && $input != *.markdown ]]; then
+  if [[ -n ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
+    pdf_final=$output output=$tmp/pdf-source.svg
+  else
+    echo "render.sh: no system Chrome found; the PDF will not have the canvas pattern" >&2
+  fi
+fi
 args=(-i "$input" -o "$output")
 [[ -n $theme ]] && args+=(-t "$theme")
 [[ -n $background ]] && args+=(-b "$background")
 
-if [[ $portable == 1 ]]; then
-  # Mermaid 11+ reads htmlLabels at the top level; flowchart.htmlLabels is ignored.
+if [[ $portable == 1 || -n $style_file ]]; then
+  # The style is the base config and the user's -c file overrides it (shallow merge, with
+  # themeVariables merged key by key). Mermaid 11+ reads htmlLabels at the top level;
+  # flowchart.htmlLabels is ignored.
   node -e '
     const fs = require("fs");
-    const [src, dst] = process.argv.slice(1);
-    const cfg = src ? JSON.parse(fs.readFileSync(src, "utf8")) : {};
-    cfg.htmlLabels = false;
+    const [styleFile, src, dst, portable, canvasBg] = process.argv.slice(1);
+    const read = (f) => (f ? JSON.parse(fs.readFileSync(f, "utf8")) : {});
+    const base = read(styleFile), user = read(src);
+    if (canvasBg) {   // keep edge-label pills and pie borders on the canvas colour
+      base.themeVariables = { ...base.themeVariables, background: canvasBg, edgeLabelBackground: canvasBg, pieStrokeColor: canvasBg };
+      base.themeCSS += `.edgeLabel,.edgeLabel p,.edgeLabel span{background-color:${canvasBg};}.edgeLabel rect{fill:${canvasBg};}`;
+    }
+    const cfg = { ...base, ...user };
+    if (base.themeVariables || user.themeVariables)
+      cfg.themeVariables = { ...base.themeVariables, ...user.themeVariables };
+    if (base.themeCSS && user.themeCSS) cfg.themeCSS = base.themeCSS + user.themeCSS;
+    if (portable === "1") cfg.htmlLabels = false;
     fs.writeFileSync(dst, JSON.stringify(cfg));
-  ' "$config" "$tmp/config.json"
+  ' "$style_file" "$config" "$tmp/config.json" "$portable" "$canvas_bg"
   args+=(-c "$tmp/config.json")
 elif [[ -n $config ]]; then
   args+=(-c "$config")
@@ -158,12 +215,28 @@ for f in "${svgs[@]}"; do
   # Mermaid splits <text> labels into one <tspan> per word with the space leading the next
   # word. Non-browser renderers (rsvg, ImageMagick) collapse that space, so "two words"
   # shows as "twowords". Preserve whitespace, which is safe because mmdc's SVG is unindented.
+  # The canvas pattern paints the <svg> root, which Mermaid's scoped themeCSS can't reach, so
+  # add it as an unscoped rule (styled PNGs are screenshots of this SVG, see below).
+  if [[ -n $canvas_css ]] && ! grep -q 'background-image' "$f"; then
+    sed -i "s|</style>|${canvas_css//&/\\&}</style>|" "$f"
+  fi
   if [[ $portable == 1 ]] && ! grep -q 'xml:space="preserve"' "$f"; then
     sed -i 's/<text /<text xml:space="preserve" /g' "$f"
   fi
-  echo "$f"
+  [[ -n $pdf_final ]] || echo "$f"
 done
 [[ $bad == 0 ]] || exit 3
+
+if [[ -n $pdf_final ]]; then
+  read -r w h <<< "$(svg_size "$output")"
+  printf '<!doctype html><meta charset="utf-8"><style>@page{size:%spx %spx;margin:0}html,body{margin:0}svg{display:block;width:%spx;height:%spx;max-width:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>' "$w" "$h" "$w" "$h" > "$tmp/pdf.html"
+  cat "$output" >> "$tmp/pdf.html"
+  "$PUPPETEER_EXECUTABLE_PATH" --headless --no-sandbox --disable-gpu --no-pdf-header-footer \
+    --print-to-pdf="$pdf_final" "file://$tmp/pdf.html" >&2 || die "Chrome failed while rendering the PDF" 1
+  [[ $(head -c4 "$pdf_final") == %PDF ]] || die "$pdf_final is not a PDF" 3
+  echo "$pdf_final"
+  exit 0
+fi
 
 # --- PNG ------------------------------------------------------------------------------
 [[ $png == 1 ]] || exit 0
@@ -174,18 +247,32 @@ pargs=(-i "$input" -o "$pngout" -b "${background:-transparent}" -s "${scale:-2}"
 [[ -f $tmp/config.json ]] && pargs+=(-c "$tmp/config.json")
 [[ -z $config || -f $tmp/config.json ]] || pargs+=(-c "$config")
 [[ -f $tmp/puppeteer.json ]] && pargs+=(-p "$tmp/puppeteer.json")
-touch "$tmp/png-start"
-case $input in *.md|*.markdown) sleep 1; pargs+=(-e png) ;; esac
-"${mmdc[@]}" "${pargs[@]}" "${extra[@]}" >&2 || die "mmdc failed while rendering PNG (see the error above)" 1
-
 pngs=()
-case $input in
-  *.md|*.markdown)
-    while IFS= read -r f; do pngs+=("$f"); done < <(
-      find "$artefacts" -maxdepth 1 -name "${stem}-*.png" -newer "$tmp/png-start" | sort -V)
-    ;;
-  *) pngs=("$pngout") ;;
-esac
+if [[ -n $canvas_css && -n ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
+  # The canvas pattern lives on the <svg> root, which mmdc's own PNG export can't style, so
+  # screenshot the finished SVG in headless Chrome instead (--size and extra args don't apply).
+  for f in "${svgs[@]}"; do
+    read -r w h <<< "$(svg_size "$f")"
+    "$PUPPETEER_EXECUTABLE_PATH" --headless --no-sandbox --disable-gpu --hide-scrollbars \
+      --default-background-color=00000000 --force-device-scale-factor="${scale:-2}" --window-size="$w,$h" \
+      --screenshot="${f%.svg}.png" "file://$(cd "$(dirname "$f")" && pwd)/$(basename "$f")" >&2 \
+      || die "Chrome failed while rendering PNG of $f" 1
+    pngs+=("${f%.svg}.png")
+  done
+else
+  [[ -z $canvas_css ]] || echo "render.sh: no system Chrome found; the PNG will not have the canvas pattern" >&2
+  touch "$tmp/png-start"
+  case $input in *.md|*.markdown) sleep 1; pargs+=(-e png) ;; esac
+  "${mmdc[@]}" "${pargs[@]}" "${extra[@]}" >&2 || die "mmdc failed while rendering PNG (see the error above)" 1
+
+  case $input in
+    *.md|*.markdown)
+      while IFS= read -r f; do pngs+=("$f"); done < <(
+        find "$artefacts" -maxdepth 1 -name "${stem}-*.png" -newer "$tmp/png-start" | sort -V)
+      ;;
+    *) pngs=("$pngout") ;;
+  esac
+fi
 [[ ${#pngs[@]} -gt 0 ]] || die "no PNG files were rendered" 3
 for f in "${pngs[@]}"; do
   if [[ ! -s $f ]] || [[ $(head -c 4 "$f" | tail -c 3) != PNG ]]; then
