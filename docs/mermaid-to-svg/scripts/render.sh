@@ -15,24 +15,31 @@
 #   -t, --theme T     default | neutral | dark | forest | base (and the other mmdc themes)
 #   -b, --background  Background colour, e.g. transparent, white, '#F0F0F0'
 #   -c, --config F    Mermaid JSON config file (merged with --portable when both are given)
+#   --png             Also write a PNG beside each SVG (same stem; Markdown gives <stem>-N.png).
+#                     PNG background is transparent unless -b is given
+#   --scale N         PNG pixel scale factor (default 2); implies --png
+#   --size N          Cap the PNG's longest side at N pixels (mmdc --size); implies --png
 #
 # Env: MERMAID_CLI_VERSION (default 12.0.0) · PUPPETEER_EXECUTABLE_PATH (auto-detected)
 #      MERMAID_NO_SANDBOX=1 forces Chrome's --no-sandbox (automatic when running as root)
 #
-# Prints each SVG written, one per line, on stdout. Logs go to stderr.
+# Prints each SVG written, then each PNG, one per line, on stdout. Logs go to stderr.
 # Exit codes: 0 rendered and valid · 1 mmdc failed · 2 usage · 3 nothing rendered or invalid SVG
 set -euo pipefail
 
-usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 die() { echo "render.sh: $1" >&2; exit "${2:-2}"; }
 
-portable=0 theme="" background="" config=""
+portable=0 theme="" background="" config="" png=0 scale="" size=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --portable) portable=1; shift ;;
     -t|--theme) [[ $# -ge 2 ]] || usage; theme=$2; shift 2 ;;
     -b|--background) [[ $# -ge 2 ]] || usage; background=$2; shift 2 ;;
     -c|--config) [[ $# -ge 2 ]] || usage; config=$2; shift 2 ;;
+    --png) png=1; shift ;;
+    --scale) [[ $# -ge 2 ]] || usage; scale=$2; png=1; shift 2 ;;
+    --size) [[ $# -ge 2 ]] || usage; size=$2; png=1; shift 2 ;;
     -h|--help) usage ;;
     --) break ;;
     -?*) die "unknown option '$1' (pass mmdc options after --)" ;;
@@ -54,12 +61,21 @@ if [[ -z $output ]]; then
   [[ $input != - ]] || die "an output path is required when reading from stdin"
   output="${input%.*}.svg"
 fi
+[[ -z $scale || $scale =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "--scale must be a number: $scale"
+[[ -z $size || $size =~ ^[0-9]+$ ]] || die "--size must be an integer: $size"
+[[ $png == 0 || $output == *.svg || $input == *.md || $input == *.markdown ]] || die "--png needs an .svg output path"
 [[ -z $config || -f $config ]] || die "config file not found: $config"
 outdir=$(dirname "$output")
 mkdir -p "$outdir"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+
+# stdin can only be read once, but --png renders twice.
+if [[ $input == - ]]; then
+  cat > "$tmp/stdin.mmd"
+  input=$tmp/stdin.mmd
+fi
 
 # --- mmdc command ---------------------------------------------------------------------
 if command -v mmdc >/dev/null; then
@@ -144,6 +160,36 @@ for f in "${svgs[@]}"; do
   # shows as "twowords". Preserve whitespace, which is safe because mmdc's SVG is unindented.
   if [[ $portable == 1 ]] && ! grep -q 'xml:space="preserve"' "$f"; then
     sed -i 's/<text /<text xml:space="preserve" /g' "$f"
+  fi
+  echo "$f"
+done
+[[ $bad == 0 ]] || exit 3
+
+# --- PNG ------------------------------------------------------------------------------
+[[ $png == 1 ]] || exit 0
+pngout="${output%.*}.png"
+pargs=(-i "$input" -o "$pngout" -b "${background:-transparent}" -s "${scale:-2}")
+[[ -n $theme ]] && pargs+=(-t "$theme")
+[[ -n $size ]] && pargs+=(--size "$size")
+[[ -f $tmp/config.json ]] && pargs+=(-c "$tmp/config.json")
+[[ -z $config || -f $tmp/config.json ]] || pargs+=(-c "$config")
+[[ -f $tmp/puppeteer.json ]] && pargs+=(-p "$tmp/puppeteer.json")
+touch "$tmp/png-start"
+case $input in *.md|*.markdown) sleep 1; pargs+=(-e png) ;; esac
+"${mmdc[@]}" "${pargs[@]}" "${extra[@]}" >&2 || die "mmdc failed while rendering PNG (see the error above)" 1
+
+pngs=()
+case $input in
+  *.md|*.markdown)
+    while IFS= read -r f; do pngs+=("$f"); done < <(
+      find "$artefacts" -maxdepth 1 -name "${stem}-*.png" -newer "$tmp/png-start" | sort -V)
+    ;;
+  *) pngs=("$pngout") ;;
+esac
+[[ ${#pngs[@]} -gt 0 ]] || die "no PNG files were rendered" 3
+for f in "${pngs[@]}"; do
+  if [[ ! -s $f ]] || [[ $(head -c 4 "$f" | tail -c 3) != PNG ]]; then
+    echo "render.sh: $f is empty or not a PNG" >&2; bad=1; continue
   fi
   echo "$f"
 done
