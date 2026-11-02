@@ -361,7 +361,7 @@ Converts Mermaid diagrams to SVG (and optionally PNG or PDF), optionally in a mo
 
 **Features:**
 - `--portable` mode draws labels as SVG `<text>` instead of HTML `<foreignObject>`, so they show up in Inkscape, Office, ImageMagick, rsvg, and PDF tools
-- `--style modern` applies an Archify-inspired look before rendering: rounded, tinted nodes, dashed rounded groups, slate edges, a JetBrains Mono font stack with system fallbacks (not embedded), and a rounded frame enclosing the whole diagram. `--style-mode dark|light` (default dark) picks the variant and sets the page colour unless `-b` is given; a `-c` config overrides the style
+- `--style modern` applies an Archify-inspired look before rendering: rounded, tinted nodes, dashed rounded groups, slate edges, a JetBrains Mono font stack with system fallbacks (not embedded), and a rounded frame enclosing the whole diagram, with the background clipped to it. `--style-mode dark|light` (default dark) picks the variant and sets the page colour unless `-b` is given; a `-c` config overrides the style
 - `--canvas blank|dots|grid|blueprint|editorial` (implies `--style modern`, default `blank`) picks the background, each in dark and light: flat, a 20px dot grid, a 40px grid, a 32px blueprint grid, or ruled paper lines. With a style, PNGs and PDFs are made from the finished SVG with the system Chrome, so `--size` and extra `mmdc` args don't apply to them; non-browser viewers ignore the patterns
 - Theme, background, and Mermaid config options, with any other `mmdc` flag passed through
 - `--png` writes a PNG beside each SVG (`<stem>-N.png` for Markdown blocks), with `--scale N` (default 2) and `--size N`; PNGs are transparent unless `-b` is given

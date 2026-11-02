@@ -217,28 +217,30 @@ for f in "${svgs[@]}"; do
   # Mermaid splits <text> labels into one <tspan> per word with the space leading the next
   # word. Non-browser renderers (rsvg, ImageMagick) collapse that space, so "two words"
   # shows as "twowords". Preserve whitespace, which is safe because mmdc's SVG is unindented.
-  # The canvas pattern paints the <svg> root, which Mermaid's scoped themeCSS can't reach, so
-  # add it as an unscoped rule (styled PNGs are screenshots of this SVG, see below).
-  if [[ -n $canvas_css ]] && ! grep -q 'background-image' "$f"; then
-    sed -i "s|</style>|${canvas_css//&/\\&}</style>|" "$f"
-  fi
-  # Modern style encloses the diagram in a rounded frame: grow the viewBox by a margin, draw a
-  # stroked rounded rect over it, and clip the root (background and canvas pattern included) to it.
+  # Modern style encloses the diagram in a rounded frame and clips the background to it. CSS
+  # on a standalone SVG root can't be rounded, so the root background is dropped and redrawn
+  # inside the viewBox: a rounded rect for the page colour (works everywhere), a rounded
+  # foreignObject div for the canvas pattern (browsers only), then the stroked frame.
   if [[ -n $style_file ]] && ! grep -q 'data-frame' "$f"; then
     node -e '
       const fs = require("fs");
-      const [file, stroke] = process.argv.slice(1);
+      const [file, stroke, bg, css] = process.argv.slice(1);
       let svg = fs.readFileSync(file, "utf8");
       const m = svg.match(/viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/);
       if (!m) process.exit(0);
-      const pad = 24, [x, y, w, h] = m.slice(1).map(Number);
+      const pad = 24, r = 20, [x, y, w, h] = m.slice(1).map(Number);
       const [nx, ny, nw, nh] = [x - pad, y - pad, w + 2 * pad, h + 2 * pad];
+      const pattern = (css.match(/background-image:[^}]*(?=})/) || [""])[0];
+      const rect = (extra) => `<rect x="${nx + 1}" y="${ny + 1}" width="${nw - 2}" height="${nh - 2}" rx="${r}" ry="${r}" ${extra}/>`;
+      const layers = rect(`fill="${bg}"`)
+        + (pattern ? `<foreignObject x="${nx + 1}" y="${ny + 1}" width="${nw - 2}" height="${nh - 2}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;border-radius:${r}px;${pattern}"></div></foreignObject>` : "")
+        + rect(`data-frame="1" fill="none" stroke="${stroke}" stroke-width="2"`);
       svg = svg.replace(m[0], `viewBox="${nx} ${ny} ${nw} ${nh}"`)
                .replace(/max-width: [\d.]+px/, `max-width: ${nw}px`)
-               .replace(/<style>/, `<style>#my-svg{border-radius:20px;clip-path:inset(0 round 20px);}`)
-               .replace("</style>", `</style><rect data-frame="1" x="${nx + 1}" y="${ny + 1}" width="${nw - 2}" height="${nh - 2}" rx="20" ry="20" fill="none" stroke="${stroke}" stroke-width="2"/>`);
+               .replace(/background-color: [^;"]*;?/, "")
+               .replace(/(<svg [^>]*>(?:<style>.*?<\/style>)?)/s, `$1${layers}`);
       fs.writeFileSync(file, svg);
-    ' "$f" "$frame_stroke"
+    ' "$f" "$frame_stroke" "${background:-transparent}" "$canvas_css"
   fi
   if [[ $portable == 1 ]] && ! grep -q 'xml:space="preserve"' "$f"; then
     sed -i 's/<text /<text xml:space="preserve" /g' "$f"
