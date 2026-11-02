@@ -38,15 +38,5 @@
       "background": "#edf7fa",
       "css": "#my-svg{background-color:#edf7fa;background-image:linear-gradient(#b5d5e1 1px,transparent 1px),linear-gradient(90deg,#b5d5e1 1px,transparent 1px);background-size:32px 32px;}"
     }
-  },
-  "editorial": {
-    "dark": {
-      "background": "#181611",
-      "css": "#my-svg{background-color:#181611;background-image:repeating-linear-gradient(transparent 0,transparent 27px,#39342a 27px,#39342a 28px);background-size:auto;}"
-    },
-    "light": {
-      "background": "#f2eee5",
-      "css": "#my-svg{background-color:#f2eee5;background-image:repeating-linear-gradient(transparent 0,transparent 27px,#d8d0c2 27px,#d8d0c2 28px);background-size:auto;}"
-    }
   }
 }

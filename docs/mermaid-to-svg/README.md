@@ -40,9 +40,8 @@ scripts/render.sh --scale 3 -b white docs/flow.mmd docs/images/flow.svg
 scripts/render.sh --style modern --png docs/flow.mmd
 scripts/render.sh --style modern --style-mode light docs/flow.mmd
 
-# Background canvas: blank (default) | dots | grid | blueprint | editorial
+# Background canvas: blank (default) | dots | grid | blueprint
 scripts/render.sh --canvas blueprint --png docs/flow.mmd
-scripts/render.sh --canvas editorial --style-mode light docs/flow.mmd
 
 # Diagram text from stdin
 scripts/render.sh - out/diagram.svg <<'EOF'
@@ -63,7 +62,6 @@ EOF
 | `dots` | 1px dots on a 20px grid |
 | `grid` | 40px grid lines |
 | `blueprint` | 32px blue grid on deep blue (dark) or pale blue (light) |
-| `editorial` | Ruled paper lines on warm black (dark) or paper (light) |
 
 The patterns are CSS backgrounds on the SVG root, so Inkscape, rsvg and Office ignore them. PNGs and PDFs are produced from the finished SVG with the system Chrome, so `--size` and extra mmdc arguments don't apply to them.
 

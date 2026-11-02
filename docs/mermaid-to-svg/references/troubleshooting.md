@@ -40,7 +40,7 @@ When you can't see the error, cut the diagram in half and re-render each half un
 - **PNG has a black or see-through background.** PNGs are transparent by default. Pass `-b white` (or any colour) for an opaque background.
 - **Modern style font.** `--style modern` asks for JetBrains Mono and falls back to the system monospace font when it isn't installed, so text widths can differ slightly between machines. Install JetBrains Mono for identical output.
 - **PDF without the canvas pattern.** With `--canvas`, a `.pdf` output is a single page printed from the finished SVG by the system Chrome, so it carries the pattern. If no Chrome is found, the script warns and falls back to mmdc's PDF, which has the page colour but no pattern.
-- **No canvas pattern in a non-browser viewer.** The `--canvas` patterns (dots, grid, blueprint, editorial) are CSS backgrounds on the SVG root, so Inkscape, rsvg and Office ignore it. Use the PNG, or a browser, when you need the pattern.
+- **No canvas pattern in a non-browser viewer.** The `--canvas` patterns (dots, grid, blueprint) are CSS backgrounds on the SVG root, so Inkscape, rsvg and Office ignore it. Use the PNG, or a browser, when you need the pattern.
 - **Dark-mode pages.** Use `-t dark -b transparent`, or `-t base` with `themeVariables` in a config file.
 
 ## Environment problems
