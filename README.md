@@ -104,6 +104,10 @@ skills/
 │   │   ├── README.md             # Install, requirements, usage
 │   │   ├── references/           # Reference materials
 │   │   │   └── troubleshooting.md
+│   │   ├── styles/               # Modern look (Archify-inspired) config files
+│   │   │   ├── modern-dark.json
+│   │   │   ├── modern-light.json
+│   │   │   └── canvases.json
 │   │   └── scripts/              # Helper scripts
 │   │       └── render.sh
 │   └── html-artifacts/           # HTML artifact skill
@@ -172,7 +176,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
 | docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
-| mermaid-to-svg | Renders Mermaid diagrams to validated SVG files, with optional PNG copies, using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh` |
+| mermaid-to-svg | Renders Mermaid diagrams to validated SVG files, with optional PNG and PDF copies and an optional modern Archify-style look with background canvases, using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
@@ -341,20 +345,24 @@ media/image-gateway/scripts/generate.sh -i ./photo.jpg "remove the person on the
 
 ---
 
-Converts Mermaid diagrams to SVG (and optionally PNG) with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli). Takes standalone `.mmd` files, every ```` ```mermaid ```` block in a Markdown file, or diagram text on stdin, and checks that each output is valid before reporting it.
+Converts Mermaid diagrams to SVG (and optionally PNG or PDF), optionally in a modern Archify-inspired style, with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli). Takes standalone `.mmd` files, every ```` ```mermaid ```` block in a Markdown file, or diagram text on stdin, and checks that each output is valid before reporting it.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with the source, output, render, verify, and fix workflow
 - `README.md`: Install, requirements, and usage examples
 - `references/troubleshooting.md`: Common Mermaid syntax pitfalls, rendering problems, Chrome/environment fixes, and a Docker fallback
 - `scripts/render.sh`: Wraps `mmdc` (pinned version via `npx`), reuses a system Chromium, applies sandbox flags when needed, and validates the SVG and PNG output
+- `styles/modern-dark.json`, `styles/modern-light.json`: Mermaid config (`themeVariables` plus `themeCSS`) behind `--style modern`
+- `styles/canvases.json`: Background canvases (page colour plus root-element CSS) behind `--canvas`, which `render.sh` injects into the SVG
 
 **Requirements:**
 - `node` / `npx`: Runs mermaid-cli
-- Chrome or Chromium: Used by mermaid-cli to draw diagrams (downloaded by puppeteer if none is installed)
+- Chrome or Chromium: Used by mermaid-cli to draw diagrams (downloaded by puppeteer if none is installed). A system Chrome is also needed for PNG and PDF output with `--canvas` patterns
 
 **Features:**
 - `--portable` mode draws labels as SVG `<text>` instead of HTML `<foreignObject>`, so they show up in Inkscape, Office, ImageMagick, rsvg, and PDF tools
+- `--style modern` applies an Archify-inspired look before rendering: rounded, tinted nodes, dashed rounded groups, slate edges, and a JetBrains Mono font stack with system fallbacks (not embedded). `--style-mode dark|light` (default dark) picks the variant and sets the page colour unless `-b` is given; a `-c` config overrides the style
+- `--canvas blank|dots|grid|blueprint|editorial` (implies `--style modern`, default `blank`) picks the background, each in dark and light: flat, a 20px dot grid, a 40px grid, a 32px blueprint grid, or ruled paper lines. PNGs, and PDFs when a canvas is chosen, are made from the finished SVG with the system Chrome, so `--size` and extra `mmdc` args don't apply to them; non-browser viewers ignore the patterns
 - Theme, background, and Mermaid config options, with any other `mmdc` flag passed through
 - `--png` writes a PNG beside each SVG (`<stem>-N.png` for Markdown blocks), with `--scale N` (default 2) and `--size N`; PNGs are transparent unless `-b` is given
 - PDF output by naming a `.pdf` path, plus a preview step for checking the result visually

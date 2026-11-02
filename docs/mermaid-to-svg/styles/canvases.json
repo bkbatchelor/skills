@@ -1,0 +1,52 @@
+{
+  "blank": {
+    "dark": {
+      "background": "#020617",
+      "css": ""
+    },
+    "light": {
+      "background": "#f4f5f7",
+      "css": ""
+    }
+  },
+  "dots": {
+    "dark": {
+      "background": "#020617",
+      "css": "#my-svg{background-color:#020617;background-image:radial-gradient(circle at 1px 1px,rgba(148,163,184,.16) 1px,transparent 1.4px);background-size:20px 20px;}"
+    },
+    "light": {
+      "background": "#f4f5f7",
+      "css": "#my-svg{background-color:#f4f5f7;background-image:radial-gradient(circle at 1px 1px,#d5dbe3 1px,transparent 1.4px);background-size:20px 20px;}"
+    }
+  },
+  "grid": {
+    "dark": {
+      "background": "#020617",
+      "css": "#my-svg{background-color:#020617;background-image:linear-gradient(#1e293b 1px,transparent 1px),linear-gradient(90deg,#1e293b 1px,transparent 1px);background-size:40px 40px;}"
+    },
+    "light": {
+      "background": "#f4f5f7",
+      "css": "#my-svg{background-color:#f4f5f7;background-image:linear-gradient(#e9edf2 1px,transparent 1px),linear-gradient(90deg,#e9edf2 1px,transparent 1px);background-size:40px 40px;}"
+    }
+  },
+  "blueprint": {
+    "dark": {
+      "background": "#06131f",
+      "css": "#my-svg{background-color:#06131f;background-image:linear-gradient(#17425a 1px,transparent 1px),linear-gradient(90deg,#17425a 1px,transparent 1px);background-size:32px 32px;}"
+    },
+    "light": {
+      "background": "#edf7fa",
+      "css": "#my-svg{background-color:#edf7fa;background-image:linear-gradient(#b5d5e1 1px,transparent 1px),linear-gradient(90deg,#b5d5e1 1px,transparent 1px);background-size:32px 32px;}"
+    }
+  },
+  "editorial": {
+    "dark": {
+      "background": "#181611",
+      "css": "#my-svg{background-color:#181611;background-image:repeating-linear-gradient(transparent 0,transparent 27px,#39342a 27px,#39342a 28px);background-size:auto;}"
+    },
+    "light": {
+      "background": "#f2eee5",
+      "css": "#my-svg{background-color:#f2eee5;background-image:repeating-linear-gradient(transparent 0,transparent 27px,#d8d0c2 27px,#d8d0c2 28px);background-size:auto;}"
+    }
+  }
+}
