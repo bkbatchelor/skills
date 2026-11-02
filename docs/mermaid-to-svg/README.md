@@ -4,7 +4,7 @@ Renders Mermaid diagrams to SVG files with [mermaid-cli](https://github.com/merm
 
 ## Triggers
 
-Asks to render, convert, or export Mermaid diagrams as SVG (or PNG/PDF), including mermaid blocks in Markdown. See `SKILL.md` for the full list, including when to skip it.
+Asks to render, convert, or export Mermaid diagrams as SVG (optionally with PNG copies), including mermaid blocks in Markdown. See `SKILL.md` for the full list, including when to skip it.
 
 ## Install
 
@@ -31,6 +31,10 @@ scripts/render.sh --portable -t neutral -b transparent docs/flow.mmd docs/images
 
 # Every mermaid block in a Markdown file -> README-1.svg, README-2.svg, ...
 scripts/render.sh README.md docs/images/README.svg
+
+# SVG plus PNG beside it (--scale N sets density, default 2; --size N caps the longest side)
+scripts/render.sh --png docs/flow.mmd
+scripts/render.sh --scale 3 -b white docs/flow.mmd docs/images/flow.svg
 
 # Diagram text from stdin
 scripts/render.sh - out/diagram.svg <<'EOF'
