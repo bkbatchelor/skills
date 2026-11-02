@@ -20,7 +20,7 @@
 #                     base theme; -c settings override it
 #   --style-mode M    dark (default) | light, for --style modern
 #   --canvas C        Background for --style modern (implies it): blank (default) | dots |
-#                     grid | blueprint | editorial, each in the dark or light mode.
+#                     grid | blueprint, each in the dark or light mode.
 #                     Sets the background colour unless -b is given
 #   --png             Also write a PNG beside each SVG (same stem; Markdown gives <stem>-N.png).
 #                     PNG background is transparent unless -b is given
