@@ -223,7 +223,7 @@ for f in "${svgs[@]}"; do
     sed -i "s|</style>|${canvas_css//&/\\&}</style>|" "$f"
   fi
   # Modern style encloses the diagram in a rounded frame: grow the viewBox by a margin, draw a
-  # stroked rounded rect over it, and round the root's own corners so the page colour follows.
+  # stroked rounded rect over it, and clip the root (background and canvas pattern included) to it.
   if [[ -n $style_file ]] && ! grep -q 'data-frame' "$f"; then
     node -e '
       const fs = require("fs");
@@ -235,7 +235,7 @@ for f in "${svgs[@]}"; do
       const [nx, ny, nw, nh] = [x - pad, y - pad, w + 2 * pad, h + 2 * pad];
       svg = svg.replace(m[0], `viewBox="${nx} ${ny} ${nw} ${nh}"`)
                .replace(/max-width: [\d.]+px/, `max-width: ${nw}px`)
-               .replace(/<style>/, `<style>#my-svg{border-radius:20px;}`)
+               .replace(/<style>/, `<style>#my-svg{border-radius:20px;clip-path:inset(0 round 20px);}`)
                .replace("</style>", `</style><rect data-frame="1" x="${nx + 1}" y="${ny + 1}" width="${nw - 2}" height="${nh - 2}" rx="20" ry="20" fill="none" stroke="${stroke}" stroke-width="2"/>`);
       fs.writeFileSync(file, svg);
     ' "$f" "$frame_stroke"
