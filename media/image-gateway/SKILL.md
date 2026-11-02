@@ -1,8 +1,8 @@
 ---
 name: image-gateway
-description: Generates or edits raster images through Google's Gemini API (Nano Banana Pro) with one command and saved defaults. Use whenever the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or to edit, restyle, recolor, extend, or remove things from an existing image. Also use when another skill (slides, READMEs, docs, websites, social posts) needs a raster image, instead of writing its own image API code. Not for charts, diagrams, or SVG drawn from code (render those directly; use mermaid-to-svg for Mermaid).
+description: Generates or edits raster images through Google's Gemini API (Nano Banana Pro) with one command and saved defaults. Use whenever the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or to edit, restyle, recolor, extend, or remove things from an existing image. Also use when another skill (slides, READMEs, docs, websites, social posts) needs a raster image, instead of writing its own image API code. Not for charts, diagrams, or SVG drawn from code (render those directly; use mermaid-to-image for Mermaid).
 metadata:
-  version: 1.0.3
+  version: 1.0.4
 ---
 
 # Image Gateway
@@ -20,7 +20,7 @@ The script is in this skill's `scripts/` folder. Use the absolute path of the di
 Use when the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or to edit, restyle, recolor, extend, or remove things from an existing image. Also use when another skill needs a raster image, such as slides, READMEs, docs, websites, or social posts, instead of writing its own image API code.
 
 Skip when:
-- The request is a chart, diagram, or SVG drawn from code. Render it directly, or use `mermaid-to-svg` for Mermaid.
+- The request is a chart, diagram, or SVG drawn from code. Render it directly, or use `mermaid-to-image` for Mermaid.
 
 ## Saved preferences
 
