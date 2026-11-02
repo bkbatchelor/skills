@@ -53,7 +53,7 @@ EOF
 
 ## Modern style
 
-`--style modern` restyles the diagram before it is rendered: rounded, tinted nodes, dashed rounded groups, slate edges, and a JetBrains Mono font stack with system fallbacks. `--style-mode dark|light` (default `dark`) picks the variant. A `-c` config overrides the style, and `-b` overrides the page colour.
+`--style modern` restyles the diagram before it is rendered: rounded, tinted nodes, dashed rounded groups, slate edges, a JetBrains Mono font stack with system fallbacks, and a rounded frame around the whole diagram (24px margin, stroked in the style's cluster-border colour, with the page corners rounded too). `--style-mode dark|light` (default `dark`) picks the variant. A `-c` config overrides the style, and `-b` overrides the page colour.
 
 `--canvas` (implies `--style modern`) picks the background:
 

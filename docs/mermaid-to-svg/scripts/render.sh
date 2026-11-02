@@ -16,7 +16,8 @@
 #   -b, --background  Background colour, e.g. transparent, white, '#F0F0F0'
 #   -c, --config F    Mermaid JSON config file (merged with --portable when both are given)
 #   --style modern    Apply the Archify-inspired modern look (rounded tinted nodes, dashed
-#                     groups, monospace font). Forces the base theme; -c settings override it
+#                     groups, monospace font, diagram enclosed in a rounded frame). Forces the
+#                     base theme; -c settings override it
 #   --style-mode M    dark (default) | light, for --style modern
 #   --canvas C        Background for --style modern (implies it): blank (default) | dots |
 #                     grid | blueprint | editorial, each in the dark or light mode.
@@ -33,7 +34,7 @@
 # Exit codes: 0 rendered and valid · 1 mmdc failed · 2 usage · 3 nothing rendered or invalid SVG
 set -euo pipefail
 
-usage() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 die() { echo "render.sh: $1" >&2; exit "${2:-2}"; }
 # Prints the root viewBox size of an SVG as "W H", rounded up to whole pixels.
 svg_size() {
@@ -84,7 +85,7 @@ fi
 [[ -z $style || $style == modern ]] || die "--style must be 'modern': $style"
 [[ $style_mode == dark || $style_mode == light ]] || die "--style-mode must be dark or light: $style_mode"
 [[ -z $canvas ]] || style=${style:-modern}
-style_file="" canvas_css="" canvas_bg=""
+style_file="" canvas_css="" canvas_bg="" frame_stroke=""
 if [[ -n $style ]]; then
   styles_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/styles"
   style_file="$styles_dir/$style-$style_mode.json"
@@ -101,6 +102,7 @@ if [[ -n $style ]]; then
   canvas_bg=$(sed -n 1p <<< "$canvas_info")
   canvas_css=$(sed -n 2p <<< "$canvas_info")
   [[ -n $background ]] || background=$canvas_bg
+  frame_stroke=$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).themeVariables.clusterBorder' "$style_file")
 fi
 outdir=$(dirname "$output")
 mkdir -p "$outdir"
@@ -133,11 +135,11 @@ fi
 
 # mmdc's own PDF export can't paint the canvas pattern, so render an SVG and print it with Chrome.
 pdf_final=""
-if [[ -n $canvas_css && $output == *.pdf && $input != *.md && $input != *.markdown ]]; then
+if [[ -n $style_file && $output == *.pdf && $input != *.md && $input != *.markdown ]]; then
   if [[ -n ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
     pdf_final=$output output=$tmp/pdf-source.svg
   else
-    echo "render.sh: no system Chrome found; the PDF will not have the canvas pattern" >&2
+    echo "render.sh: no system Chrome found; the PDF will not have the canvas pattern or rounded frame" >&2
   fi
 fi
 args=(-i "$input" -o "$output")
@@ -220,6 +222,24 @@ for f in "${svgs[@]}"; do
   if [[ -n $canvas_css ]] && ! grep -q 'background-image' "$f"; then
     sed -i "s|</style>|${canvas_css//&/\\&}</style>|" "$f"
   fi
+  # Modern style encloses the diagram in a rounded frame: grow the viewBox by a margin, draw a
+  # stroked rounded rect over it, and round the root's own corners so the page colour follows.
+  if [[ -n $style_file ]] && ! grep -q 'data-frame' "$f"; then
+    node -e '
+      const fs = require("fs");
+      const [file, stroke] = process.argv.slice(1);
+      let svg = fs.readFileSync(file, "utf8");
+      const m = svg.match(/viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/);
+      if (!m) process.exit(0);
+      const pad = 24, [x, y, w, h] = m.slice(1).map(Number);
+      const [nx, ny, nw, nh] = [x - pad, y - pad, w + 2 * pad, h + 2 * pad];
+      svg = svg.replace(m[0], `viewBox="${nx} ${ny} ${nw} ${nh}"`)
+               .replace(/max-width: [\d.]+px/, `max-width: ${nw}px`)
+               .replace(/<style>/, `<style>#my-svg{border-radius:20px;}`)
+               .replace("</style>", `</style><rect data-frame="1" x="${nx + 1}" y="${ny + 1}" width="${nw - 2}" height="${nh - 2}" rx="20" ry="20" fill="none" stroke="${stroke}" stroke-width="2"/>`);
+      fs.writeFileSync(file, svg);
+    ' "$f" "$frame_stroke"
+  fi
   if [[ $portable == 1 ]] && ! grep -q 'xml:space="preserve"' "$f"; then
     sed -i 's/<text /<text xml:space="preserve" /g' "$f"
   fi
@@ -248,8 +268,8 @@ pargs=(-i "$input" -o "$pngout" -b "${background:-transparent}" -s "${scale:-2}"
 [[ -z $config || -f $tmp/config.json ]] || pargs+=(-c "$config")
 [[ -f $tmp/puppeteer.json ]] && pargs+=(-p "$tmp/puppeteer.json")
 pngs=()
-if [[ -n $canvas_css && -n ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
-  # The canvas pattern lives on the <svg> root, which mmdc's own PNG export can't style, so
+if [[ -n $style_file && -n ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
+  # The canvas pattern and rounded frame live on the <svg> root, which mmdc's own PNG export can't style, so
   # screenshot the finished SVG in headless Chrome instead (--size and extra args don't apply).
   for f in "${svgs[@]}"; do
     read -r w h <<< "$(svg_size "$f")"
@@ -260,7 +280,7 @@ if [[ -n $canvas_css && -n ${PUPPETEER_EXECUTABLE_PATH:-} ]]; then
     pngs+=("${f%.svg}.png")
   done
 else
-  [[ -z $canvas_css ]] || echo "render.sh: no system Chrome found; the PNG will not have the canvas pattern" >&2
+  [[ -z $style_file ]] || echo "render.sh: no system Chrome found; the PNG will not have the canvas pattern or rounded frame" >&2
   touch "$tmp/png-start"
   case $input in *.md|*.markdown) sleep 1; pargs+=(-e png) ;; esac
   "${mmdc[@]}" "${pargs[@]}" "${extra[@]}" >&2 || die "mmdc failed while rendering PNG (see the error above)" 1
