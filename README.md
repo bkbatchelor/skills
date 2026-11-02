@@ -99,7 +99,7 @@ skills/
 │   │       ├── test_units.py
 │   │       ├── test_pipeline.py
 │   │       └── fixtures/verdicts/    # Hand-written verdicts, one per cluster
-│   ├── mermaid-to-svg/           # Mermaid diagram rendering skill
+│   ├── mermaid-to-image/           # Mermaid diagram rendering skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Install, requirements, usage
 │   │   ├── references/           # Reference materials
@@ -176,7 +176,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
 | docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
-| mermaid-to-svg | Renders Mermaid diagrams to validated SVG files, with optional PNG and PDF copies and an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
+| mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
@@ -341,11 +341,11 @@ media/image-gateway/scripts/generate.sh -a 16:9 -o ./assets/hero.png "misty pine
 media/image-gateway/scripts/generate.sh -i ./photo.jpg "remove the person on the left, keep everything else unchanged"
 ```
 
-#### mermaid-to-svg
+#### mermaid-to-image
 
 ---
 
-Converts Mermaid diagrams to SVG (and optionally PNG or PDF), optionally in a modern Archify-inspired style, with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli). Takes standalone `.mmd` files, every ```` ```mermaid ```` block in a Markdown file, or diagram text on stdin, and checks that each output is valid before reporting it.
+Converts Mermaid diagrams to SVG, PNG, or PDF, optionally in a modern Archify-inspired style, with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli). Takes standalone `.mmd` files, every ```` ```mermaid ```` block in a Markdown file, or diagram text on stdin, and checks that each output is valid before reporting it.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with the source, output, render, verify, and fix workflow
