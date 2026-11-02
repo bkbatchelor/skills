@@ -36,7 +36,8 @@ When you can't see the error, cut the diagram in half and re-render each half un
 - **Boxes without text in Inkscape, Office, ImageMagick, rsvg, or PDFs.** The labels are HTML inside `<foreignObject>`. Re-render with `--portable`. In Mermaid 11+, only the top-level `htmlLabels: false` setting works. `flowchart.htmlLabels` is ignored, and the script sets the correct key.
 - **Words run together in a `--portable` SVG ("twowords").** The file was rendered without the script, or edited afterwards, and has lost `xml:space="preserve"` on its `<text>` elements. Re-render it with the script.
 - **Text clipped or overflowing boxes.** The fonts available at render time differ from the ones at view time. Keep embedded fonts (don't pass `--no-font-embed`), or set the same `fontFamily` in a config file that the viewer will have.
-- **Diagram too small or too large.** The SVG scales freely. `-- --size 1200` sets `max-width`, and `-- -s 2` doubles the PNG resolution.
+- **Diagram too small or too large.** The SVG scales freely. `-- --size 1200` sets `max-width`. For PNGs, `--png` renders at 2x by default; raise it with `--scale 3` or cap the longest side with `--size N`.
+- **PNG has a black or see-through background.** PNGs are transparent by default. Pass `-b white` (or any colour) for an opaque background.
 - **Dark-mode pages.** Use `-t dark -b transparent`, or `-t base` with `themeVariables` in a config file.
 
 ## Environment problems

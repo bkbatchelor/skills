@@ -1,8 +1,8 @@
 ---
 name: mermaid-to-svg
-description: Renders Mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, and more) to validated SVG files with mermaid-cli, from .mmd files, mermaid blocks in Markdown, or pasted source. Use whenever the user asks to convert, render, export, or save a Mermaid diagram as SVG (or PNG/PDF), to turn a README's mermaid blocks into images, or to get a diagram that opens in Figma, Inkscape, Word, PowerPoint, or LaTeX. Also use when another skill needs Mermaid turned into an image file. Not for designing a diagram from a description with no Mermaid involved (use archify), charts of numeric data, or raster art (use image-gateway).
+description: Renders Mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, and more) to validated SVG files with mermaid-cli, from .mmd files, mermaid blocks in Markdown, or pasted source. Use whenever the user asks to convert, render, export, or save a Mermaid diagram as SVG (also with PNG copies, or PDF), to turn a README's mermaid blocks into images, or to get a diagram that opens in Figma, Inkscape, Word, PowerPoint, or LaTeX. Also use when another skill needs Mermaid turned into an image file. Not for designing a diagram from a description with no Mermaid involved (use archify), charts of numeric data, or raster art (use image-gateway).
 metadata:
-  version: 1.0.3
+  version: 1.1.0
 ---
 
 # Mermaid to SVG
@@ -12,7 +12,7 @@ Render Mermaid source to SVG files with [mermaid-cli](https://github.com/mermaid
 ## Triggers
 
 Use when the user:
-- asks to convert, render, export, or save a Mermaid diagram as SVG (or PNG or PDF)
+- asks to convert, render, export, or save a Mermaid diagram as SVG, or as SVG plus PNG (or PDF)
 - wants a README's or doc's mermaid blocks as image files
 - needs a diagram that opens in Figma, Inkscape, Word, PowerPoint, LaTeX, or other non-browser tools
 - or another skill needs Mermaid turned into an image file
@@ -71,11 +71,17 @@ sequenceDiagram
   API-->>Client: 200 OK
 EOF
 
+# SVG plus a PNG beside it -> docs/flow.svg and docs/flow.png (2x scale, transparent)
+"$SKILL/scripts/render.sh" --png docs/flow.mmd
+
+# Sharper, white-background PNG capped at 1600 px on its longest side
+"$SKILL/scripts/render.sh" --scale 3 --size 1600 -b white docs/flow.mmd docs/images/flow.svg
+
 # Any other mmdc flag goes after --
 "$SKILL/scripts/render.sh" flow.mmd flow.svg -- --no-font-embed -q
 ```
 
-The script prints each SVG it wrote, one per line, on stdout. Its exit codes are: `0` success, `1` mmdc failed (usually a syntax error), `2` usage error, `3` nothing rendered or the output is invalid.
+The script prints each SVG it wrote, then each PNG, one per line, on stdout. Its exit codes are: `0` success, `1` mmdc failed (usually a syntax error), `2` usage error, `3` nothing rendered or the output is invalid.
 
 **Choosing options:**
 
@@ -84,7 +90,9 @@ The script prints each SVG it wrote, one per line, on stdout. Its exit codes are
 - **`-b transparent`**: for diagrams placed on coloured or dark pages. The default background is white.
 - **`-c config.json`**: Mermaid config, for things like `themeVariables`, `fontFamily`, and `flowchart.curve`. It is merged with `--portable` when you pass both.
 - **`-- --no-font-embed`**: by default mmdc embeds web fonts, which makes even a small flowchart about 200 KB. Turning that off brings it to about 30 KB, but the viewer then falls back to its own fonts and sizes.
-- **Other formats**: an output path ending in `.png` or `.pdf` produces that format instead. For sharper PNGs, add `-- -s 2`.
+- **`--png`**: also writes a PNG beside each SVG, with the same stem (`flow.svg` and `flow.png`; Markdown gives `README-1.png`, and so on). Use it when the destination can't take SVG (chat, slides, email, many CMSs). The PNG background is transparent unless you pass `-b`. The script checks that each PNG is non-empty and has a PNG header.
+- **`--scale N`** (default 2) sets the PNG pixel density; **`--size N`** caps the PNG's longest side. Either one implies `--png`.
+- **PDF**: an output path ending in `.pdf` produces a PDF instead (no validation).
 
 **Markdown rewriting.** If the output path ends in `.md` (e.g. `render.sh README.md out/README.md`), mmdc also writes a copy of the Markdown in which each block is replaced by `![diagram](./README-1.svg)` references and a small caption describing the diagram's source.
 
@@ -92,10 +100,7 @@ The script prints each SVG it wrote, one per line, on stdout. Its exit codes are
 
 The script has already checked that each file is non-empty, contains `<svg`, is well-formed XML (when `xmllint` is available), and isn't Mermaid's "Syntax error" diagram. Then check that it looks right in a viewer or by rasterizing it.
 
-1. **Look at it.** Render a PNG preview into a scratch location and read the image. Confirm that the nodes, labels, and arrows match the source and that no text is clipped or overlapping.
-   ```bash
-   "$SKILL/scripts/render.sh" docs/flow.mmd /tmp/flow-preview.png
-   ```
+1. **Look at it.** Read a PNG of the diagram (the one from `--png`, or a preview rendered into a scratch location with `render.sh --png docs/flow.mmd /tmp/flow-preview.svg`). Confirm that the nodes, labels, and arrows match the source and that no text is clipped or overlapping.
 2. **Portability check** (when you used `--portable`, or when the user will open the file outside a browser): rasterize the actual SVG with `rsvg-convert docs/flow.svg -o /tmp/flow-rsvg.png` and review it.
 3. For Markdown input, confirm that the number of SVGs matches the number of ```mermaid ``` blocks (`grep -c '^```mermaid' README.md`).
 
@@ -109,8 +114,8 @@ Don't silently drop parts of a diagram to get it to render.
 
 Tell the user:
 
-- each SVG written (path and approximate size)
-- the options used (`--portable`, theme, background) and why
+- each SVG and PNG written (path and approximate size)
+- the options used (`--portable`, `--png`, theme, background) and why
 - any fixes made to the diagram source
 - for Markdown input, which block produced which file
 
