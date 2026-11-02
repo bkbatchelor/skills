@@ -1,4 +1,4 @@
-# mermaid-to-svg
+# mermaid-to-image
 
 Renders Mermaid diagrams to SVG files with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) (`mmdc`), then checks that the output is valid and actually shows the diagram.
 
@@ -9,9 +9,9 @@ Asks to render, convert, or export Mermaid diagrams as SVG (optionally with PNG 
 ## Install
 
 ```bash
-/agentic-library use mermaid-to-svg
+/agentic-library use mermaid-to-image
 # or link it manually
-ln -s ~/Projects/skills/docs/mermaid-to-svg ~/.claude/skills/mermaid-to-svg
+ln -s ~/Projects/skills/docs/mermaid-to-image ~/.claude/skills/mermaid-to-image
 ```
 
 ## Requirements
