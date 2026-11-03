@@ -380,3 +380,13 @@ def test_malformed_verdicts_are_skipped(tmp_path):
     (v / "ok.json").write_text(json.dumps({"cluster_id": "ok", "reviewed": True}))
     verdicts, warns = curate.load_verdicts(tmp_path / ".docs-curator")
     assert [x["cluster_id"] for x in verdicts] == ["ok"] and len(warns) == 1
+
+
+def test_extract_xml_keeps_markup_in_fenced_block(tmp_path):
+    good = tmp_path / "a.xml"
+    good.write_text('<r a="attr"><x>Hello</x></r>', encoding="utf-8")
+    assert curate.extract_text(good, "xml") == '```xml\n<r a="attr"><x>Hello</x></r>\n```'
+    bad = tmp_path / "b.xml"
+    bad.write_text("<r><x>oops</r>", encoding="utf-8")
+    with pytest.raises(Exception):
+        curate.extract_text(bad, "xml")

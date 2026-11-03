@@ -27,8 +27,8 @@ from pathlib import Path
 
 EXTRACT_VERSION = 1
 WORKDIR = ".docs-curator"
-SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx"}
-FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5}
+SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml"}
+FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out", ".docs-curator"}
 IDENTICAL_TEXT_SIMILARITY = 0.999
 MIN_TOKENS = 5
@@ -166,7 +166,23 @@ _md = None
 def extract_text(full, fmt):
     """Phase 1 extraction. .md/.txt are read as UTF-8; charset guessing is fallback only."""
     global _md
-    if fmt in ("md", "txt"):
+    if fmt == "xml":
+        # keep the markup: validate it is well-formed, then stage the raw XML in a fenced block
+        import xml.etree.ElementTree as ET
+
+        raw = full.read_bytes()
+        ET.fromstring(raw)
+        enc = re.match(rb'\s*<\?xml[^>]*encoding=["\']([\w.-]+)', raw)
+        try:
+            body = raw.decode(enc.group(1).decode("ascii") if enc else "utf-8-sig")
+        except (LookupError, UnicodeDecodeError):
+            body = raw.decode("utf-8", "replace")
+        body = body.lstrip("\ufeff").strip("\n")
+        fence = "```"
+        while fence in body:
+            fence += "`"
+        text = f"{fence}xml\n{body}\n{fence}"
+    elif fmt in ("md", "txt"):
         raw = full.read_bytes()
         try:
             text = raw.decode("utf-8-sig")
@@ -1032,7 +1048,7 @@ def make_doc(rel, fmt, sha, status, text, warnings):
         "source_format": fmt,
         "sha256": sha,
         "status": status,
-        "description": describe(body, Path(rel).stem),
+        "description": describe("" if fmt == "xml" else body, Path(rel).stem),
     }
     if meta:
         fields["source_front_matter"] = meta

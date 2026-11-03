@@ -372,7 +372,7 @@ Converts Mermaid diagrams to SVG, PNG, or PDF, optionally in a modern Archify-in
 
 ---
 
-Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and `graphify-out` and `.docs-curator` symlinks in the project point there so Graphify's output and the working files stay out of it. Apart from those symlinks (and an optional `--gitignore project|global` entry) it never modifies the source, and it never runs Graphify; it prints `cd <source> && /graphify <out>/staging` for the user to run.
+Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and `graphify-out` and `.docs-curator` symlinks in the project point there so Graphify's output and the working files stay out of it. Apart from those symlinks (and an optional `--gitignore project|global` entry) it never modifies the source, and it never runs Graphify; it prints `cd <source> && /graphify <out>/staging` for the user to run.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules

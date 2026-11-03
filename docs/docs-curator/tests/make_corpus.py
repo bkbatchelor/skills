@@ -373,6 +373,14 @@ BOARD = """# Sprint board
 """
 
 
+SHIPPING = """<?xml version="1.0" encoding="UTF-8"?>
+<carriers>
+  <carrier id="c1"><name>Northwind Freight</name><lane>Rotterdam to Gdansk, weekly sailings</lane></carrier>
+  <carrier id="c2"><name>Harbor Line</name><lane>Antwerp to Riga, fortnightly sailings</lane></carrier>
+</carriers>
+"""
+
+
 def build(root):
     root.mkdir(parents=True, exist_ok=True)
     # unique, unrelated documents
@@ -380,6 +388,7 @@ def build(root):
     put(root, "marketing/brand_voice.md", BRAND_VOICE, 2)
     put(root, "engineering/coding_standards.md", CODING, 3)
     put(root, "research/battery_chemistry.txt", BATTERY, 4)
+    put(root, "logistics/carrier_lanes.xml", SHIPPING, 16)
     make_pdf(root, "legal/privacy_notice.pdf", PRIVACY, 5)
     make_docx(root, "ops/incident_runbook.docx", "Incident runbook", RUNBOOK, 6)
     make_xlsx(root, "facilities/catering_schedule.xlsx", "Catering", [
