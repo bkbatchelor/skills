@@ -8,7 +8,7 @@ Inputs:
 
 ## What it is
 
-A skill that takes a large, read-only repository of documents (`.pptx .pdf .md .xlsx .txt .docx`) and produces a curated staging tree for Graphify. It removes exact, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and naming conflicts. It never modifies the source and never runs Graphify (it prints `/graphify <out>/staging`).
+A skill that takes a large, read-only repository of documents (`.pptx .pdf .md .xlsx .txt .docx .xml`) and produces a curated staging tree for Graphify. It removes exact, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and naming conflicts. It never modifies the source and never runs Graphify (it prints `/graphify <out>/staging`).
 
 Three phases: `curate.py analyze` (deterministic), an LLM phase (Claude, following `SKILL.md`, one verdict file per cluster), `curate.py apply` (deterministic).
 
