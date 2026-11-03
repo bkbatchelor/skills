@@ -6,6 +6,10 @@ files:
   engineering/coding_standards.md: {action: include, reason: unique}
   research/battery_chemistry.txt: {action: include, reason: unique}
   logistics/carrier_lanes.xml: {action: include, reason: unique}
+  logistics/warehouses.json: {action: include, reason: unique}
+  hr/staff_directory.csv: {action: include, reason: unique}
+  ops/deployments.yaml: {action: include, reason: unique}
+  ops/alert_rules.yml: {action: include, reason: unique}
   legal/privacy_notice.pdf: {action: include, reason: unique}
   ops/incident_runbook.docx: {action: include, reason: unique}
   facilities/catering_schedule.xlsx: {action: include, reason: unique}

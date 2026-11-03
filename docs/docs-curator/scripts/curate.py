@@ -27,8 +27,8 @@ from pathlib import Path
 
 EXTRACT_VERSION = 1
 WORKDIR = ".docs-curator"
-SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml"}
-FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6}
+SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml", ".json", ".csv", ".yaml", ".yml"}
+FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6, "json": 7, "csv": 8, "yaml": 9, "yml": 9}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out", ".docs-curator"}
 IDENTICAL_TEXT_SIMILARITY = 0.999
 MIN_TOKENS = 5
@@ -163,34 +163,51 @@ def write_json(path, data):
 _md = None
 
 
+RAW_FENCED = ("xml", "json", "csv", "yaml", "yml")
+
+
+def _decode_text(raw):
+    for enc in ("utf-8-sig", "cp1252"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return raw.decode("latin-1")
+
+
 def extract_text(full, fmt):
     """Phase 1 extraction. .md/.txt are read as UTF-8; charset guessing is fallback only."""
     global _md
-    if fmt == "xml":
-        # keep the markup: validate it is well-formed, then stage the raw XML in a fenced block
-        import xml.etree.ElementTree as ET
-
+    if fmt in RAW_FENCED:
+        # keep the structure: validate, then stage the raw text in a fenced block
         raw = full.read_bytes()
-        ET.fromstring(raw)
-        enc = re.match(rb'\s*<\?xml[^>]*encoding=["\']([\w.-]+)', raw)
-        try:
-            body = raw.decode(enc.group(1).decode("ascii") if enc else "utf-8-sig")
-        except (LookupError, UnicodeDecodeError):
-            body = raw.decode("utf-8", "replace")
+        if fmt == "xml":
+            import xml.etree.ElementTree as ET
+
+            ET.fromstring(raw)
+            enc = re.match(rb'\s*<\?xml[^>]*encoding=["\']([\w.-]+)', raw)
+            try:
+                body = raw.decode(enc.group(1).decode("ascii") if enc else "utf-8-sig")
+            except (LookupError, UnicodeDecodeError):
+                body = raw.decode("utf-8", "replace")
+        else:
+            if b"\0" in raw:
+                raise ValueError(f"not a text {fmt} file (contains NUL bytes)")
+            body = _decode_text(raw)
+            if fmt == "json":
+                json.loads(body)
+            elif fmt in ("yaml", "yml"):
+                import yaml
+
+                list(yaml.safe_load_all(body))  # multi-document files are fine
         body = body.lstrip("\ufeff").strip("\n")
         fence = "```"
         while fence in body:
             fence += "`"
-        text = f"{fence}xml\n{body}\n{fence}"
+        lang = "yaml" if fmt == "yml" else fmt
+        text = f"{fence}{lang}\n{body}\n{fence}"
     elif fmt in ("md", "txt"):
-        raw = full.read_bytes()
-        try:
-            text = raw.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            try:
-                text = raw.decode("cp1252")
-            except UnicodeDecodeError:
-                text = raw.decode("latin-1")
+        text = _decode_text(full.read_bytes())
     else:
         # markitdown quietly falls back to plain text on a broken container, so check first
         if fmt in ("docx", "pptx", "xlsx") and not zipfile.is_zipfile(full):
@@ -1048,7 +1065,7 @@ def make_doc(rel, fmt, sha, status, text, warnings):
         "source_format": fmt,
         "sha256": sha,
         "status": status,
-        "description": describe("" if fmt == "xml" else body, Path(rel).stem),
+        "description": describe("" if fmt in RAW_FENCED else body, Path(rel).stem),
     }
     if meta:
         fields["source_front_matter"] = meta

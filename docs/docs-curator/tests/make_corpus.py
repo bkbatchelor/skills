@@ -381,6 +381,38 @@ SHIPPING = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+INVENTORY_JSON = """{
+  "warehouses": [
+    {"id": "w1", "city": "Lyon", "capacity_pallets": 1200},
+    {"id": "w2", "city": "Turin", "capacity_pallets": 800}
+  ]
+}
+"""
+
+STAFF_CSV = """employee,team,location
+Ada Moreau,Platform,Lyon
+Bruno Keller,Payments,Zurich
+"""
+
+
+DEPLOY_YAML = """service: billing-api
+replicas: 3
+regions:
+  - eu-west-1
+  - us-east-2
+---
+service: ledger-worker
+replicas: 2
+"""
+
+ALERTS_YML = """alerts:
+  - name: high-latency
+    threshold_ms: 750
+  - name: queue-backlog
+    threshold_items: 5000
+"""
+
+
 def build(root):
     root.mkdir(parents=True, exist_ok=True)
     # unique, unrelated documents
@@ -389,6 +421,10 @@ def build(root):
     put(root, "engineering/coding_standards.md", CODING, 3)
     put(root, "research/battery_chemistry.txt", BATTERY, 4)
     put(root, "logistics/carrier_lanes.xml", SHIPPING, 16)
+    put(root, "logistics/warehouses.json", INVENTORY_JSON, 17)
+    put(root, "hr/staff_directory.csv", STAFF_CSV, 18)
+    put(root, "ops/deployments.yaml", DEPLOY_YAML, 19)
+    put(root, "ops/alert_rules.yml", ALERTS_YML, 20)
     make_pdf(root, "legal/privacy_notice.pdf", PRIVACY, 5)
     make_docx(root, "ops/incident_runbook.docx", "Incident runbook", RUNBOOK, 6)
     make_xlsx(root, "facilities/catering_schedule.xlsx", "Catering", [
