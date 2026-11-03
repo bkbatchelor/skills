@@ -70,7 +70,7 @@ The OUT layout is:
 - Unsupported extensions get the status `not_ingestible`.
 - Extraction is cached by content hash, in `text/v{EXTRACT_VERSION}/<sha>.md`. A failure is cached as `<sha>.err`, so a bad file is not retried on every run. Bumping `EXTRACT_VERSION` invalidates the cache.
 - `.md` and `.txt` are decoded as utf-8-sig, then cp1252, then latin-1.
-- `.xml` is checked for well-formedness with `xml.etree.ElementTree`, then staged as the raw XML in a fenced `xml` block, so tags and attributes survive. Malformed XML is `unreadable`. The description is the filename stem.
+- `.xml`, `.json`, `.csv`, `.yaml` and `.yml` keep their structure: XML must be well-formed, JSON must parse and YAML must load (multi-document files are fine) (otherwise the file is `unreadable`; a CSV with NUL bytes is too). Each is staged as the raw text in a fenced block (`xml`, `json`, `csv`, `yaml`, with `.yml` fenced as `yaml`; the fence grows if the content contains backticks). The description is the filename stem.
 - Other formats go through markitdown. Before that, the script checks `zipfile.is_zipfile` for Office files and the `%PDF` header for PDFs. This check is there because markitdown silently falls back to plain text on a corrupt container.
 
 ### 2.2 Normalization
@@ -83,7 +83,7 @@ Files are grouped by sha256. The representative of each group is `min(rank_key)`
 (FORMAT_RANK, -token_count, -descriptive_score, filename_marker_count, path)
 ```
 
-- Format rank prefers structured and editable formats: md < docx < pptx < xlsx < pdf < txt < xml.
+- Format rank prefers structured and editable formats: md < docx < pptx < xlsx < pdf < txt < xml < json < csv < yaml = yml.
 - Token count prefers the fuller extraction.
 - `descriptive_score` counts the filename words (4 or more letters, not stopwords) that appear in the first 300 tokens of the text. It prefers `vendor-security-policy.docx` over `doc1.docx`, and can be turned off with `keeper_prefers_descriptive_name`.
 - The marker count prefers filenames without `final`, `copy` and similar words.

@@ -109,7 +109,7 @@ def test_state_records_backend_and_config(pipeline):
 def test_decisions_schema(pipeline):
     _, out, _ = pipeline
     rows = [json.loads(l) for l in (out / ".docs-curator/decisions.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert len(rows) == 36
+    assert len(rows) == 40
     for r in rows:
         assert set(r) == {"run_id", "path", "sha256", "action", "reason", "kept_instead", "evidence", "confidence"}
         assert r["action"] in {"include", "exclude", "convert", "unreadable", "not_ingestible"}
