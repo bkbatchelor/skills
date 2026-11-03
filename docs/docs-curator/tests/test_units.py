@@ -390,3 +390,39 @@ def test_extract_xml_keeps_markup_in_fenced_block(tmp_path):
     bad.write_text("<r><x>oops</r>", encoding="utf-8")
     with pytest.raises(Exception):
         curate.extract_text(bad, "xml")
+
+
+def test_extract_json_and_csv_are_fenced_raw(tmp_path):
+    j = tmp_path / "a.json"
+    j.write_text('{"a": [1, 2]}\n', encoding="utf-8")
+    assert curate.extract_text(j, "json") == '```json\n{"a": [1, 2]}\n```'
+    c = tmp_path / "a.csv"
+    c.write_text("x,y\n1,2\n", encoding="utf-8")
+    assert curate.extract_text(c, "csv") == "```csv\nx,y\n1,2\n```"
+    fenced = tmp_path / "f.csv"
+    fenced.write_text("a\n```\nb\n", encoding="utf-8")
+    assert curate.extract_text(fenced, "csv").startswith("````csv\n")
+
+
+def test_extract_json_and_csv_reject_bad_input(tmp_path):
+    bad = tmp_path / "b.json"
+    bad.write_text("{not json", encoding="utf-8")
+    with pytest.raises(Exception):
+        curate.extract_text(bad, "json")
+    binary = tmp_path / "b.csv"
+    binary.write_bytes(b"a,b\x00\x01")
+    with pytest.raises(ValueError):
+        curate.extract_text(binary, "csv")
+
+
+def test_extract_yaml_and_yml_are_fenced_raw(tmp_path):
+    y = tmp_path / "a.yaml"
+    y.write_text("a: 1\n---\nb: 2\n", encoding="utf-8")
+    assert curate.extract_text(y, "yaml") == "```yaml\na: 1\n---\nb: 2\n```"
+    yml = tmp_path / "a.yml"
+    yml.write_text("k: [1, 2]\n", encoding="utf-8")
+    assert curate.extract_text(yml, "yml") == "```yaml\nk: [1, 2]\n```"
+    bad = tmp_path / "b.yaml"
+    bad.write_text("a: [1, 2\n", encoding="utf-8")
+    with pytest.raises(Exception):
+        curate.extract_text(bad, "yaml")

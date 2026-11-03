@@ -1,6 +1,6 @@
 ---
 name: docs-curator
-description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
+description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
 metadata:
   version: 1.5.0
 ---
@@ -69,7 +69,7 @@ Both files are optional and live in `<out>/`. Missing means defaults. The settin
 
 ## What staging looks like
 
-- Every kept document except `.pptx` becomes Markdown named `<source path>.md` (a source `.md` keeps its name), with front matter: `source_path`, `source_format`, `sha256`, `status`, `description`. Text only: layout, images and formatting of PDF, Word and Excel files are not carried over; XML is kept verbatim in a fenced `xml` block (markup preserved).
+- Every kept document except `.pptx` becomes Markdown named `<source path>.md` (a source `.md` keeps its name), with front matter: `source_path`, `source_format`, `sha256`, `status`, `description`. Text only: layout, images and formatting of PDF, Word and Excel files are not carried over; XML, JSON, CSV and YAML are kept verbatim in a fenced block (structure preserved).
 - A kept `.pptx` becomes `<name>.pptx.pdf` plus `<name>.pptx.notes.md` (speaker notes).
 - `_curated/CONFLICTS.md` lists contradictions; `_curated/historical/` holds superseded files that had unique content.
 - Text-free documents (scans) are staged with an empty body and listed under "Flagged but kept"; there is no OCR. Corrupt or password-protected files are `unreadable`; other extensions are `not_ingestible`.
