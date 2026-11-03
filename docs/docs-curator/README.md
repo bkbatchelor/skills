@@ -1,6 +1,6 @@
 # docs-curator
 
-A Claude Code skill that cleans up a large folder of documents (`.pptx .pdf .md .xlsx .txt .docx`) before you build a knowledge graph from it with [Graphify](https://pypi.org/project/graphifyy/).
+A Claude Code skill that cleans up a large folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml`) before you build a knowledge graph from it with [Graphify](https://pypi.org/project/graphifyy/).
 
 It finds duplicates and outdated revisions, flags documents that contradict each other, and writes the documents worth keeping into a separate, tidy folder. Your original folder is never changed, and the skill never runs Graphify for you.
 
