@@ -1,13 +1,13 @@
 ---
 name: docs-curator
-description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source and never runs Graphify; it prints the command. Skip for a single file (use heavy-file-ingestion), for building the graph itself (use graphify), and for any request to modify or delete the source documents.
+description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify only after the user approves (docs graph and code graph by default, docs only, or a custom choice). Skip for a single file (use heavy-file-ingestion), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Docs Curator
 
-Three phases: a script analyzes, you judge the clusters, a script applies. The source folder is only ever read.
+Three phases: a script analyzes, you judge the clusters, a script applies. Then, with the user's approval, the graphs are built. The source folder is only ever read.
 
 ## Triggers
 
@@ -15,7 +15,7 @@ Run this skill when the user wants a folder of documents deduplicated, cleaned u
 
 Skip it for:
 - One file or a handful of files: use `heavy-file-ingestion`.
-- Building or querying the graph: use `graphify`. This skill prints the Graphify command and never runs it.
+- Querying a graph, or building one with no curation step: use `graphify`. This skill builds graphs only at the end of a curation run, and only after the user approves.
 - Editing, moving, or deleting the user's documents. Nothing under `--source` is created, changed, or removed.
 
 ## Prerequisites
@@ -29,9 +29,11 @@ $RUN bash $SKILL/scripts/check_env.sh        # exit 0 means ready; otherwise it 
 
 System: `uv`, `python3` (3.10+), and `soffice` (LibreOffice, for `.pptx` to PDF). The embedding model (`BAAI/bge-small-en-v1.5`) downloads once on first use. If it cannot load, `analyze` stops; the user can set `embedding_backend: tfidf` in `config.yaml`. If you have to fall back to Python 3.12 (`--python 3.12`) because a wheel is missing, say so.
 
+Building graphs (steps 6 and 7) also needs Graphify (`uv tool install graphifyy`) and the `graphify` skill. The code graph needs `--source` to be a git work tree, because it scans only tracked files. If either is missing, say so and skip that graph.
+
 ## Workflow
 
-The output folder defaults to `~/curated/<project-name>/`, where `<project-name>` is the basename of `--source`. Omit `--out` to use it; a different `--out` must still be outside `--source`. Everything generated lives there: `staging/`, `.docs-curator/` and `graphify-out/`. Nothing generated goes in the project folder.
+The output folder defaults to `~/curated/<project-name>/`, where `<project-name>` is the basename of `--source`. Omit `--out` to use it; a different `--out` must still be outside `--source`. Everything generated lives there: `staging/`, `.docs-curator/` and `graphify-out/`. The code graph goes next to it, in `~/curated/<project-name>-code/graphify-out/`. Nothing generated goes in the project folder.
 
 1. **Analyze.** `$RUN python $SKILL/scripts/curate.py analyze --source <src> --out <out>`. It inventories and hashes the files, extracts text, groups duplicates, finds revision chains and topic clusters, and writes one queue item per cluster to `<out>/.docs-curator/work/queue/<cluster_id>.json`. Re-running costs nothing for unchanged files.
 2. **Review each queued cluster** (the LLM phase, done by you):
@@ -43,7 +45,18 @@ The output folder defaults to `~/curated/<project-name>/`, where `<project-name>
    - Unique content in a superseded file goes in `unique_content`; that file also gets a copy under `_curated/historical/`.
 3. **Apply.** `$RUN python $SKILL/scripts/curate.py apply --source <src> --out <out>`. It builds `<out>/staging/`, writes `REPORT.md`, `decisions.jsonl` and `state.json` under `<out>/.docs-curator/`, and prints the next steps.
 4. **Link.** `$RUN python $SKILL/scripts/curate.py link --source <src> --out <out>`. It creates `<out>/graphify-out/` and two symlinks in the project root: `<src>/graphify-out` and `<src>/.docs-curator`, pointing at `<out>/graphify-out` and `<out>/.docs-curator` (the working directory). Graphify writes `graphify-out/` into the directory it runs from, so running it from `<src>` sends its output to `<out>` instead of filling the project. It refuses to replace an existing `graphify-out` that is not that symlink; tell the user. Offer `--gitignore project` (appends `.docs-curator` to `<src>/.gitignore`) or `--gitignore global` (appends it to the global git excludes file: `core.excludesFile`, else `~/.config/git/ignore`); only pass it if the user says yes. The entry has no trailing slash because git treats a symlink as a file.
-5. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, and the printed `cd <src> && /graphify <out>/staging` line. Do not run Graphify.
+5. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, and the printed `cd <src> && /graphify <out>/staging` line.
+6. **Ask before running Graphify.** Never start it without the user's explicit approval in this turn; approval for an earlier run does not carry over. Ask one question with these choices, the first marked as the default:
+   - **Docs and code graphs (default).** Build the docs graph from `staging/` and a code-only graph from the project's source.
+   - **Docs graph only.**
+   - **Other:** the user describes it, for example the code graph only, a different code scope, tests included, or neither.
+
+   State the costs in the question. The docs graph uses AI agents and costs tokens. When `<out>/graphify-out/graph.json` already exists, it re-extracts only changed files (`--update`). The code graph is parsed structurally, with no AI agents and no tokens. If the user declines or picks neither, stop after the report.
+7. **Run what was approved.**
+   - **Docs graph:** from `<src>`, invoke the `graphify` skill on `<out>/staging`, adding `--update` if `<out>/graphify-out/graph.json` exists. Because of the `link` symlink, the output lands in `<out>/graphify-out/`. Follow the graphify skill's own steps, including its corpus-size warning.
+   - **Code graph:** `bash $SKILL/scripts/code_graph.sh --source <src> [--out <dir>] [--paths "<dirs>"] [--include-tests]`. It writes to `~/curated/<project-name>-code/graphify-out/` by default and refuses an `--out` inside `<src>`. It scans every git-tracked code file and skips test folders unless `--include-tests` is passed. Use `--paths` when the user named a scope. It carries community labels over from the previous code graph. It prints any community it could not label: name those (2 to 5 words each), write `{"<id>": "<name>"}` to a JSON file outside `<src>`, and re-run with `--labels <file>`.
+   - Never run the code-graph build from `<src>` with `/graphify`. `<src>/graphify-out` is the docs graph's symlink, and the run would overwrite that graph.
+   - Report each graph's node, edge and community counts, its path, and its query line (`graphify query "<q>" --graph <path>/graph.json`).
 
 If the queue was capped (`max_llm_clusters_per_run`, default 25, largest clusters first), the rest are listed in the report. Tell the user, and run analyze, review, and apply again to pick them up; existing verdicts are kept.
 
@@ -52,7 +65,7 @@ If the queue was capped (`max_llm_clusters_per_run`, default 25, largest cluster
 When files were added, modified or removed after a finished run, use `update` instead of a full re-run: `$RUN python $SKILL/scripts/curate.py update --source <src> --out <out>`. It requires an earlier `analyze`, re-runs it, and writes `<out>/.docs-curator/changes.json` with `added`, `modified`, `removed`, `affected_clusters`, `queued_clusters` and `stale_verdicts`. Only clusters containing a new or modified file get a new id, so only they are queued; every other verdict is kept.
 
 1. Run `update` and tell the user the added, modified and removed counts.
-2. Review the queued clusters exactly as in step 2 above, then run `apply` and `link` (if needed).
+2. Review the queued clusters exactly as in step 2 above, then run `apply` and `link` (if needed), then ask about Graphify as in steps 6 and 7.
 3. `stale_verdicts` are verdicts for clusters that no longer exist (a member changed or was removed). Leave the files in place; `apply` warns about them. Mention them to the user.
 4. A removed source file disappears from `staging/` when `apply` rebuilds it.
 
@@ -76,7 +89,8 @@ Both files are optional and live in `<out>/`. Missing means defaults. The settin
 
 ## Hard rules
 
-- Never write under `--source`, except the single `graphify-out` symlink that `link` creates. Never pass an `--out` inside it. Graphify and the source documents are not yours to run or change.
+- Never write under `--source`, except the `graphify-out` and `.docs-curator` symlinks that `link` creates (and the `.gitignore` entry, if the user opts in). Never pass an `--out` inside it. The source documents are not yours to change.
+- Never run Graphify without the user's explicit approval for this run (step 6). Run only the graphs they chose, and never build the code graph inside `--source`.
 - If `apply` says the source changed since analyze, run analyze again; do not edit the analysis files.
 - Stop and ask if: Graphify starts accepting `.pptx` (this design assumes it does not), the embedding model will not load and the user has not chosen tfidf, or a requirement is ambiguous in a way that would change which documents reach staging.
 - Thresholds were tuned on a synthetic corpus only. After the first real run, suggest the user spot-check "Flagged but kept" and the superseded list.

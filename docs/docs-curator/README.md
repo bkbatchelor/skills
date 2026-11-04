@@ -2,7 +2,7 @@
 
 A Claude Code skill that cleans up a large folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml`) before you build a knowledge graph from it with [Graphify](https://pypi.org/project/graphifyy/).
 
-It finds duplicates and outdated revisions, flags documents that contradict each other, and writes the documents worth keeping into a separate, tidy folder. Your original folder is never changed, and the skill never runs Graphify for you.
+It finds duplicates and outdated revisions, flags documents that contradict each other, and writes the documents worth keeping into a separate, tidy folder. Your original folder is never changed. At the end it offers to build the knowledge graphs for you, and runs Graphify only if you say yes.
 
 ## Using the skill
 
@@ -62,7 +62,8 @@ Whichever option you choose, Claude needs the source folder. If it is missing, i
 
 1. **Analyze.** Claude scans the folder, reads every file, and groups exact duplicates, copies in different formats (a deck and its PDF export), near-identical text, revision chains (`v1`, `v2`, `final`, dated copies) and related topics.
 2. **Review.** Claude reads each group and decides whether one document supersedes another and whether any contradict each other. Contradictions are quoted word for word, and the quotes are checked against the documents afterwards. Claude only marks a file as superseded when it can defend that from the text.
-3. **Apply.** Claude builds the curated folder and a report, then gives you a summary and the Graphify command to run.
+3. **Apply.** Claude builds the curated folder and a report, then gives you a summary.
+4. **Graphs (with your approval).** Claude asks whether to build both the docs graph and a code graph (the default), the docs graph only, or something else you describe. Nothing runs until you choose.
 
 After the folder changes, ask for an update. Claude lists the files added, modified and removed (saved in `.docs-curator/changes.json`), reviews only the groups that contain a new or modified file, and rebuilds `staging/`. Reviews of untouched groups are kept. Reviews of groups that changed are listed as stale and left in place.
 
@@ -72,7 +73,7 @@ Re-running on an unchanged folder is cheap, and earlier reviews are kept. Very l
 
 ```text
 <out>/                       # default ~/curated/<project-name>/
-├── graphify-out/            # Graphify's output; see "Running Graphify"
+├── graphify-out/            # the docs graph; see "Running Graphify"
 ├── staging/                 # give this to Graphify
 │   ├── <original path>.md   # each kept document, as Markdown with front matter
 │   ├── <name>.pptx.pdf      # kept decks, as a PDF
@@ -104,7 +105,32 @@ It then prints:
 cd <source> && /graphify <out>/staging
 ```
 
-Run it yourself. Because of the symlink, the graph lands in `<out>/graphify-out/` and the project folder holds only the link. If the project already has a real `graphify-out` folder, the skill won't replace it. Move it aside and ask Claude to link again.
+Because of the symlink, the graph lands in `<out>/graphify-out/` and the project folder holds only the link. If the project already has a real `graphify-out` folder, the skill won't replace it. Move it aside and ask Claude to link again.
+
+Claude then asks whether to run Graphify:
+
+| Choice | What runs | Cost |
+|---|---|---|
+| **Docs and code graphs** (default) | The docs graph from `staging/`, plus a code-only graph | Docs: AI tokens (only changed files when a graph already exists). Code: none |
+| **Docs graph only** | The docs graph from `staging/` | AI tokens |
+| **Other** | Whatever you describe: code only, a different code scope, tests included, or nothing | Depends |
+
+Approval applies to one run only. Claude asks again next time.
+
+### The code graph
+
+The docs graph knows only what your documents say about the code. The code graph is parsed from the source itself (classes, methods, calls, imports), so it can answer "what depends on X". It needs no AI and costs no tokens.
+
+- Output: `~/curated/<project-name>-code/graphify-out/`, kept outside your project. It never uses the project's `graphify-out` link, which belongs to the docs graph.
+- Scope: every git-tracked code file, with test folders skipped. You can ask for specific folders or for tests to be included.
+- Community names carry over between rebuilds. Claude names any new communities.
+- Query it with `graphify query "<question>" --graph ~/curated/<project-name>-code/graphify-out/graph.json`.
+
+To rebuild it on its own:
+
+```text
+bash ~/.claude/skills/docs-curator/scripts/code_graph.sh --source <source> [--paths "src/main tools"] [--include-tests]
+```
 
 ## Adjusting the result
 

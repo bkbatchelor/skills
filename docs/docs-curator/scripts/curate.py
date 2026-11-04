@@ -6,7 +6,7 @@
   curate.py link    --source SRC --out OUT   symlinks SRC/graphify-out and SRC/.docs-curator into OUT
 
 --out defaults to ~/curated/<basename of SRC>. The source is only ever read, except that
-`link` creates the graphify-out and .docs-curator symlinks (and a .gitignore entry if asked). Graphify is never run; its command is printed.
+`link` creates the graphify-out and .docs-curator symlinks (and a .gitignore entry if asked). Graphify is not run by this script; the skill asks the user before building any graph.
 Code is kept 3.10-compatible.
 """
 from __future__ import annotations
@@ -1389,7 +1389,7 @@ def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, o
         L += ["", "## Warnings", ""] + [f"- {w}" for w in warnings]
     L += ["", "## Staging method", "",
           "Generated. Markdown is written from the Phase 1 cached extraction, with front matter. Kept `.pptx` decks are converted to PDF with LibreOffice (serial, private profile) and paired with a `.notes.md` sidecar. Nothing is copied or linked from the source.",
-          "", "## Next step", "", f"Run Graphify yourself (this skill never does): `/graphify {out / 'staging'}`", ""]
+          "", "## Next step", "", f"Build the graphs (the skill asks for approval first): `cd {source} && /graphify {out / 'staging'}` for the docs graph; `scripts/code_graph.sh --source {source}` for the code graph.", ""]
     return "\n".join(L)
 
 
