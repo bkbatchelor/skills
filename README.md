@@ -145,6 +145,7 @@ skills/
 ├── efficiency/               # Token and context discipline skills
 │   └── token-saver/              # Token discipline skill
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, usage, helper commands, state location
 │       └── scripts/              # Helper scripts
 │           └── tokensaver.py     # search, count, fields, dates, diff, accept, current
 └── delegation/               # Agent delegation skills
@@ -182,7 +183,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
 | docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
-| token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `scripts/tokensaver.py` |
+| token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
@@ -452,6 +453,7 @@ Token discipline for the rest of a job. It cannot erase the call it was loaded i
 
 **Key Components:**
 - `SKILL.md`: Seven rules (local code first, search then send only matches, one accepted result, minimal tools, smaller model only when the whole job wins, answer sized to the request, one bounded repair) and the usage-reporting rule
+- `README.md`: Install, usage, helper commands, and where the accepted result is stored
 - `scripts/tokensaver.py`: `search` (capped passages, `--skip N` for one more bounded pull), `count`, `fields` (CSV/TSV/JSON/JSONL), `dates` (ISO 8601), `diff`, `accept`, `current`
 
 **Requirements:**
