@@ -4,7 +4,7 @@ Generates and updates README files at a chosen fidelity level, with Mermaid diag
 
 ## Fidelity levels
 
-| Level | Template |
+| Level | Section guide |
 |-------|----------|
 | BASIC | `references/basic-level-template.md` |
 | STANDARD | `references/standard-level-template.md` |
@@ -12,9 +12,12 @@ Generates and updates README files at a chosen fidelity level, with Mermaid diag
 
 ## Behavior
 
-- Backs up an existing README before replacing it.
-- Respects `.gitignore` when scanning the project.
-- Follows its own Mermaid diagram guidelines.
+- Infers the fidelity level from the request and asks only when unclear.
+- On update, keeps accurate human-written content instead of rewriting everything.
+- Backs up the old README only when git cannot recover it.
+- Respects `.gitignore` through git's file listing.
+- Verifies commands, paths and Mermaid blocks before writing.
+- Draws only diagrams the codebase supports.
 
 ## Triggers
 
@@ -33,4 +36,4 @@ ln -s ~/Projects/skills/docs/generate-readme ~/.claude/skills/generate-readme
 | Path | Purpose |
 |------|---------|
 | `SKILL.md` | Agent instructions: workflow, diagram guidelines, `.gitignore` handling and constraints |
-| `references/` | One README template per fidelity level |
+| `references/` | One section guide per fidelity level |
