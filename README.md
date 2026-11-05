@@ -142,6 +142,11 @@ skills/
 │       ├── SKILL.md              # Skill definition
 │       └── scripts/              # Helper scripts
 │           └── ingest.py
+├── efficiency/               # Token and context discipline skills
+│   └── token-saver/              # Token discipline skill
+│       ├── SKILL.md              # Skill definition
+│       └── scripts/              # Helper scripts
+│           └── tokensaver.py     # search, count, fields, dates, diff, accept, current
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -177,6 +182,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
 | docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
+| token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `scripts/tokensaver.py` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
@@ -437,6 +443,25 @@ Renders dense or visual output (plans, reports, research explainers, review summ
 ```bash
 docs/html-artifacts/scripts/verify.sh ~/artifacts/2026-10-24-my-report.html
 ```
+
+#### token-saver
+
+---
+
+Token discipline for the rest of a job. It cannot erase the call it was loaded into; it only makes the work after it smaller.
+
+**Key Components:**
+- `SKILL.md`: Seven rules (local code first, search then send only matches, one accepted result, minimal tools, smaller model only when the whole job wins, answer sized to the request, one bounded repair) and the usage-reporting rule
+- `scripts/tokensaver.py`: `search` (capped passages, `--skip N` for one more bounded pull), `count`, `fields` (CSV/TSV/JSON/JSONL), `dates` (ISO 8601), `diff`, `accept`, `current`
+
+**Requirements:**
+- `python3` (standard library only)
+
+**Features:**
+- Keeps one accepted result per job at `~/.claude/state/token-saver/<job-slug>/accepted.md`; rejected results are never saved
+- Never retries a token-limit or usage-limit failure; reduces the input instead
+- Reports usage numbers only when the harness provides them, otherwise `unavailable`
+- The skill picks the job slug and runs the script itself, so the user manages no state file or paths
 
 #### visible-delegation
 
