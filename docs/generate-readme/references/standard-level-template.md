@@ -1,83 +1,41 @@
 # STANDARD Level Template
 
----
+Everything in [BASIC](basic-level-template.md), plus the sections below. Include a section only if the project has real content for it.
 
-Includes all BASIC sections plus:
+## Added sections
 
+1. **Project Structure**: a `text` tree of the key directories and files, each with a short purpose comment. Only paths that exist, and nothing `.gitignore`d.
+2. **Modules**: a table (module, description, key files), then a short subsection per module listing its main components and what each does. Group by what the code does, not by file count. Skip modules with nothing to say.
+3. **Contributing**: only steps the project supports.
+   - Branch and PR flow, using the repo's own conventions if documented.
+   - The real test and lint commands.
+   - Commit convention only if the history or config (commitlint, CONTRIBUTING.md) shows one.
+4. **License**: the license name from the LICENSE file and a link to it. Omit if there is no license file.
+
+## Example
+
+````markdown
 ## Project Structure
+
 ```text
-{project_root}/
-├── {key_directory_1}/    # {purpose_1}
-├── {key_directory_2}/    # {purpose_2}
-├── {config_file}         # {purpose}
-└── {other_notable_files}
+acme-cli/
+├── src/       # CLI commands and sync logic
+├── tests/     # Vitest suites
+└── package.json
 ```
-*Note: Files and directories matching .gitignore patterns are excluded from this view.*
 
 ## Modules
 
 | Module | Description | Key Files |
-|-------|-------------|-----------|
-| {module_1} | {description_1} | `{file_1}`, `{file_2}` |
-| {module_2} | {description_2} | `{file_3}`, `{file_4}` |
-| {module_3} | {description_3} | `{file_5}` |
-
-### Module Details
-
-#### {module_1_name}
-
-{detailed_description}
-
-**Key Components:**
-- `{component_1}`: {purpose}
-- `{component_2}`: {purpose}
-
-#### {module_2_name}
-
-{detailed_description}
-
-**Key Components:**
-- `{component_1}`: {purpose}
-- `{component_2}`: {purpose}
-
-## Contributing
-
-### Development Setup
-
-1. Fork the repository
-2. Create a feature branch:
-  ```bash
-      git checkout -b feature/{branch_name}
-  ```
-3. Make your changes
-4. Run tests:
-   ```bash
-   {test_command}
-   ```
-5. Submit a pull request
-
-### Code Style
-
-- Follow {coding_standard}
-- Run linter before committing:
-  ```bash
-  {lint_command}
-  ```
-
-### Commit Convention
-
-This project follows [Conventional Commits](https://www.conventionalcommits.org/):
-
-```text
-<type>(<scope>): <description>
-```
-
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-
+|--------|-------------|-----------|
+| sync | Pulls and pushes projects | `src/sync/index.ts` |
 
 ## License
 
-This project is licensed under the {license_name} License - see the [LICENSE](LICENSE) file for details.
+MIT, see [LICENSE](LICENSE).
+````
 
-*Generated with STANDARD fidelity level*
+## Rules
+
+- Every path must exist.
+- No footer or generator note.
