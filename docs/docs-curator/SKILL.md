@@ -1,8 +1,8 @@
 ---
 name: docs-curator
-description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify only after the user approves (docs graph and code graph by default, docs only, or a custom choice). Skip for a single file (use heavy-file-ingestion), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
+description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify only after the user approves (docs graph and code graph by default, docs only, or a custom choice). Requires the heavy-file-ingestion skill to convert PDF, Word, Excel and PowerPoint files to Markdown. Skip for a single file (use heavy-file-ingestion), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.6.0
+  version: 1.7.0
 ---
 
 # Docs Curator
@@ -29,13 +29,15 @@ $RUN bash $SKILL/scripts/check_env.sh        # exit 0 means ready; otherwise it 
 
 System: `uv`, `python3` (3.10+), and `soffice` (LibreOffice, for `.pptx` to PDF). The embedding model (`BAAI/bge-small-en-v1.5`) downloads once on first use. If it cannot load, `analyze` stops; the user can set `embedding_backend: tfidf` in `config.yaml`. If you have to fall back to Python 3.12 (`--python 3.12`) because a wheel is missing, say so.
 
+**Required: the `heavy-file-ingestion` skill.** `analyze` converts every `.pdf`, `.docx`, `.xlsx` and `.pptx` to Markdown by running that skill's `ingest.py` (found at `$HEAVY_FILE_INGESTION_SCRIPT`, else `~/.claude/skills/heavy-file-ingestion/scripts/ingest.py`). Do not convert these files any other way. If the skill is missing, stop and tell the user to install it; those files would otherwise be marked unreadable. It also needs `pdftotext` (poppler) for PDFs.
+
 Building graphs (steps 6 and 7) also needs Graphify (`uv tool install graphifyy`) and the `graphify` skill. The code graph needs `--source` to be a git work tree, because it scans only tracked files. If either is missing, say so and skip that graph.
 
 ## Workflow
 
 The output folder defaults to `~/curated/<project-name>/`, where `<project-name>` is the basename of `--source`. Omit `--out` to use it; a different `--out` must still be outside `--source`. Everything generated lives there: `staging/`, `.docs-curator/` and `graphify-out/`. The code graph goes next to it, in `~/curated/<project-name>-code/graphify-out/`. Nothing generated goes in the project folder.
 
-1. **Analyze.** `$RUN python $SKILL/scripts/curate.py analyze --source <src> --out <out>`. It inventories and hashes the files, extracts text, groups duplicates, finds revision chains and topic clusters, and writes one queue item per cluster to `<out>/.docs-curator/work/queue/<cluster_id>.json`. Re-running costs nothing for unchanged files.
+1. **Analyze.** `$RUN python $SKILL/scripts/curate.py analyze --source <src> --out <out>`. It inventories and hashes the files, extracts text (converting binary documents with `heavy-file-ingestion`), groups duplicates, finds revision chains and topic clusters, and writes one queue item per cluster to `<out>/.docs-curator/work/queue/<cluster_id>.json`. Re-running costs nothing for unchanged files.
 2. **Review each queued cluster** (the LLM phase, done by you):
    - Read the queue item, then each member's `text_path`. Read the first ~6,000 words by default (`read_words` in the item). For longer members, diff them against the others instead of reading end to end. If you did not read everything, set `partial_read: true`.
    - Decide whether any member **supersedes** another (a later revision, an updated copy) and whether members **contradict** each other on a fact (numbers, dates, limits, owners).

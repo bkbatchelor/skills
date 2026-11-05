@@ -154,6 +154,7 @@ Thresholds were tuned on a synthetic corpus only, so spot-check "Flagged but kep
 
 ## Requirements
 
+- The [heavy-file-ingestion](../../research/heavy-file-ingestion) skill, installed in `~/.claude/skills/` (or point `HEAVY_FILE_INGESTION_SCRIPT` at its `ingest.py`). It converts PDF, Word, Excel and PowerPoint files to Markdown; it needs `pdftotext` (poppler) for PDFs
 - `uv`, Python 3.10+, and LibreOffice (`soffice`, used to convert `.pptx` decks to PDF)
 - The embedding model (`BAAI/bge-small-en-v1.5`) downloads on first use. If it can't, Claude will ask whether to switch to `tfidf`.
 - The skill linked into Claude Code:
