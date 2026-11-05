@@ -2,211 +2,66 @@
 name: generate-readme
 description: Generates or updates a project's README.md at BASIC, STANDARD, or ADVANCE fidelity, with Mermaid diagrams at ADVANCE, backing up any existing README and respecting .gitignore. Use whenever the user asks to write, create, generate, draft, refresh, rewrite, or update a README, or says a repo "needs a README" or "project docs", even without naming a fidelity level. Not for API reference sites, changelogs, or tweaking one section of an existing README (edit it directly). Hand SVG output of diagrams to mermaid-to-image and banner or hero images to image-gateway.
 metadata:
-  version: 1.0.4
+  version: 1.1.0
 ---
 
 # Generate README Skill
 
-This skill generates professional README documentation with three fidelity levels. All diagrams use Mermaid chart format.
-
----
+Writes `README.md` at one of three fidelity levels. Every statement in the output must come from a file you read in this project. All diagrams use Mermaid.
 
 ## Triggers
 
 Use when the user:
 - asks to write, create, generate, draft, refresh, rewrite, or update a README
-- says a repo or project "needs a README" or "needs docs", even without naming a fidelity level (ask for the level in step 1)
+- says a repo or project "needs a README" or "needs docs", even without naming a fidelity level
 
 Skip when:
 - They want one section of an existing README changed. Edit it directly.
 - They want API reference sites, changelogs, or other docs. This skill only writes `README.md`.
 - They want diagrams as SVG files (use `mermaid-to-image`) or banner or hero images (use `image-gateway`).
 
+## Fidelity levels
+
+| Level | Adds | Template |
+|-------|------|----------|
+| BASIC | Name, tech stack, getting started, usage | [basic-level-template.md](references/basic-level-template.md) |
+| STANDARD | BASIC + structure, modules, contributing, license | [standard-level-template.md](references/standard-level-template.md) |
+| ADVANCE | STANDARD + architecture diagrams, configuration, API, testing, deployment | [advance-level-template.md](references/advance-level-template.md) |
+
+Choose the level from the request ("quick README" is BASIC, "full docs with diagrams" is ADVANCE). If the request does not make it clear, ask with AskUserQuestion and recommend STANDARD. State the level you used in the final report.
+
 ## Workflow
 
-### Step 1: Select Fidelity Level
+1. **Pick the level** as above.
+2. **Analyze the project.** Read the manifest (package.json, pyproject.toml, Cargo.toml, go.mod, pom.xml), the license file, CI config, and the top-level layout. Take the project name from the manifest, else the directory name.
+3. **Respect `.gitignore`.** In a git repo, list files with `git ls-files --cached --others --exclude-standard` and never document anything outside that list. Outside a git repo, read `.gitignore` and apply it. Always skip `node_modules`, `.git`, `dist` and `build`.
+4. **Read any existing README.** On an update, keep human-written content that is still accurate (badges, history, custom sections, tone) and rewrite only what is stale or missing. Do a full rewrite only when the user asks for one.
+5. **Back up only if git cannot recover the old file.** If `README.md` is untracked, has uncommitted changes, or the directory is not a git repo, rename it to `README.{n+1}.md` (n is the highest existing backup number, starting at `README.1.md`) and tell the user. Otherwise skip the backup.
+6. **Draft** the README following the level's template. Delete any section the project has no real content for. Never leave placeholders.
+7. **Verify before writing:**
+   - Each install, run, test and lint command exists (npm script in package.json, Makefile target, console entry point, and so on).
+   - Each path and module named exists.
+   - Each Mermaid block is valid: render with `mmdc` if installed, else check the syntax by eye.
+   - Drop anything you cannot confirm, or mark it `<!-- TODO: verify -->`.
+8. **Write `README.md`** in the project root and report: level used, backup location (if any), and any TODO markers left.
 
-Prompt the user to choose a fidelity level using the `question` tool:
+## Mermaid guidelines
 
-```
-Select README Fidelity Level:
+Draw only diagrams the codebase supports, and every node must match a real file, module or service. If the project has no real architecture, draw none.
 
-[1] BASIC
-    Project name, tech stack, quick start, installation, usage instructions
+| Diagram | Use only when | Syntax |
+|---------|---------------|--------|
+| Architecture | There are several components or services | `graph TD` / `graph LR`, `subgraph` for groups |
+| Sequence | A real multi-step or multi-service flow exists | `sequenceDiagram` |
+| Flowchart | There is a real decision, error or deploy pipeline | `flowchart TD` with labeled branches |
+| ER | The repo has a schema or models | `erDiagram` |
 
-[2] STANDARD  
-    Everything in BASIC + modules, contributing, license
-
-[3] ADVANCE
-    Everything in STANDARD + architecture diagrams, configuration, API reference, testing, deployment
-```
-
-Wait for user selection before proceeding.
-
----
-
-### Step 2: Analyze Project
-
-1. **Read project root** to identify:
-   - Project name (from package.json, pom.xml, Cargo.toml, go.mod, pyproject.toml, or directory name)
-   - Primary language and framework
-   - Dependencies and dev dependencies
-   - License file if present
-
-2. **Read `.gitignore`** if it exists:
-   - Parse all patterns (file extensions, directories, specific files)
-   - Store exclusion list to filter out ignored items from documentation
-
-3. **Scan directory structure**:
-   - Identify source directories (src/, lib/, app/, etc.)
-   - Identify test directories (test/, tests/, __tests__/, spec/, etc.)
-   - Identify configuration files
-   - Identify documentation files
-   - Apply `.gitignore` exclusions to filtered results
-
----
-
-### Step 3: Backup Existing README
-
-If `README.md` exists in the project root:
-
-1. Find the highest existing backup number:
-   - Check for `README.1.md`, `README.2.md`, etc.
-   - If none exist, start with `README.1.md`
-
-2. Rename current `README.md` to `README.{n+1}.md`
-
-3. Inform user of backup location
-
----
-
-### Step 4: Generate README Based on Fidelity Level
-
-**BASIC Level Template:**
-See [basic-level-template.md](references/basic-level-template.md) for the complete template.
-
-
-**STANDARD Level Template:**
-See [standard-level-template.md](references/standard-level-template.md) for the complete template.
-
-**ADVANCE Level Template:**
-See [advance-level-template.md](references/advance-level-template.md) for the complete template.
-
-## Mermaid Diagram Guidelines
-
-### Architecture Diagrams
-
-Use `graph TD` (top-down) or `graph LR` (left-right) for:
-
-- System component relationships
-- Service dependencies
-- Data flow between components
-
-**Best Practices:**
-- Group related components in `subgraph` blocks
-- Use descriptive node labels
-- Keep diagrams focused on high-level relationships
-- Limit to 15-20 nodes maximum
-
-### Sequence Diagrams
-
-Use `sequenceDiagram` for:
-
-- API request/response flows
-- Authentication sequences
-- Multi-service interactions
-
-**Best Practices:**
-- Show only essential participants
-- Include meaningful message labels
-- Use activation boxes for important steps
-
-### Flowcharts
-
-Use `flowchart TD` or `flowchart LR` for:
-
-- Decision processes
-- Error handling flows
-- Deployment pipelines
-
-**Best Practices:**
-- Use diamond shapes for decisions
-- Keep paths clear and uncluttered
-- Label all decision branches
-
-### Entity Relationships
-
-Use `erDiagram` for database schemas:
-
-```mermaid
-erDiagram
-    USER {
-        int id PK
-        string email
-        string name
-        datetime created_at
-    }
-    
-    POST {
-        int id PK
-        int user_id FK
-        string title
-        text content
-    }
-    
-    USER ||--o{ POST : "writes"
-```
-
----
-
-## .gitignore Handling
-
-The skill reads `.gitignore` and excludes matching patterns from documentation:
-
-### Supported Patterns
-
-| Pattern | Example | Excludes |
-|---------|---------|----------|
-| Directory | `node_modules/` | Entire directory |
-| File extension | `*.log` | All matching files |
-| Specific file | `.env` | Exact file |
-| Wildcard | `dist*` | Matches dist, dist-dev, etc. |
-| Negation | `!important.log` | Un-excludes specific file |
-
-### Implementation
-
-When scanning the project:
-
-1. Read `.gitignore` from project root
-2. Parse each line into a glob pattern
-3. Apply patterns to file/directory listing
-4. Exclude all matching items from documentation generation
-5. Note exclusions in README comments if relevant
-
----
-
-## Agent Workflow
-
-When instructed to generate a README:
-
-1. **Prompt for fidelity level** using `question` tool
-2. **Wait for user selection** (1, 2, or 3 / BASIC, STANDARD, ADVANCE)
-3. **Analyze project** - scan root, read config files, detect tech stack
-4. **Read `.gitignore`** - build exclusion list
-5. **Check for existing README** - backup if exists
-6. **Gather module information** (STANDARD+)
-7. **Analyze architecture** and generate diagrams (ADVANCE)
-8. **Generate README** with selected fidelity level sections
-9. **Write to `README.md`** in project root
-10. **Report success** and note backup location if applicable
-
----
+Keep each diagram to 15 nodes or fewer, with descriptive labels.
 
 ## Constraints
 
-- Never overwrite existing README without backing up first
-- Always respect `.gitignore` patterns
-- Use Mermaid format for all diagrams (no other diagram formats)
-- Do not include sensitive information (API keys, passwords, tokens)
-- Exclude node_modules, .git, dist, build directories from structure
-- Generate factual content based on actual project analysis
+- Never overwrite a README that git cannot recover without a backup.
+- Never document `.gitignore`d files.
+- Mermaid is the only diagram format.
+- No secrets (keys, passwords, tokens) in the output.
+- No invented content: if you did not read it, do not write it.

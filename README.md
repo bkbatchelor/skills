@@ -174,7 +174,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | Skill | Description | Key Files |
 |-------|-------------|-----------|
 | commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
-| generate-readme | Generates README files with three fidelity levels | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
+| generate-readme | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
 | current-info-search | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `config.env`, `scripts/search.py` |
 | media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
@@ -213,21 +213,23 @@ Commits only staged changes using a specific commit message template. Never stag
 Generates professional README documentation with three fidelity levels. All diagrams use Mermaid chart format.
 
 **Key Components:**
-- `SKILL.md`: Skill definition with templates and workflow
+- `SKILL.md`: Skill definition: workflow, verification and diagram rules
 - `references/basic-level-template.md`: BASIC level template
 - `references/standard-level-template.md`: STANDARD level template
 - `references/advance-level-template.md`: ADVANCE level template
 
 **Fidelity Levels:**
-- **BASIC**: Project name, tech stack, quick start, installation, usage
-- **STANDARD**: BASIC + modules, contributing, license
+- **BASIC**: Project name, tech stack, getting started, usage
+- **STANDARD**: BASIC + structure, modules, contributing, license
 - **ADVANCE**: STANDARD + architecture diagrams, configuration, API reference, testing, deployment
 
 **Features:**
-- Interactive fidelity level selection
-- Automatic `.gitignore` parsing and exclusion
-- README backup with incrementing numbers
-- Mermaid diagram generation (ADVANCE level)
+- Infers the fidelity level from the request and asks only when unclear
+- Keeps accurate human-written content when updating an existing README
+- Respects `.gitignore` through git's own file listing
+- Backs up the old README (`README.n.md`) only when git cannot recover it
+- Verifies commands, paths and Mermaid blocks before writing; unverified items are dropped or marked `TODO: verify`
+- Draws only diagrams the codebase supports (ADVANCE level)
 
 #### goal-prompt-generator
 
@@ -285,6 +287,7 @@ Converts PDFs, Office documents, and large CSV/text files into chunked Markdown 
 - Splits PDFs, decks, spreadsheets, CSVs, and text into chunks of about 25k characters or less
 - Writes output to `_ingested/<source-stem>/` next to the source, or `~/.cache/heavy-file-ingestion/<hash>/` if that folder is not writable
 - Skips re-ingesting a source whose SHA-256 is unchanged
+- `--check` reports which external tools are installed and what each missing one costs; a missing poppler also prints a stderr warning during PDF ingest
 
 #### media-transcription
 
