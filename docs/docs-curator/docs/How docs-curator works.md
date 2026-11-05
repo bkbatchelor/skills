@@ -71,7 +71,7 @@ The OUT layout is:
 - Extraction is cached by content hash, in `text/v{EXTRACT_VERSION}/<sha>.md`. A failure is cached as `<sha>.err`, so a bad file is not retried on every run. Bumping `EXTRACT_VERSION` invalidates the cache.
 - `.md` and `.txt` are decoded as utf-8-sig, then cp1252, then latin-1.
 - `.xml`, `.json`, `.csv`, `.yaml` and `.yml` keep their structure: XML must be well-formed, JSON must parse and YAML must load (multi-document files are fine) (otherwise the file is `unreadable`; a CSV with NUL bytes is too). Each is staged as the raw text in a fenced block (`xml`, `json`, `csv`, `yaml`, with `.yml` fenced as `yaml`; the fence grows if the content contains backticks). The description is the filename stem.
-- Other formats go through markitdown. Before that, the script checks `zipfile.is_zipfile` for Office files and the `%PDF` header for PDFs. This check is there because markitdown silently falls back to plain text on a corrupt container.
+- PDF, Word, Excel and PowerPoint files are converted by the `heavy-file-ingestion` skill (`ingest.py`, chunks joined in INDEX order). Before that, the script checks `zipfile.is_zipfile` for Office files and the `%PDF` header for PDFs. This check is there because the converter silently falls back to plain text on a corrupt container.
 
 ### 2.2 Normalization
 `normalize` produces the token stream used by every later comparison. It strips pptx speaker notes, HTML comments, and lines like "Page 3 of 9" or "Slide 4". It then lowercases the text and extracts `[a-z0-9]+` tokens. A file with zero tokens becomes `text_free`. It is still staged, with an empty body, and there is no OCR.

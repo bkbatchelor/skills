@@ -25,7 +25,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-EXTRACT_VERSION = 1
+EXTRACT_VERSION = 2
 WORKDIR = ".docs-curator"
 SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml", ".json", ".csv", ".yaml", ".yml"}
 FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6, "json": 7, "csv": 8, "yaml": 9, "yml": 9}
@@ -160,7 +160,6 @@ def write_json(path, data):
 
 # ---------------------------------------------------------------------- extraction
 
-_md = None
 
 
 RAW_FENCED = ("xml", "json", "csv", "yaml", "yml")
@@ -175,9 +174,34 @@ def _decode_text(raw):
     return raw.decode("latin-1")
 
 
+def find_ingest_script():
+    """Locate heavy-file-ingestion's ingest.py (required for PDF, Office and deck conversion)."""
+    cands = [os.environ.get("HEAVY_FILE_INGESTION_SCRIPT"),
+             Path.home() / ".claude/skills/heavy-file-ingestion/scripts/ingest.py",
+             Path(__file__).resolve().parents[3] / "research/heavy-file-ingestion/scripts/ingest.py"]
+    for c in cands:
+        if c and Path(c).is_file():
+            return Path(c)
+    raise RuntimeError("heavy-file-ingestion skill not found (set HEAVY_FILE_INGESTION_SCRIPT or install it in ~/.claude/skills)")
+
+
+def ingest_to_markdown(full):
+    """Convert one binary document to Markdown with the heavy-file-ingestion skill and join its chunks."""
+    script = find_ingest_script()
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([sys.executable, str(script), str(full), "--out", tmp],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError("heavy-file-ingestion failed: " + (r.stderr or r.stdout).strip()[-500:])
+        index = Path(tmp) / "INDEX.md"
+        names = re.findall(r"^\| \[([^\]]+)\]\(\1\) \| (?:text|table) \|", index.read_text(encoding="utf-8"), re.M)
+        text = "\n\n".join((Path(tmp) / n).read_text(encoding="utf-8").strip("\n") for n in names)
+        # a scanned PDF yields only "## Page N" headings; treat that as no text
+        return text if re.sub(r"(?m)^## Page \d+\s*$", "", text).strip() else ""
+
+
 def extract_text(full, fmt):
     """Phase 1 extraction. .md/.txt are read as UTF-8; charset guessing is fallback only."""
-    global _md
     if fmt in RAW_FENCED:
         # keep the structure: validate, then stage the raw text in a fenced block
         raw = full.read_bytes()
@@ -214,17 +238,13 @@ def extract_text(full, fmt):
             raise ValueError(f"not a valid {fmt} container")
         if fmt == "pdf" and not full.read_bytes()[:1024].lstrip().startswith(b"%PDF"):
             raise ValueError("not a valid PDF (missing %PDF header)")
-        if _md is None:
-            from markitdown import MarkItDown
-
-            _md = MarkItDown()
-        text = _md.convert(str(full)).text_content or ""
+        text = ingest_to_markdown(full)
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
 _NOTES = re.compile(r"###\s*Notes:.*?(?=<!--\s*Slide number|\Z)", re.S | re.I)
-_PAGE_LINE = re.compile(r"^\s*(?:page|slide)\s+\d+(?:\s+of\s+\d+)?\s*$", re.I | re.M)
+_PAGE_LINE = re.compile(r"^\s*(?:#+\s*)?(?:page|slide)\s+\d+(?:\s+of\s+\d+)?\s*$", re.I | re.M)
 
 
 def normalize(text, fmt=None):

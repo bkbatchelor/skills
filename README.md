@@ -388,6 +388,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 
 **Requirements:**
 - `uv` and Python 3.10+; run through `uv run --no-project --with-requirements requirements.txt python scripts/curate.py ...`
+- The `heavy-file-ingestion` skill (required: converts PDF, Word, Excel and PowerPoint files to Markdown during `analyze`) and `pdftotext` (poppler)
 - `soffice` (LibreOffice) to convert kept `.pptx` decks to PDF
 - First run downloads the `BAAI/bge-small-en-v1.5` embedding model; `embedding_backend: tfidf` in `config.yaml` avoids it
 
