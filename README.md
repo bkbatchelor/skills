@@ -66,11 +66,13 @@ skills/
 ├── git/                      # Git workflow skills
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install and usage
 │       └── references/           # Reference materials
 │           └── git-commit-template.md
 ├── docs/                     # Documentation skills
 │   ├── generate-readme/          # README generation skill
 │   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install and usage
 │   │   └── references/           # Reference materials
 │   │       ├── basic-level-template.md
 │   │       ├── standard-level-template.md
@@ -87,7 +89,8 @@ skills/
 │   │   ├── references/           # Reference materials
 │   │   │   └── verdict-schema.md
 │   │   ├── scripts/              # Helper scripts
-│   │   │   ├── curate.py         # analyze, apply and link commands
+│   │   │   ├── curate.py         # analyze, update, apply and link commands
+│   │   │   ├── code_graph.sh     # Code-only Graphify graph (no tokens)
 │   │   │   └── check_env.sh      # Dependency check
 │   │   ├── docker/               # Reference image
 │   │   │   └── Dockerfile
@@ -112,6 +115,7 @@ skills/
 │   │       └── render.sh
 │   └── html-artifacts/           # HTML artifact skill
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, usage, house style summary
 │       ├── references/           # Reference materials
 │       │   └── template.html     # Starter page: tokens, components, every layout pattern
 │       └── scripts/              # Helper scripts
@@ -119,6 +123,7 @@ skills/
 ├── media/                    # Image and audio/video skills
 │   ├── image-gateway/            # Image generation and editing skill
 │   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install, options, configuration
 │   │   ├── config.env            # Saved defaults (model, output dir, key file)
 │   │   ├── references/           # Reference materials
 │   │   │   └── api.md
@@ -126,6 +131,7 @@ skills/
 │   │       └── generate.sh
 │   └── media-transcription/      # Audio/video transcription skill
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, usage, output package
 │       ├── config.env            # Saved defaults (models, key location, prices)
 │       ├── references/           # Reference materials
 │       │   ├── api.md
@@ -135,11 +141,13 @@ skills/
 ├── research/                 # Research and ingestion skills
 │   ├── current-info-search/      # Live search for fast-changing facts
 │   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install, requirements, usage
 │   │   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
 │   │   └── scripts/              # Helper scripts
 │   │       └── search.py
 │   └── heavy-file-ingestion/     # PDF/Office/large text to chunked Markdown
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, requirements, output layout
 │       └── scripts/              # Helper scripts
 │           └── ingest.py
 ├── efficiency/               # Token and context discipline skills
@@ -151,10 +159,12 @@ skills/
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
+    │   ├── README.md             # Install and usage
     │   └── references/           # Reference materials
     │       └── goal-prompt-template.md
     └── visible-delegation/       # Visible agent delegation skill
         ├── SKILL.md              # Skill definition
+        ├── README.md             # Install, requirements, usage
         ├── references/           # Reference materials
         │   └── delegate-addendum.md
         └── scripts/              # Helper scripts
@@ -173,18 +183,18 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 
 | Skill | Description | Key Files |
 |-------|-------------|-----------|
-| commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `references/git-commit-template.md` |
-| generate-readme | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
-| goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `references/goal-prompt-template.md` |
-| current-info-search | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `config.env`, `scripts/search.py` |
-| media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
-| image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
-| heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `scripts/ingest.py` |
-| html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `references/template.html`, `scripts/verify.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `README.md`, `references/git-commit-template.md` |
+| generate-readme | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `README.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
+| goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
+| current-info-search | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `README.md`, `config.env`, `scripts/search.py` |
+| media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
+| image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
+| heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
+| html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/code_graph.sh`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
-| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -383,7 +393,7 @@ Converts Mermaid diagrams to SVG, PNG, or PDF, optionally in a modern Archify-in
 
 ---
 
-Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and `graphify-out` and `.docs-curator` symlinks in the project point there so Graphify's output and the working files stay out of it. Apart from those symlinks (and an optional `--gitignore project|global` entry) it never modifies the source, and it never runs Graphify; it prints `cd <source> && /graphify <out>/staging` for the user to run.
+Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and `graphify-out` and `.docs-curator` symlinks in the project point there so Graphify's output and the working files stay out of it. Apart from those symlinks (and an optional `--gitignore project|global` entry) it never modifies the source. At the end it asks before running Graphify, per run: docs and code graphs (default), docs only, or a custom choice; it never starts Graphify without that approval.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
@@ -391,6 +401,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - `docs/How docs-curator works.md`: Technical walkthrough of `curate.py` (analyze, update, decide, apply, link), with a Mermaid architecture diagram
 - `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `update` (re-analyze after files were added, modified or removed, report the changes, queue only affected clusters), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` and `<source>/.docs-curator` into `<out>`; `--gitignore project|global` adds `.docs-curator` to a gitignore)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
+- `scripts/code_graph.sh`: Builds a code-only Graphify graph from the git-tracked source (structural parsing, no AI tokens) into `~/curated/<project-name>-code/`, never inside the source
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
 - `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
@@ -404,7 +415,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - First run downloads the `BAAI/bge-small-en-v1.5` embedding model; `embedding_backend: tfidf` in `config.yaml` avoids it
 
 **Features:**
-- Three phases: `analyze`, a per-cluster LLM review that writes verdict files, then `apply`
+- Three phases: `analyze`, a per-cluster LLM review that writes verdict files, then `apply`; an approval-gated Graphify step follows
 - Exact, cross-format (for example a deck and its PDF export), and near-duplicate detection with MinHash and rapidfuzz; near duplicates are flagged and kept unless `near_duplicate_action: exclude`
 - Revision chains from filename markers, in-text versions and dates, document properties, and mtime; a file is excluded as superseded only with two agreeing signals or a confident verdict
 - Every kept document except `.pptx` is staged as Markdown with front matter (`source_path`, `source_format`, `sha256`, `status`, `description`); decks become a PDF plus a speaker-notes sidecar
@@ -430,6 +441,7 @@ Renders dense or visual output (plans, reports, research explainers, review summ
 
 **Key Components:**
 - `SKILL.md`: Skill definition with trigger conditions, hard rules, the house style tokens, layout patterns, and the verify-before-done rule
+- `README.md`: Install, usage, requirements, and a summary of the house style
 - `references/template.html`: Starter page with the tokens, components, theme toggle, print styles, and an example of each layout pattern
 - `scripts/verify.sh`: Renders the file with headless Chromium and checks the result
 
