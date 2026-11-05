@@ -142,6 +142,10 @@ skills/
 │       ├── SKILL.md              # Skill definition
 │       └── scripts/              # Helper scripts
 │           └── ingest.py
+├── mcp/                      # MCP server definitions
+│   └── markitdown/               # MarkItDown document-to-Markdown MCP server
+│       ├── mcp.json              # Server definition (stdio, uvx markitdown-mcp)
+│       └── README.md             # Requirements, install, manual registration
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -462,6 +466,25 @@ Delegates a bounded task to another coding-agent session (Claude Code or opencod
 - Monitoring with clear intervene-vs-wait rules and an approval policy for delegate prompts
 - Independently re-runs every verification gate before reporting results
 - Refuses to close a session while the user is attached unless forced
+
+---
+
+## Available MCP Servers
+
+MCP servers are not skills: they are server definitions the agent harness loads, each a single
+`mcp.json` holding the object that goes under `mcpServers.<name>`.
+
+| Server | Description | Key Files |
+|--------|-------------|-----------|
+| markitdown | Microsoft MarkItDown as an MCP server: converts PDF, Office, HTML, images and audio to Markdown via `convert_to_markdown` | `mcp.json`, `README.md` |
+
+### markitdown
+
+Runs upstream [`markitdown-mcp`](https://github.com/microsoft/markitdown) over stdio with
+`uvx markitdown-mcp`, so the only requirement is `uv` on `PATH` — no package to install or update
+by hand. Install it with `/agentic-library use markitdown` (add `-p` to scope it to one project),
+then restart the harness. See [`mcp/markitdown/README.md`](mcp/markitdown/README.md) for manual
+registration and version pinning.
 
 ---
 
