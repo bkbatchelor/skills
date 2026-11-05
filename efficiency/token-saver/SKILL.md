@@ -2,7 +2,7 @@
 name: token-saver
 description: Token discipline for the rest of a job. Does exact work (counting, sorting, text search, field extraction, date normalization, format conversion, file comparison, validation) with local code instead of a model, sends only matching passages from large sources instead of whole files, rebuilds revisions from the last accepted result instead of the chat history, loads only the tools the job needs, and keeps answers the size of the request. Use when the user says token-saver, asks to save tokens or context, cut token waste, keep a long job cheap, or revise a result across many turns, and whenever a job touches a large transcript, repo, log, or export. Skip for short one-shot questions where nothing large is read.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Token Saver
