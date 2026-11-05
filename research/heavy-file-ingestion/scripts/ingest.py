@@ -30,6 +30,9 @@ def run(cmd, **kw):
     return subprocess.run(cmd, check=True, capture_output=True, text=True, **kw).stdout
 
 
+MARKITDOWN_HINT = "uv tool install 'markitdown[pdf,pptx,docx,xlsx,xls]'"
+
+
 def need(tool, hint):
     if not shutil.which(tool):
         sys.exit(f"missing tool '{tool}'. Install: {hint}")
@@ -91,8 +94,19 @@ def write_chunks(d, prefix, parts, kind, label=""):
     return rows
 
 
+def pdf_markitdown(src, d, a):
+    """Fallback when poppler is missing: no page structure, header/footer removal or scan detection."""
+    need("markitdown", MARKITDOWN_HINT)
+    md = run(["markitdown", str(src)])
+    warns = ["converted with markitdown (pdftotext/pdfinfo not found): no page markers or header/footer removal; scanned pages are not detected"]
+    if not md.strip():
+        warns.append("no extractable text (scan or image-only, needs OCR/visual review)")
+    return "document", write_chunks(d, "doc", split_text(md, a.max_chars), "text"), "markitdown", warns
+
+
 def pdf(src, d, a):
-    need("pdftotext", "sudo pacman -S poppler")
+    if not (shutil.which("pdftotext") and shutil.which("pdfinfo")):
+        return pdf_markitdown(src, d, a)
     pages = int(re.search(r"Pages:\s+(\d+)", run(["pdfinfo", str(src)])).group(1))
     raw = run(["pdftotext", "-layout", str(src), "-"]).split("\f")[:pages]
     raw += [""] * (pages - len(raw))
@@ -135,7 +149,7 @@ def pdf(src, d, a):
 
 
 def office(src, d, a):
-    need("markitdown", "uv tool install 'markitdown[pdf,pptx,docx,xlsx,xls]'")
+    need("markitdown", MARKITDOWN_HINT)
     ext, work = src.suffix.lower(), src
     if ext in OFFICE_LEGACY:
         need("soffice", "sudo pacman -S libreoffice-fresh")

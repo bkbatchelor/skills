@@ -2,7 +2,7 @@
 name: heavy-file-ingestion
 description: Converts heavy or binary documents (PDF, PPTX, XLSX, DOCX, legacy Office, big CSV/TSV, large text dumps) into chunked Markdown/CSV artifacts plus an INDEX.md BEFORE any analysis. Use whenever the user shares, mentions, or asks anything about such a file (summarize, analyze, extract, compare, review, answer questions from it), or when a text/CSV file exceeds ~200 KB or ~2,000 lines. Never read or analyze the original file directly; all analysis reads the converted artifacts. Skip for small plain-text files, and for creating or editing PDF, Word, or PowerPoint files (use the pdf, docx, or pptx skills).
 metadata:
-  version: 1.0.3
+  version: 1.1.0
 ---
 
 # Heavy File Ingestion
@@ -37,7 +37,7 @@ The script implements these; use the manual commands when it fails or you need a
 
 | Type | Primary | Fallback |
 |---|---|---|
-| PDF (text) | `pdftotext -layout -f N -l M file.pdf -` per page range | `markitdown file.pdf` |
+| PDF (text) | `pdftotext -layout -f N -l M file.pdf -` per page range (the script falls back to `markitdown` automatically when poppler is missing) | `markitdown file.pdf` |
 | PDF (scanned) | `pdftoppm -r 200 -png -f N -l M file.pdf out`, then `tesseract out-N.png out-N` | `ocrmypdf` (`uv tool install ocrmypdf`) |
 | PPTX | `markitdown deck.pptx` (slide markers, notes, tables) | `soffice --headless --convert-to pdf`, then PDF recipe |
 | XLSX | `markitdown book.xlsx` (one `##` section per sheet); for large sheets export CSV via `soffice --headless --convert-to csv` | `uv run --with openpyxl python` |
