@@ -2,6 +2,7 @@
 """Convert a heavy file into chunked Markdown/CSV artifacts plus INDEX.md.
 
 Usage: ingest.py SOURCE [--out DIR] [--force] [--max-chars N]
+       ingest.py --check
 
 Output: <SOURCE dir>/_ingested/<stem>/ (falls back to
 ~/.cache/heavy-file-ingestion/<hash>/ when the source dir is not writable).
@@ -94,10 +95,32 @@ def write_chunks(d, prefix, parts, kind, label=""):
     return rows
 
 
+TOOLS = [
+    ("markitdown", "required", "Office, EPUB and HTML conversion fails; PDF fallback unavailable", MARKITDOWN_HINT),
+    ("pdftotext", "recommended", "PDFs fall back to markitdown: no page markers, header/footer removal or scan detection", "sudo pacman -S poppler"),
+    ("pdfinfo", "recommended", "same as pdftotext (page count)", "sudo pacman -S poppler"),
+    ("pdfimages", "optional", "embedded PDF images are not extracted to assets/", "sudo pacman -S poppler"),
+    ("pdftoppm", "optional", "cannot render pages to PNG for visual review or OCR", "sudo pacman -S poppler"),
+    ("tesseract", "optional", "no OCR for scanned pages (they are only flagged)", "sudo pacman -S tesseract tesseract-data-eng"),
+    ("soffice", "optional", "legacy formats (.doc .ppt .xls .odt .rtf) cannot be converted", "sudo pacman -S libreoffice-fresh"),
+]
+
+
+def check():
+    missing_required = False
+    for tool, level, cost, hint in TOOLS:
+        ok = shutil.which(tool)
+        print(f"{'ok     ' if ok else 'MISSING'}  {tool:<11} {level:<12}" + ("" if ok else f" {cost}. Install: {hint}"))
+        missing_required |= not ok and level == "required"
+    return 1 if missing_required else 0
+
+
 def pdf_markitdown(src, d, a):
     """Fallback when poppler is missing: no page structure, header/footer removal or scan detection."""
     need("markitdown", MARKITDOWN_HINT)
     md = run(["markitdown", str(src)])
+    print("warning: pdftotext/pdfinfo not found; using markitdown fallback (no page markers, header/footer removal or scan detection). "
+          "Install poppler for full PDF handling.", file=sys.stderr)
     warns = ["converted with markitdown (pdftotext/pdfinfo not found): no page markers or header/footer removal; scanned pages are not detected"]
     if not md.strip():
         warns.append("no extractable text (scan or image-only, needs OCR/visual review)")
@@ -228,9 +251,14 @@ def text_file(src, d, a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("source"); ap.add_argument("--out"); ap.add_argument("--force", action="store_true")
+    ap.add_argument("source", nargs="?"); ap.add_argument("--out")
+    ap.add_argument("--check", action="store_true", help="report which external tools are installed and exit"); ap.add_argument("--force", action="store_true")
     ap.add_argument("--max-chars", type=int, default=MAX_CHARS)
     a = ap.parse_args()
+    if a.check:
+        sys.exit(check())
+    if not a.source:
+        ap.error("source is required unless --check is given")
     src = Path(a.source).resolve()
     digest = sha256(src)
     d = out_dir_for(src, digest, a.out)

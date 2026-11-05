@@ -278,8 +278,9 @@ Converts PDFs, Office documents, and large CSV/text files into chunked Markdown 
 
 **Requirements:**
 - `uv` and `python3`
-- `pdftotext` and `pdfinfo` (poppler) for PDFs
-- `markitdown` for Office files (and as the PDF fallback when poppler is missing); `libreoffice` for legacy formats; `tesseract` for scanned pages
+- `markitdown` (required) for Office files and as the PDF fallback when poppler is missing
+- Recommended: poppler (`pdftotext`, `pdfinfo`, `pdfimages`, `pdftoppm`) for PDFs
+- Optional: `libreoffice` for legacy formats; `tesseract` for scanned pages (run by hand, not by the script)
 
 **Features:**
 - Splits PDFs, decks, spreadsheets, CSVs, and text into chunks of about 25k characters or less
@@ -287,6 +288,7 @@ Converts PDFs, Office documents, and large CSV/text files into chunked Markdown 
 - Skips re-ingesting a source whose SHA-256 is unchanged
 
 #### media-transcription
+- `--check` reports which external tools are installed and what each missing one costs; a missing poppler also prints a stderr warning during PDF ingest
 
 ---
 

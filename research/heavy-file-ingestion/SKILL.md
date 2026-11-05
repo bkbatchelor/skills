@@ -2,7 +2,7 @@
 name: heavy-file-ingestion
 description: Converts heavy or binary documents (PDF, PPTX, XLSX, DOCX, legacy Office, big CSV/TSV, large text dumps) into chunked Markdown/CSV artifacts plus an INDEX.md BEFORE any analysis. Use whenever the user shares, mentions, or asks anything about such a file (summarize, analyze, extract, compare, review, answer questions from it), or when a text/CSV file exceeds ~200 KB or ~2,000 lines. Never read or analyze the original file directly; all analysis reads the converted artifacts. Skip for small plain-text files, and for creating or editing PDF, Word, or PowerPoint files (use the pdf, docx, or pptx skills).
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Heavy File Ingestion
@@ -20,6 +20,7 @@ Small plain-text files (e.g. a 5 KB Markdown file) are read directly. Creating o
 
 ## Workflow
 
+0. **Optional preflight:** `uv run --no-project python ~/.claude/skills/heavy-file-ingestion/scripts/ingest.py --check` lists installed tools and what each missing one costs. Run it before a batch of PDFs.
 1. **Check for an existing ingest.** Look for `<source dir>/_ingested/<stem>/INDEX.md`. If its `sha256` matches the source, reuse it.
 2. **Ingest:** `uv run --no-project python ~/.claude/skills/heavy-file-ingestion/scripts/ingest.py <source>` (add `--force` to redo). The last output line is the artifact directory.
 3. **Read `INDEX.md` first**, check Warnings, then open only the artifacts relevant to the question.

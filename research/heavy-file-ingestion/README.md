@@ -26,13 +26,15 @@ ln -s ~/Projects/skills/research/heavy-file-ingestion ~/.claude/skills/heavy-fil
 
 - `uv` and `python3`
 - `markitdown` (required for Office, EPUB and HTML files; hard-fails without it): `uv tool install 'markitdown[pdf,pptx,docx,xlsx,xls]'`
-- `pdftotext` and `pdfinfo` (poppler) for PDFs. Without them, PDFs fall back to markitdown, which loses page markers, header/footer removal and scan detection
-- `libreoffice` for legacy formats; `tesseract` for scanned pages
+- Recommended: poppler (`pdftotext`, `pdfinfo`, plus `pdfimages` and `pdftoppm`) for PDFs. Without `pdftotext` or `pdfinfo`, PDFs fall back to markitdown, which loses page markers, header/footer removal and scan detection. The script prints a warning to stderr and records it in `INDEX.md`
+- Optional: `libreoffice` for legacy formats. `tesseract` for scanned pages: the script only flags them, and the agent runs `pdftoppm` then `tesseract` by hand
+- Run `scripts/ingest.py --check` to see which tools are installed and what each missing one costs
 
 ## Usage
 
 ```bash
 uv run --no-project python scripts/ingest.py <source> [--force] [--out DIR] [--max-chars N]
+uv run --no-project python scripts/ingest.py --check
 ```
 
 Output goes to `_ingested/<source-stem>/` next to the source, or `~/.cache/heavy-file-ingestion/<hash>/` if that folder is not writable. An unchanged source (same SHA-256) is not re-ingested.
