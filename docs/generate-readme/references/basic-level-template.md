@@ -1,81 +1,52 @@
 # BASIC Level Template
 
-# <project_name>
+Section guide. Include a section only if the project has real content for it.
 
-{one_line_description}
+## Sections
+
+1. **Title and description**: `# <project name>` and one sentence on what it does, taken from the manifest or existing docs.
+2. **Tech Stack**: a short table (language, framework, package manager, notable tools) from the manifest and lockfiles.
+3. **Getting Started**: one section, no repeats.
+   - *Prerequisites*: runtimes and tools with versions when the manifest states them.
+   - *Install*: clone command (use the real remote from `git remote get-url origin`, else omit the clone step), then the install command.
+   - *Configure*: only if an `.env.example` or similar exists. Name the file.
+   - *Run*: the real start command.
+4. **Usage**: the basic command or call, then a table of the common commands that exist (npm scripts, Make targets, CLI subcommands). Add an example only if you can show real output or behavior.
+
+## Example
+
+````markdown
+# acme-cli
+
+Command-line tool for syncing Acme projects.
 
 ## Tech Stack
 
 | Category | Technology |
 |----------|------------|
-| Language | {primary_language} |
-| Framework | {framework} |
-| Package Manager | {package_manager} |
-| {additional_categories} | {technologies} |
+| Language | TypeScript |
+| Package manager | pnpm |
 
-## Quick Start
+## Getting Started
 
-# Clone the repository
-git clone {repository_url}
-cd {project_directory}
+Requires Node 20+.
 
-
-# Install dependencies
-{install_command}
-
-# Run the application
-{run_command}
-
-
-## Installation
-
-### Prerequisites
 ```bash
-- {prerequisite_1}
-- {prerequisite_2}
+git clone https://github.com/acme/acme-cli
+cd acme-cli
+pnpm install
+pnpm start
 ```
-### Steps
-
-1. Clone the repository:
-   ```bash
-   git clone {repository_url}
-   ```
-
-2. Navigate to project directory:
-   ```bash
-   cd {project_directory}
-   ```
-
-3. Install dependencies:
-   ```bash
-   {install_command}
-   ```
-
-4. Set up environment:
-   ```bash
-   {setup_command}
-   ```
 
 ## Usage
 
-### Basic Usage
-
-```bash
-{basic_usage_command}
-```
-
-### Common Commands
-
 | Command | Description |
 |---------|-------------|
-| `{command_1}` | {description_1} |
-| `{command_2}` | {description_2} |
-| `{command_3}` | {description_3} |
+| `pnpm start` | Run the CLI |
+| `pnpm test` | Run the tests |
+````
 
-### Examples
+## Rules
 
-- {example_1_with_output_or_description}
-- {example_2_with_output_or_description}
-
----
-*Generated with BASIC fidelity level*
+- Every command must appear in a manifest, script, or existing doc.
+- No footer or generator note.
