@@ -25,8 +25,8 @@ ln -s ~/Projects/skills/research/heavy-file-ingestion ~/.claude/skills/heavy-fil
 ## Requirements
 
 - `uv` and `python3`
-- `pdftotext` and `pdfinfo` (poppler) for PDFs
-- `markitdown` for Office files: `uv tool install 'markitdown[pdf,pptx,docx,xlsx,xls]'`
+- `markitdown` (required for Office, EPUB and HTML files; hard-fails without it): `uv tool install 'markitdown[pdf,pptx,docx,xlsx,xls]'`
+- `pdftotext` and `pdfinfo` (poppler) for PDFs. Without them, PDFs fall back to markitdown, which loses page markers, header/footer removal and scan detection
 - `libreoffice` for legacy formats; `tesseract` for scanned pages
 
 ## Usage
