@@ -93,10 +93,12 @@ def test_report_sections(pipeline):
     _, out, _ = pipeline
     report = (out / ".docs-curator/REPORT.md").read_text(encoding="utf-8")
     for section in ("Totals", "Excluded duplicates", "Filed under conflicting names", "Identifier collisions", "Superseded",
-                    "Other exclusions", "Flagged but kept", "Unreadable", "Not ingestible", "Sidecars written into staging",
+                    "Other exclusions", "Flagged but kept", "Unreadable", "Not ingestible", "Linked code (applies_to)", "Sidecars written into staging",
                     "LLM queue", "Staging method", "Next step"):
         assert f"## {section}" in report
     assert "/graphify" in report
+    assert "code_graph.sh" not in report
+    assert "`code-graph` skill" in report
 
 
 def test_state_records_backend_and_config(pipeline):

@@ -96,7 +96,6 @@ skills/
 │   │   │   └── verdict-schema.md
 │   │   ├── scripts/              # Helper scripts
 │   │   │   ├── curate.py         # analyze, update, apply and link commands
-│   │   │   ├── code_graph.sh     # Code-only Graphify graph (no tokens)
 │   │   │   └── check_env.sh      # Dependency check
 │   │   ├── docker/               # Reference image
 │   │   │   └── Dockerfile
@@ -198,7 +197,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
 | code-graph | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/code_graph.sh`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
@@ -400,7 +399,7 @@ Converts Mermaid diagrams to SVG, PNG, or PDF, optionally in a modern Archify-in
 
 ---
 
-Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and `graphify-out` and `.docs-curator` symlinks in the project point there so Graphify's output and the working files stay out of it. Apart from those symlinks (and an optional `--gitignore project|global` entry) it never modifies the source. At the end it asks before running Graphify, per run: docs and code graphs (default), docs only, or a custom choice; it never starts Graphify without that approval.
+Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml`) into a staging tree ready for [Graphify](https://pypi.org/project/graphifyy/). It removes byte-identical, cross-format, and near duplicates, excludes superseded revisions, and flags contradictions, conflicting filenames, and identifier collisions. Output defaults to `~/curated/<project-name>/`, and `graphify-out` and `.docs-curator` symlinks in the project point there so Graphify's output and the working files stay out of it. Apart from those symlinks (and an optional `--gitignore project|global` entry) it never modifies the source. At the end it asks before building the docs graph with Graphify, per run; it never starts Graphify without that approval. Code is not staged or mapped here: the [code-graph](#code-graph) skill covers it, and a doc can link to code with `applies_to:` front matter, listed in the report.
 
 **Key Components:**
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
@@ -408,7 +407,6 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - `docs/How docs-curator works.md`: Technical walkthrough of `curate.py` (analyze, update, decide, apply, link), with a Mermaid architecture diagram
 - `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `update` (re-analyze after files were added, modified or removed, report the changes, queue only affected clusters), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` and `<source>/.docs-curator` into `<out>`; `--gitignore project|global` adds `.docs-curator` to a gitignore)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
-- `scripts/code_graph.sh`: Builds a code-only Graphify graph from the git-tracked source (structural parsing, no AI tokens) into `~/curated/<project-name>-code/`, never inside the source
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
 - `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
@@ -422,11 +420,12 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - First run downloads the `BAAI/bge-small-en-v1.5` embedding model; `embedding_backend: tfidf` in `config.yaml` avoids it
 
 **Features:**
-- Three phases: `analyze`, a per-cluster LLM review that writes verdict files, then `apply`; an approval-gated Graphify step follows
+- Three phases: `analyze`, a per-cluster LLM review that writes verdict files, then `apply`; an approval-gated docs-graph step follows
 - Exact, cross-format (for example a deck and its PDF export), and near-duplicate detection with MinHash and rapidfuzz; near duplicates are flagged and kept unless `near_duplicate_action: exclude`
 - Revision chains from filename markers, in-text versions and dates, document properties, and mtime; a file is excluded as superseded only with two agreeing signals or a confident verdict
 - Every kept document except `.pptx` is staged as Markdown with front matter (`source_path`, `source_format`, `sha256`, `status`, `description`); decks become a PDF plus a speaker-notes sidecar
 - `_curated/CONFLICTS.md` for contradictions (quotes are checked against the text) and `_curated/historical/` for superseded files with unique content
+- `applies_to:` front matter ties a document to code paths or symbols; the report lists the links and flags paths missing from the source
 - Optional `config.yaml` and `overrides.yaml` in the output folder; a second run on an unchanged corpus processes nothing new
 - `update` handles a corpus that changed after a finished run: it reports added, modified and removed files in `changes.json` and queues only the clusters containing a new or modified file
 - Thresholds are tuned on a synthetic corpus only; spot-check the first real run

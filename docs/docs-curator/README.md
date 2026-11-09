@@ -63,7 +63,7 @@ Whichever option you choose, Claude needs the source folder. If it is missing, i
 1. **Analyze.** Claude scans the folder, reads every file, and groups exact duplicates, copies in different formats (a deck and its PDF export), near-identical text, revision chains (`v1`, `v2`, `final`, dated copies) and related topics.
 2. **Review.** Claude reads each group and decides whether one document supersedes another and whether any contradict each other. Contradictions are quoted word for word, and the quotes are checked against the documents afterwards. Claude only marks a file as superseded when it can defend that from the text.
 3. **Apply.** Claude builds the curated folder and a report, then gives you a summary.
-4. **Graphs (with your approval).** Claude asks whether to build both the docs graph and a code graph (the default), the docs graph only, or something else you describe. Nothing runs until you choose.
+4. **Docs graph (with your approval).** Claude asks whether to build the docs graph from `staging/`. Nothing runs until you say yes. Code is mapped by the separate `code-graph` skill.
 
 After the folder changes, ask for an update. Claude lists the files added, modified and removed (saved in `.docs-curator/changes.json`), reviews only the groups that contain a new or modified file, and rebuilds `staging/`. Reviews of untouched groups are kept. Reviews of groups that changed are listed as stale and left in place.
 
@@ -107,30 +107,23 @@ cd <source> && /graphify <out>/staging
 
 Because of the symlink, the graph lands in `<out>/graphify-out/` and the project folder holds only the link. If the project already has a real `graphify-out` folder, the skill won't replace it. Move it aside and ask Claude to link again.
 
-Claude then asks whether to run Graphify:
+Claude then asks whether to build the docs graph. It costs AI tokens, and when a graph already exists only changed files are re-extracted. Approval applies to one run only. Claude asks again next time.
 
-| Choice | What runs | Cost |
-|---|---|---|
-| **Docs and code graphs** (default) | The docs graph from `staging/`, plus a code-only graph | Docs: AI tokens (only changed files when a graph already exists). Code: none |
-| **Docs graph only** | The docs graph from `staging/` | AI tokens |
-| **Other** | Whatever you describe: code only, a different code scope, tests included, or nothing | Depends |
+### Code is a separate graph
 
-Approval applies to one run only. Claude asks again next time.
+Code files are never staged, and the report counts how many were skipped. Use the `code-graph` skill for code questions (callers, dependencies, structure). It builds its own index with `codegraph`, never touches the docs graph, and does not need this skill.
 
-### The code graph
+To tie a document to code, put `applies_to` in its front matter:
 
-The docs graph knows only what your documents say about the code. The code graph is parsed from the source itself (classes, methods, calls, imports), so it can answer "what depends on X". It needs no AI and costs no tokens.
-
-- Output: `~/curated/<project-name>-code/graphify-out/`, kept outside your project. It never uses the project's `graphify-out` link, which belongs to the docs graph.
-- Scope: every git-tracked code file, with test folders skipped. You can ask for specific folders or for tests to be included.
-- Community names carry over between rebuilds. Claude names any new communities.
-- Query it with `graphify query "<question>" --graph ~/curated/<project-name>-code/graphify-out/graph.json`.
-
-To rebuild it on its own:
-
-```text
-bash ~/.claude/skills/docs-curator/scripts/code_graph.sh --source <source> [--paths "src/main tools"] [--include-tests]
+```yaml
+---
+applies_to:
+  - src/orders/service.py
+  - OrderService.retry
+---
 ```
+
+The report lists each link under "Linked code (applies_to)" and flags a path that does not exist in the source. The `code-graph` skill uses these links to check a code change against the ADRs that constrain it.
 
 ## Adjusting the result
 

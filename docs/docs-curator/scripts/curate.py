@@ -1337,6 +1337,36 @@ def cap(items, limit):
     return shown + (f" (+{len(items) - limit} more)" if len(items) > limit else "")
 
 
+CODE_EXTS = {".py", ".java", ".kt", ".kts", ".scala", ".go", ".rs", ".js", ".jsx", ".ts", ".tsx", ".rb", ".php",
+             ".cs", ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".swift", ".lua", ".sh"}
+
+
+def linked_code_lines(dec, files, source):
+    """Report kept Markdown docs whose source front matter has `applies_to` (code paths or symbols).
+
+    A value that looks like a path (has a '/' or a code extension) and does not exist under the source is flagged.
+    Symbols are listed as-is; they are checked by the code-graph skill, not here.
+    """
+    rows = []
+    for p in sorted(dec):
+        if dec[p]["action"] not in ("include", "convert") or files[p].get("format") != "md":
+            continue
+        try:
+            meta, _, ok = split_front_matter((Path(source) / p).read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        targets = (meta or {}).get("applies_to") if ok else None
+        if isinstance(targets, str):
+            targets = [targets]
+        if not isinstance(targets, list):
+            continue
+        for t in map(str, targets):
+            pathlike = "/" in t or Path(t).suffix.lower() in CODE_EXTS
+            missing = pathlike and not (Path(source) / t.split("::")[0]).exists()
+            rows.append(f"- `{p}` -> `{t}`" + (" **[path not found in source]**" if missing else ""))
+    return rows
+
+
 def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, out, source):
     lim = cfg["report_group_member_limit"]
     by_reason = collections.defaultdict(list)
@@ -1396,6 +1426,10 @@ def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, o
     L += [f"- `{p}`: {dec[p]['reason']} ({str(dec[p]['evidence'].get('error', ''))[:120]})" for p in by_reason.get("unreadable", []) + by_reason.get("conversion_failed", [])] or ["- none"]
     L += ["", "## Not ingestible", ""]
     L += [f"- `{p}`" for p in by_reason.get("not_ingestible", [])] or ["- none"]
+    code_skipped = [p for p in by_reason.get("not_ingestible", []) if Path(p).suffix.lower() in CODE_EXTS]
+    L += ["", f"Code files are never staged; {len(code_skipped)} of the files above are source code. Map code with the `code-graph` skill.", ""]
+    L += ["## Linked code (applies_to)", ""]
+    L += linked_code_lines(dec, files, source) or ["- none"]
     L += ["", "## Sidecars written into staging", ""]
     L += [f"- `{s}`" for s in sidecars] or ["- none"]
 
@@ -1409,7 +1443,7 @@ def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, o
         L += ["", "## Warnings", ""] + [f"- {w}" for w in warnings]
     L += ["", "## Staging method", "",
           "Generated. Markdown is written from the Phase 1 cached extraction, with front matter. Kept `.pptx` decks are converted to PDF with LibreOffice (serial, private profile) and paired with a `.notes.md` sidecar. Nothing is copied or linked from the source.",
-          "", "## Next step", "", f"Build the graphs (the skill asks for approval first): `cd {source} && /graphify {out / 'staging'}` for the docs graph; `scripts/code_graph.sh --source {source}` for the code graph.", ""]
+          "", "## Next step", "", f"Build the docs graph (the skill asks for approval first): `cd {source} && /graphify {out / 'staging'}`. For code, use the `code-graph` skill.", ""]
     return "\n".join(L)
 
 
