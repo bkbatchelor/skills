@@ -77,6 +77,12 @@ skills/
 │   │       ├── basic-level-template.md
 │   │       ├── standard-level-template.md
 │   │       └── advance-level-template.md
+│   ├── code-graph/               # Code knowledge graph skill (codegraph) and code-to-docs change check
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Overview, applies_to links, files
+│   │   └── scripts/              # Helper scripts
+│   │       ├── check_env.sh      # codegraph installed? repo indexed?
+│   │       └── diff_links.sh     # Changed files -> documents that constrain them, docs graph freshness
 │   ├── docs-curator/             # Document curation skill for Graphify
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Skill overview, usage, and output layout
@@ -191,6 +197,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
+| code-graph | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
 | docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/code_graph.sh`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
@@ -431,6 +438,34 @@ $RUN python docs/docs-curator/scripts/curate.py analyze --source ~/docs --out ~/
 # review each cluster in ~/curated/docs/.docs-curator/work/queue/, write verdicts, then:
 $RUN python docs/docs-curator/scripts/curate.py apply --source ~/docs --out ~/curated/docs
 $RUN python docs/docs-curator/scripts/curate.py link --source ~/docs --out ~/curated/docs   # ~/docs/graphify-out and ~/docs/.docs-curator -> ~/curated/docs/
+```
+
+#### code-graph
+
+---
+
+Maps source code with [codegraph](https://github.com/colbymchenry/codegraph), a code knowledge graph, and keeps it separate from the document graph that [docs-curator](#docs-curator) and Graphify build. It also checks a code change against the documents that constrain it, such as ADRs, by reading the docs graph read-only. The check is advisory and reports each candidate as consistent, possibly conflicting, or can't tell.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with the setup gate, how to answer code questions, the change-check procedure, and hard rules
+- `README.md`: Overview, how to link an ADR to code with `applies_to`, and the file list
+- `scripts/check_env.sh`: Exits 0 when codegraph is installed and the repo is indexed, 1 when codegraph is missing, 2 when the repo is not indexed
+- `scripts/diff_links.sh`: Lists changed files and the Markdown documents that list them under `applies_to` or name them, and reports whether the docs graph is missing, ok, or stale
+
+**Requirements:**
+- `codegraph` on the PATH (the skill never installs it)
+- For the change check, optionally the `graphify` CLI and a docs graph built by docs-curator
+
+**Features:**
+- Runs `codegraph init` only after the user approves in that turn; falls back to grep and Read if declined
+- Answers from `codegraph explore`, `node`, `context` and `query` before grep or Read, and runs `sync` first when the index is behind
+- Change check: exact links from `applies_to` front matter, fuzzy matches from document text, a read-only `graphify query` on the docs graph, and a plain text search of the repo's Markdown when the graph is missing or stale
+- Never builds or edits the docs graph; the two graphs are never merged
+
+**Usage:**
+```bash
+bash docs/code-graph/scripts/check_env.sh .          # exit 0 ready, 1 codegraph missing, 2 not indexed
+bash docs/code-graph/scripts/diff_links.sh --base main .
 ```
 
 #### html-artifacts
