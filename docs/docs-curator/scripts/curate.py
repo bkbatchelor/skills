@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime as dt
+import fnmatch
 import hashlib
 import json
 import os
@@ -53,6 +54,9 @@ DEFAULTS = {
     "cluster_floor_tfidf": 0.25,
     "identifier_patterns": [DEFAULT_ID_PATTERN],
     "identifier_title_headers": ["id", "ticket", "key", "ref", "number"],
+    "adr_globs": [],  # path globs for ADRs, used when front matter has no `type`
+    "requirement_globs": [],  # path globs for business requirements
+    "cross_type_threshold": None,  # similarity to pair a requirement with an ADR; None = the cluster floor
 }
 
 STOPWORDS = set(
@@ -95,6 +99,9 @@ def load_config(out, explicit=None):
         die("near_duplicate_action must be flag or exclude")
     if cfg["revision_chain_scope"] not in ("directory", "corpus"):
         die("revision_chain_scope must be directory or corpus")
+    for key in ("adr_globs", "requirement_globs"):
+        if not isinstance(cfg[key], list) or not all(isinstance(g, str) for g in cfg[key]):
+            die(f"{key} must be a list of path globs")
     return cfg
 
 
@@ -510,6 +517,95 @@ def cluster_documents(keys, texts, cfg):
     return [sorted(g) for g in groups.values() if len(g) >= 2], cut
 
 
+_DOC_TYPES = {"requirement": "requirement", "requirements": "requirement", "req": "requirement",
+              "adr": "adr", "decision": "adr"}
+
+
+def _as_list(v):
+    if v is None:
+        return []
+    return [str(x) for x in (v if isinstance(v, list) else [v])]
+
+
+def _glob_match(path, globs):
+    return any(fnmatch.fnmatch(path, g) or (g.startswith("**/") and fnmatch.fnmatch(path, g[3:])) for g in globs)
+
+
+def classify_doc(path, text, fmt, cfg):
+    """Business requirement or ADR? Front matter `type` wins, then the path globs; otherwise type is None.
+
+    Also reads `id`, `status`, and the links `satisfies` / `decided_by` (ids of documents of the other type).
+    """
+    meta = None
+    if fmt == "md":
+        meta, _, _ = split_front_matter(text)
+    meta = meta if isinstance(meta, dict) else {}
+    doc_type = _DOC_TYPES.get(str(meta.get("type", "")).strip().lower())
+    source = "front_matter" if doc_type else None
+    if not doc_type:
+        for t, key in (("adr", "adr_globs"), ("requirement", "requirement_globs")):
+            if _glob_match(path, cfg[key]):
+                doc_type, source = t, "path"
+                break
+    return {
+        "type": doc_type,
+        "type_source": source,
+        "id": str(meta["id"]) if meta.get("id") else None,
+        "status": str(meta["status"]) if meta.get("status") else None,
+        "links": _as_list(meta.get("satisfies")) + _as_list(meta.get("decided_by")),
+    }
+
+
+def merge_cross_type(groups, alive, snippets, doctypes, cfg):
+    """Put requirements and ADRs that belong together into one review cluster.
+
+    Pairs come from explicit ids (`satisfies` / `decided_by`) and from similarity: each requirement is paired with
+    its most similar ADR when the similarity reaches `cross_type_threshold` (default: the cluster floor).
+    Returns the topic groups, merged where a pair spans two of them.
+    """
+    import numpy as np
+
+    reqs = [p for p in alive if doctypes[p]["type"] == "requirement"]
+    adrs = [p for p in alive if doctypes[p]["type"] == "adr"]
+    if not reqs or not adrs:
+        return groups
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        parent[find(a)] = find(b)
+
+    for g in groups:
+        for m in g:
+            union(g[0], m)
+    by_id = {doctypes[p]["id"]: p for p in reqs + adrs if doctypes[p]["id"]}
+    for p in reqs + adrs:
+        for ref in doctypes[p]["links"]:
+            q = by_id.get(ref)
+            if q and doctypes[q]["type"] != doctypes[p]["type"]:
+                union(p, q)
+    idx = {p: snippets[alive.index(p)] for p in reqs + adrs}
+    mat = embed_matrix([idx[p] for p in reqs + adrs], cfg)
+    sims = mat[: len(reqs)] @ mat[len(reqs):].T
+    thr = cfg["cross_type_threshold"]
+    if thr is None:
+        thr = cfg["cluster_floor_" + cfg["embedding_backend"]]
+    for i, r in enumerate(reqs):
+        j = int(np.argmax(sims[i]))
+        if sims[i, j] >= thr:
+            union(r, adrs[j])
+    merged = collections.defaultdict(list)
+    for m in list(parent):
+        merged[find(m)].append(m)
+    return [sorted(g) for g in merged.values() if len(g) >= 2]
+
+
 def cluster_id(shas):
     return hashlib.sha256("\n".join(sorted(shas)).encode()).hexdigest()[:16]
 
@@ -745,12 +841,23 @@ def cmd_analyze(args):
     # topic clusters and revision chains ----------------------------------------
     cut = None
     clusters = []
+    doctypes = {p: classify_doc(p, texts[p], byp[p]["format"], cfg) for p in alive}
     if len(alive) >= 2:
         snippets = [" ".join(re.findall(r"\S+", _COMMENT.sub(" ", texts[p]))[:400]) for p in alive]
         groups, cut = cluster_documents(alive, snippets, cfg)
+        groups = merge_cross_type(groups, alive, snippets, doctypes, cfg)
         for members in groups:
             clusters.append({"id": cluster_id([byp[m]["sha256"] for m in members]), "members": members})
     cluster_of = {m: c["id"] for c in clusters for m in c["members"]}
+    typed = {p: d for p, d in doctypes.items() if d["type"]}
+    unlinked = []
+    if {d["type"] for d in typed.values()} == {"requirement", "adr"}:
+        members_of = {c["id"]: c["members"] for c in clusters}
+        for p, d in sorted(typed.items()):
+            other = "adr" if d["type"] == "requirement" else "requirement"
+            peers = members_of.get(cluster_of.get(p), [])
+            if not any(typed.get(m, {}).get("type") == other for m in peers):
+                unlinked.append({"path": p, "type": d["type"], "type_source": d["type_source"]})
 
     info = {}
     for p in alive:
@@ -822,11 +929,14 @@ def cmd_analyze(args):
                     "size_bytes": byp[m]["size"],
                     "tokens": byp[m]["tokens"],
                     "revision_signals": info[m]["name"] | {k: info[m][k] for k in ("text_version", "text_date", "core_modified", "mtime")},
+                    **({"doc_type": doctypes[m]["type"], "type_source": doctypes[m]["type_source"], "doc_id": doctypes[m]["id"],
+                        "doc_status": doctypes[m]["status"]} if doctypes[m]["type"] else {}),
                 }
                 for m in c["members"]
             ],
             "chains": [ch for ch in chains if ch["members"][0] in c["members"]],
             "near_duplicate_pairs": [e for e in edges if e["a"] in c["members"] and e["b"] in c["members"]],
+            "decision_check": {doctypes[m]["type"] for m in c["members"]} >= {"requirement", "adr"},
         }
         write_json(queue_dir / f"{c['id']}.json", item)
 
@@ -845,6 +955,8 @@ def cmd_analyze(args):
         "cluster_cut": cut,
         "collisions": collisions,
         "anomalies": anomalies,
+        "doc_types": typed,
+        "unlinked": unlinked,
         "backend": cfg["embedding_backend"],
         "model": cfg["embedding_model"] if cfg["embedding_backend"] == "fastembed" else None,
     }
@@ -924,6 +1036,8 @@ def load_verdicts(work):
             v.setdefault("cluster_id", vf.stem)
             v["revisions"] = list(v.get("revisions") or [])
             v["conflicts"] = list(v.get("conflicts") or [])
+            v["decision_checks"] = list(v.get("decision_checks") or [])
+            v["doc_type_guesses"] = list(v.get("doc_type_guesses") or [])
             verdicts.append(v)
         except Exception as exc:
             warnings.append(f"verdict {vf.name} ignored: {exc}")
@@ -1233,6 +1347,39 @@ def cmd_apply(args):
                     warnings.append(f"conflict '{c.get('topic')}': quote not found verbatim in {path}")
                 stmts.append({"path": path, "quote": quote, "location": s.get("location", ""), "verified": verified})
             conflicts.append({"topic": c.get("topic", ""), "statements": stmts, "rationale": c.get("rationale", ""), "cluster_id": v["cluster_id"]})
+    def verified_side(side, label, topic):
+        side = side or {}
+        path, quote = side.get("path"), side.get("quote", "")
+        if path not in files:
+            warnings.append(f"decision check '{topic}': unknown {label} path {path}")
+            return None
+        if not quote:
+            return {"path": path, "quote": "", "location": side.get("location", ""), "verified": True}
+        cached = tdir / f"{files[path]['sha256']}.md"
+        ok = cached.exists() and norm_ws(quote) in norm_ws(cached.read_text(encoding="utf-8"))
+        if not ok:
+            warnings.append(f"decision check '{topic}': quote not found verbatim in {path}")
+        return {"path": path, "quote": quote, "location": side.get("location", ""), "verified": ok}
+
+    checks = []
+    for v in verdicts:
+        for c in v["decision_checks"]:
+            kind = c.get("kind") if c.get("kind") in ("conflict", "gap", "cant_tell") else "cant_tell"
+            topic = c.get("topic", "")
+            req, adr = verified_side(c.get("requirement"), "requirement", topic), verified_side(c.get("adr"), "adr", topic)
+            row = {"kind": kind, "topic": topic, "requirement": req, "adr": adr, "rationale": c.get("rationale", ""),
+                   "requirement_version": c.get("requirement_version", ""), "adr_status": c.get("adr_status", ""),
+                   "cluster_id": v["cluster_id"]}
+            if kind == "conflict" and req and adr:
+                conflicts.append({"topic": f"[requirement vs ADR] {topic}", "statements": [req, adr],
+                                  "rationale": " ".join(x for x in (
+                                      f"ADR status: {row['adr_status']}." if row["adr_status"] else "",
+                                      f"Requirement version: {row['requirement_version']}." if row["requirement_version"] else "",
+                                      row["rationale"]) if x),
+                                  "cluster_id": v["cluster_id"]})
+            else:
+                checks.append(row)
+    write_json(work / "decision_checks.json", {"checks": checks, "unlinked": an.get("unlinked", [])})
     if conflicts:
         body = ["# Conflicts between documents", ""]
         for i, c in enumerate(conflicts, 1):
@@ -1260,7 +1407,7 @@ def cmd_apply(args):
             d = dec[p]
             row = {"run_id": run_id, "path": p, "sha256": files[p]["sha256"], **{k: d[k] for k in ("action", "reason", "kept_instead", "evidence", "confidence")}}
             fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
-    report = build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, out, source)
+    report = build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, out, source, checks)
     (work / "REPORT.md").write_text(report, encoding="utf-8")
     counts = collections.Counter(d["action"] for d in dec.values())
     write_state(work, cfg, {"apply": {"run_id": run_id, "counts": dict(counts), "overrides": len(overrides), "warnings": len(warnings)}})
@@ -1367,7 +1514,7 @@ def linked_code_lines(dec, files, source):
     return rows
 
 
-def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, out, source):
+def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, out, source, checks=()):
     lim = cfg["report_group_member_limit"]
     by_reason = collections.defaultdict(list)
     for p, d in sorted(dec.items()):
@@ -1430,6 +1577,20 @@ def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, o
     L += ["", f"Code files are never staged; {len(code_skipped)} of the files above are source code. Map code with the `code-graph` skill.", ""]
     L += ["## Linked code (applies_to)", ""]
     L += linked_code_lines(dec, files, source) or ["- none"]
+    L += ["", "## Requirements and ADRs", ""]
+    typed = an.get("doc_types", {})
+    L += [f"- Requirements: {sum(d['type'] == 'requirement' for d in typed.values())}; ADRs: {sum(d['type'] == 'adr' for d in typed.values())}; "
+          "classified by front matter or path globs."]
+    for v in verdicts:
+        for g in v["doc_type_guesses"]:
+            L.append(f"- guessed by the reviewer (no front matter or glob matched): `{g.get('path')}` as {g.get('type')}")
+    n_conf = sum(1 for c in conflicts if c["topic"].startswith("[requirement vs ADR]"))
+    L += [f"- Requirement-vs-ADR conflicts (also in `_curated/CONFLICTS.md`): {n_conf}"]
+    for c in checks:
+        sides = " | ".join(f"`{x['path']}`" + ("" if x["verified"] else " [quote not verified]") for x in (c["requirement"], c["adr"]) if x)
+        L.append(f"- {c['kind']}: {c['topic']} ({sides})" + (f" - {c['rationale']}" if c["rationale"] else ""))
+    L += ["", "### Unlinked", "", "Gaps, not conflicts: a requirement with no ADR in its cluster, or an ADR with no requirement.", ""]
+    L += [f"- {u['type']} `{u['path']}`" for u in an.get("unlinked", [])] or ["- none"]
     L += ["", "## Sidecars written into staging", ""]
     L += [f"- `{s}`" for s in sidecars] or ["- none"]
 

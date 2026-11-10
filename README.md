@@ -106,6 +106,7 @@ skills/
 │   │       ├── conftest.py
 │   │       ├── test_units.py
 │   │       ├── test_pipeline.py
+│   │       ├── test_requirement_adr.py
 │   │       └── fixtures/verdicts/    # Hand-written verdicts, one per cluster
 │   ├── mermaid-to-image/           # Mermaid diagram rendering skill
 │   │   ├── SKILL.md              # Skill definition
@@ -197,7 +198,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
 | code-graph | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, and checks business requirements against ADRs | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
@@ -411,7 +412,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
 - `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
 - `plan/DECISIONS.md`: Every settled decision and where the build departed from `plan/PLAN.md`
-- `tests/`: Dev-only synthetic corpus generator with an answer key, `score.py`, fixture verdicts, and a pytest suite (not needed at runtime)
+- `tests/`: Dev-only synthetic corpus generator with an answer key, `score.py`, fixture verdicts, and a pytest suite, including `test_requirement_adr.py` for the requirement-versus-ADR check (not needed at runtime)
 
 **Requirements:**
 - `uv` and Python 3.10+; run through `uv run --no-project --with-requirements requirements.txt python scripts/curate.py ...`
@@ -425,6 +426,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - Revision chains from filename markers, in-text versions and dates, document properties, and mtime; a file is excluded as superseded only with two agreeing signals or a confident verdict
 - Every kept document except `.pptx` is staged as Markdown with front matter (`source_path`, `source_format`, `sha256`, `status`, `description`); decks become a PDF plus a speaker-notes sidecar
 - `_curated/CONFLICTS.md` for contradictions (quotes are checked against the text) and `_curated/historical/` for superseded files with unique content
+- Requirement-versus-ADR check: documents typed by front matter or path globs are paired by id and by similarity; conflicts go to `CONFLICTS.md`, gaps and unlinked items to the report; report only, no winner picked
 - `applies_to:` front matter ties a document to code paths or symbols; the report lists the links and flags paths missing from the source
 - Optional `config.yaml` and `overrides.yaml` in the output folder; a second run on an unchanged corpus processes nothing new
 - `update` handles a corpus that changed after a finished run: it reports added, modified and removed files in `changes.json` and queues only the clusters containing a new or modified file
