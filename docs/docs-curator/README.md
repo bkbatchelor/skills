@@ -90,8 +90,26 @@ Start with `<out>/.docs-curator/REPORT.md`. Pay most attention to:
 - **Filed under conflicting names:** documents whose filename disagrees with their content.
 - **Identifier collisions:** near-identical files that differ only in an ID, such as form templates.
 - **Conflicts:** the contradictions found, with quotes.
+- **Requirements and ADRs:** business requirements that conflict with an ADR, gaps, and unlinked items (see below).
 
 Staged Markdown is text only. Layout, images and formatting in PDF, Word and Excel files are not carried over. Scanned documents with no text are kept with an empty body and listed in the report, because there is no OCR.
+
+## Requirements versus ADRs
+
+If your folder holds business requirements and ADRs (architecture decision records), the skill can check one against the other. It needs to know which is which. Either add `type: requirement` or `type: adr` to a document's front matter, or list path globs in `config.yaml`:
+
+```yaml
+adr_globs: ["adr/*", "docs/adr/*"]
+requirement_globs: ["requirements/*"]
+```
+
+To pair them exactly, give each document an `id` and link them: an ADR with `satisfies: REQ-12`, or a requirement with `decided_by: ADR-7`. The skill also pairs each requirement with its most similar ADR on its own. That similarity cutoff (`cross_type_threshold`) is untuned, so expect some pairs to be missed or wrong.
+
+What you get:
+
+- A requirement and an ADR that cannot both hold go in `_curated/CONFLICTS.md` as `[requirement vs ADR]`, with a verbatim quote from each side and the ADR's status. A superseded ADR is not binding.
+- Gaps and "can't tell" findings go in the report's "Requirements and ADRs" section, with an "Unlinked" list of requirements with no ADR and ADRs with no requirement. Those are gaps, not conflicts.
+- Nothing picks a winner or edits a document. The people who own them decide.
 
 ## Running Graphify
 

@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify on the docs only after the user approves. Requires the heavy-file-ingestion skill to convert PDF, Word, Excel and PowerPoint files to Markdown. Skip for a single file (use heavy-file-ingestion), for source-code structure or call graphs (use code-graph), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.7.1
+  version: 1.8.0
 ---
 
 # Docs Curator
@@ -46,6 +46,7 @@ The output folder defaults to `~/curated/<project-name>/`, where `<project-name>
    - Quote contradicting statements verbatim; `apply` checks each quote against the document and marks misses `[quote not verified]`.
    - Only claim a supersession you can defend from the text. Give honest `confidence` (0 to 1). Below 0.75 the older file is kept and flagged.
    - Unique content in a superseded file goes in `unique_content`; that file also gets a copy under `_curated/historical/`.
+   - If the queue item has `"decision_check": true`, it holds business requirements and ADRs. Check each requirement against the ADRs in the cluster and write `decision_checks[]` (see the schema): `conflict`, `gap`, or `cant_tell`, with verbatim quotes from both sides and the ADR's status. A superseded ADR is not binding. Do not pick a winner; report both sides. If a member has no `doc_type` but is plainly a requirement or an ADR, record it in `doc_type_guesses[]`.
 3. **Apply.** `$RUN python $SKILL/scripts/curate.py apply --source <src> --out <out>`. It builds `<out>/staging/`, writes `REPORT.md`, `decisions.jsonl` and `state.json` under `<out>/.docs-curator/`, and prints the next steps.
 4. **Link.** `$RUN python $SKILL/scripts/curate.py link --source <src> --out <out>`. It creates `<out>/graphify-out/` and two symlinks in the project root: `<src>/graphify-out` and `<src>/.docs-curator`, pointing at `<out>/graphify-out` and `<out>/.docs-curator` (the working directory). Graphify writes `graphify-out/` into the directory it runs from, so running it from `<src>` sends its output to `<out>` instead of filling the project. It refuses to replace an existing `graphify-out` that is not that symlink; tell the user. Offer `--gitignore project` (appends `.docs-curator` to `<src>/.gitignore`) or `--gitignore global` (appends it to the global git excludes file: `core.excludesFile`, else `~/.config/git/ignore`); only pass it if the user says yes. The entry has no trailing slash because git treats a symlink as a file.
 5. **Report to the user:** the totals, the report path, anything under "Flagged but kept", "Filed under conflicting names", "Identifier collisions", the conflicts found, the `applies_to` links (and any marked `[path not found in source]`), and the printed `cd <src> && /graphify <out>/staging` line. Mention that code files are not staged and that the `code-graph` skill covers them.
@@ -73,6 +74,12 @@ Both files are optional and live in `<out>/`. Missing means defaults. The settin
 - `overrides.yaml`: a list of `{path, action: include|exclude, note}` keyed by source-relative path. An override wins over every rule except unreadable and not-ingestible files. Offer this when the user disagrees with one file's fate, then re-run `apply`.
 
 `near_duplicate_action` defaults to `flag` (kept and reported). Near-identical text is not proof of duplication when identity lives in an identifier, as in form libraries. Suggest `exclude` only for prose corpora where near-identical text really is redundant, and ask first.
+
+## Requirements versus ADRs
+
+The curator can check business requirements against ADRs. It only runs when it can tell which documents are which: a `type: requirement` or `type: adr` field in the front matter (which wins), or path globs in `config.yaml` (`adr_globs`, `requirement_globs`, for example `["adr/*", "docs/adr/*"]`). Ids make exact pairs: an ADR lists `satisfies: REQ-12`, or a requirement lists `decided_by: ADR-7`, with the documents' own `id:` fields. Beyond ids, each requirement is also put in one review cluster with its most similar ADR when similarity reaches `cross_type_threshold` (default: the cluster floor), whatever the usual cluster cut says.
+
+Reviewed clusters produce conflicts (in `_curated/CONFLICTS.md`, tagged `[requirement vs ADR]`), and gaps and "can't tell" findings in the report's "Requirements and ADRs" section. The "Unlinked" list there names requirements with no ADR in their cluster and ADRs with no requirement; those are gaps, not conflicts, and appear only when the corpus has both types. The check only reports. It never picks a winner and never changes a document. Tell the user the thresholds are untuned on real data.
 
 ## Linking docs to code
 
