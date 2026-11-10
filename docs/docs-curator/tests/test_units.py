@@ -426,3 +426,18 @@ def test_extract_yaml_and_yml_are_fenced_raw(tmp_path):
     bad.write_text("a: [1, 2\n", encoding="utf-8")
     with pytest.raises(Exception):
         curate.extract_text(bad, "yaml")
+
+
+def test_linked_code_lines_flags_missing_paths(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/orders.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "adr.md").write_text(
+        "---\napplies_to:\n  - src/orders.py\n  - src/gone.py\n  - OrderService.retry\n---\n# ADR 7\nRetries are capped.\n", encoding="utf-8")
+    dec = {"adr.md": {"action": "include"}}
+    files = {"adr.md": {"format": "md"}}
+    rows = curate.linked_code_lines(dec, files, tmp_path)
+    assert rows == [
+        "- `adr.md` -> `src/orders.py`",
+        "- `adr.md` -> `src/gone.py` **[path not found in source]**",
+        "- `adr.md` -> `OrderService.retry`",
+    ]

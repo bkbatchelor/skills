@@ -42,6 +42,8 @@ An empty verdict, `{"cluster_id": "<id>", "reviewed": true}`, means "reviewed, n
 | `partial_read` | no | `true` if you did not read every member in full. Listed in the report's warnings. |
 | `revisions[]` | no | Claims that one document replaces another. |
 | `conflicts[]` | no | Places where documents state incompatible facts. |
+| `decision_checks[]` | no | Requirement-versus-ADR findings. Only for queue items with `"decision_check": true`. |
+| `doc_type_guesses[]` | no | `{path, type}` (`requirement` or `adr`) for a member you classified yourself because no front matter `type` or path glob matched. Reported as a guess. |
 
 ### `revisions[]`
 
@@ -57,6 +59,27 @@ An empty verdict, `{"cluster_id": "<id>", "reviewed": true}`, means "reviewed, n
 - `statements[]`: at least two entries of `{path, quote, location}`. `quote` should be copied verbatim (whitespace and case are ignored when checked). `location` is free text such as a heading or sheet name.
 - Conflicts never exclude anything. They are written to `_curated/CONFLICTS.md` and `.docs-curator/conflicts.json`.
 
+### `decision_checks[]`
+
+For a cluster that holds both business requirements and ADRs (`"decision_check": true` in the queue item). Each entry:
+
+```json
+{
+  "kind": "conflict",
+  "topic": "Payment retry limit",
+  "requirement": {"path": "docs/retries.md", "quote": "retry failed payment submissions up to 10 times", "location": "first paragraph"},
+  "adr": {"path": "adr/0007-retries.md", "quote": "capped at 3 attempts", "location": "decision"},
+  "adr_status": "accepted",
+  "requirement_version": "2",
+  "rationale": "A cap of 3 cannot satisfy 10 retries."
+}
+```
+
+- `kind`: `conflict` (the two cannot both hold), `gap` (a requirement no ADR addresses, an ADR no requirement justifies, or an ADR that ignores a requirement), or `cant_tell`. Anything else is read as `cant_tell`.
+- `requirement` / `adr`: `{path, quote, location}`. A `conflict` needs both sides with a verbatim quote; a `gap` may have one side. Quotes are checked like conflict quotes and marked `[quote not verified]` when missing.
+- `adr_status` and `requirement_version`: copy them from the documents (the queue item gives `doc_status`). Check whether the ADR is superseded before calling something a conflict; a superseded ADR is not binding.
+- A `conflict` is written to `_curated/CONFLICTS.md` under `[requirement vs ADR]`. `gap` and `cant_tell` appear in the report's "Requirements and ADRs" section. Nothing is excluded, and no document is changed.
+
 ## Queue item (input)
 
 `<out>/.docs-curator/work/queue/<cluster_id>.json` gives you:
@@ -65,3 +88,4 @@ An empty verdict, `{"cluster_id": "<id>", "reviewed": true}`, means "reviewed, n
 - `members[]`: `path`, `also_at` (byte-identical copies elsewhere), `format`, `text_path` (the extracted text to read), `size_bytes`, `tokens`, and `revision_signals` (filename markers, in-text version and date, document-property date, file mtime).
 - `chains[]`: revision chains the script found, with `order` (oldest to newest), which signals `agreeing` and `contradicting`, and whether it is `deterministic`.
 - `near_duplicate_pairs[]`: pairs of members with high text similarity.
+- `members[].doc_type`, `type_source` (`front_matter` or `path`), `doc_id`, `doc_status`: present when a member is a requirement or ADR. `decision_check` is `true` when the cluster holds both.
