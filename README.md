@@ -67,11 +67,13 @@ skills/
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition
 │       ├── README.md             # Install and usage
+│       ├── README.md             # Install and usage
 │       └── references/           # Reference materials
 │           └── git-commit-template.md
 ├── docs/                     # Documentation skills
 │   ├── generate-readme/          # README generation skill
 │   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install and usage
 │   │   ├── README.md             # Install and usage
 │   │   └── references/           # Reference materials
 │   │       ├── basic-level-template.md
@@ -122,6 +124,7 @@ skills/
 │   └── html-artifacts/           # HTML artifact skill
 │       ├── SKILL.md              # Skill definition
 │       ├── README.md             # Install, usage, house style summary
+│       ├── README.md             # Install, usage, house style summary
 │       ├── references/           # Reference materials
 │       │   └── template.html     # Starter page: tokens, components, every layout pattern
 │       └── scripts/              # Helper scripts
@@ -130,6 +133,7 @@ skills/
 │   ├── image-gateway/            # Image generation and editing skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Install, options, configuration
+│   │   ├── README.md             # Install, options, configuration
 │   │   ├── config.env            # Saved defaults (model, output dir, key file)
 │   │   ├── references/           # Reference materials
 │   │   │   └── api.md
@@ -137,6 +141,7 @@ skills/
 │   │       └── generate.sh
 │   └── media-transcription/      # Audio/video transcription skill
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, usage, output package
 │       ├── README.md             # Install, usage, output package
 │       ├── config.env            # Saved defaults (models, key location, prices)
 │       ├── references/           # Reference materials
@@ -148,11 +153,13 @@ skills/
 │   ├── current-info-search/      # Live search for fast-changing facts
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Install, requirements, usage
+│   │   ├── README.md             # Install, requirements, usage
 │   │   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
 │   │   └── scripts/              # Helper scripts
 │   │       └── search.py
 │   └── heavy-file-ingestion/     # PDF/Office/large text to chunked Markdown
 │       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, requirements, output layout
 │       ├── README.md             # Install, requirements, output layout
 │       └── scripts/              # Helper scripts
 │           └── ingest.py
@@ -166,10 +173,12 @@ skills/
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
     │   ├── README.md             # Install and usage
+    │   ├── README.md             # Install and usage
     │   └── references/           # Reference materials
     │       └── goal-prompt-template.md
     └── visible-delegation/       # Visible agent delegation skill
         ├── SKILL.md              # Skill definition
+        ├── README.md             # Install, requirements, usage
         ├── README.md             # Install, requirements, usage
         ├── references/           # Reference materials
         │   └── delegate-addendum.md
@@ -201,6 +210,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, and checks business requirements against ADRs | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
+| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
@@ -408,6 +418,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - `docs/How docs-curator works.md`: Technical walkthrough of `curate.py` (analyze, update, decide, apply, link), with a Mermaid architecture diagram
 - `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `update` (re-analyze after files were added, modified or removed, report the changes, queue only affected clusters), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` and `<source>/.docs-curator` into `<out>`; `--gitignore project|global` adds `.docs-curator` to a gitignore)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
+- `scripts/code_graph.sh`: Builds a code-only Graphify graph from the git-tracked source (structural parsing, no AI tokens) into `~/curated/<project-name>-code/`, never inside the source
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.97` is installed only to check its accepted extensions in tests)
 - `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
@@ -477,6 +488,7 @@ Renders dense or visual output (plans, reports, research explainers, review summ
 
 **Key Components:**
 - `SKILL.md`: Skill definition with trigger conditions, hard rules, the house style tokens, layout patterns, and the verify-before-done rule
+- `README.md`: Install, usage, requirements, and a summary of the house style
 - `README.md`: Install, usage, requirements, and a summary of the house style
 - `references/template.html`: Starter page with the tokens, components, theme toggle, print styles, and an example of each layout pattern
 - `scripts/verify.sh`: Renders the file with headless Chromium and checks the result
