@@ -178,9 +178,12 @@ skills/
 │       └── scripts/              # Helper scripts
 │           └── tokensaver.py     # search, count, fields, dates, diff, accept, current
 ├── testing/                  # Testing and verification skills
-│   └── testing-runbook-creator/  # Repo-local testing runbook skill
+│   ├── testing-runbook-creator/  # Repo-local testing runbook skill
+│   │   ├── SKILL.md              # Skill definition
+│   │   └── README.md             # Install, runbook location, entry fields, rules
+│   └── page-testing-memory/      # General web page QA process; page facts stay in repo runbooks
 │       ├── SKILL.md              # Skill definition
-│       └── README.md             # Install, runbook location, entry fields, rules
+│       └── README.md             # Install, usage, knowledge split
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -224,6 +227,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | testing-runbook-creator | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
+| page-testing-memory | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -606,6 +610,31 @@ Makes testing knowledge persist in the repo. Triggers on any testing, verificati
 **Usage:**
 ```bash
 ln -s "$PWD/testing/testing-runbook-creator" ~/.claude/skills/testing-runbook-creator
+```
+
+#### page-testing-memory
+
+---
+
+Global process for QA of any web page or UI, with a hard split: the process lives in the skill, and every page-specific fact lives in the repo's testing runbook.
+
+**Key Components:**
+- `SKILL.md`: Trigger conditions, the knowledge-split table, the QA process (page states, form testing, auth boundaries, breakpoints 375/768/1024/1440, screenshot evidence, reporting), the write-it-down-now rule, the leak test, and safety rules
+- `README.md`: Install and usage
+
+**Requirements:**
+- `testing-runbook-creator` (owns the runbook location, entry format, and no-secrets rule)
+- Some browser automation in the target repo; the skill is tool-agnostic
+
+**Features:**
+- Selectors, routes, test accounts, seed data, and cleanup quirks go into the repo runbook the moment they are learned
+- Wanting to add a project detail to the skill is the signal it belongs in the repo runbook
+- Screenshots go to a temp or scratchpad directory and are not committed unless the runbook says so
+- Runs only against local or non-production environments; destructive actions need approval
+
+**Usage:**
+```bash
+ln -s "$PWD/testing/page-testing-memory" ~/.claude/skills/page-testing-memory
 ```
 
 #### visible-delegation
