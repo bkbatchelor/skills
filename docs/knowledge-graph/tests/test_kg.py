@@ -378,3 +378,50 @@ def test_snapshot_keeps_decisions(env):
     (ctx.work / "decisions.jsonl").write_text('{"run_id": "r1", "path": "a", "action": "include"}\n')
     snap = kg.snapshot(ctx, "before curate")
     assert (snap / ".docs-curator/decisions.jsonl").read_text().startswith('{"run_id": "r1"')
+
+
+def set_graph_excludes(env, pats):
+    import yaml
+    cfg = yaml.safe_load((env.out / "kg.yaml").read_text())
+    cfg["graph"]["excludes"] = pats
+    (env.out / "kg.yaml").write_text(yaml.safe_dump(cfg))
+    return env.ctx()
+
+
+def test_sync_graph_excludes(env):
+    ctx = env.ctx()
+    assert kg.sync_graph_excludes(ctx) is False  # unset: graphify's file left alone
+    kg.write_json(ctx.out / "graphify-out/.graphify_build.json", {"excludes": ["old/a.md"], "gitignore": True})
+    ctx = set_graph_excludes(env, ["*.xlsx.md", "!/docs/keep.xlsx.md"])
+    assert kg.sync_graph_excludes(ctx) is True
+    b = kg.read_json(ctx.out / "graphify-out/.graphify_build.json")
+    assert b == {"excludes": ["*.xlsx.md", "!/docs/keep.xlsx.md"], "gitignore": True}
+    assert kg.sync_graph_excludes(ctx) is False  # idempotent
+
+
+def test_bad_graph_excludes_rejected(env):
+    import yaml
+    cfg = yaml.safe_load((env.out / "kg.yaml").read_text())
+    cfg["graph"]["excludes"] = "*.xlsx.md"
+    (env.out / "kg.yaml").write_text(yaml.safe_dump(cfg))
+    with pytest.raises(SystemExit):
+        env.ctx()
+
+
+def test_newly_excluded_sources_and_check(env):
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    for f in ("a.md", "form.pdf.md"):
+        (st / f).write_text("x\n")
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a1", "docs/a.md", None), ("f1", "docs/form.pdf.md", None),
+                                           ("gone", "docs/deleted.md", None)]))
+    # form.pdf.md still exists but is no longer scanned -> must be pruned; deleted.md is graphify's job
+    assert kg.newly_excluded_sources(ctx, ["docs/a.md"]) == ["docs/form.pdf.md"]
+    snap = kg.snapshot(ctx, "before graph")
+    kg.write_json(ctx.kgdir / "graph-plan.json", {"snapshot": snap.name, "changed": [], "deleted": ["docs/deleted.md"],
+                                                  "excluded": ["docs/form.pdf.md"]})
+    kg.write_json(g / ".graphify_extract.json", graph([("a1", "docs/a.md", None)]))
+    assert kg.cmd_graph_check(argparse.Namespace(repo=str(env.repo), new=None)) == 0
+    assert kg.read_json(ctx.kgdir / "graph-check.json")["explained"] == 2
