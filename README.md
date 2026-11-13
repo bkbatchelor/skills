@@ -513,6 +513,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Snapshots before each curate and each graph run (keeps 3) and `kg restore`
 - Token-cost estimate with a cap, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
 - Re-keys graphify manifests written by older versions, so `--update` re-extracts only the files that changed
+- Graph exclude rules in `kg.yaml` (`graph.excludes`, gitignore-style) written into graphify's exclude file on every run, with nodes of newly excluded files pruned
 - Repo symlinks written in `$HOME` form; codegraph telemetry kept off
 
 **Usage:**
