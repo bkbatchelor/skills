@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.2.1
+  version: 1.2.2
 ---
 
 # Knowledge Graph
@@ -55,7 +55,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 4. **`kg graph prepare`**: takes a snapshot, re-keys graphify's manifest if needed (otherwise every update re-extracts the whole corpus), and writes `graph.excludes` from `kg.yaml` into graphify's exclude file (`.graphify_build.json`). It then lists changed and deleted files, plus graph sources that the exclude rules now leave out, estimates the token cost, and lists oversized files.
 5. **Ask the user** (one yes/no question): "Update the docs graph? N changed files, about T input tokens." If `over_cap` is true, say that it exceeds the cap and get a separate, explicit yes for the cost. Approval for an earlier run does not carry over.
 6. **Run graphify** (you): run the `graphify_command` printed in `.kg/graph-plan.json`, from the repo root, following the graphify skill and its `references/update.md`. While doing so:
-   - Give each `big_files` entry its own extraction chunk, and tell that agent to parse the file with `python3 -I` rather than Read.
+   - Give each `big_files` and `long_files` entry its own extraction chunk (`long_files` are over 2,000 lines, graphify's own rule), and tell that agent to parse the file with `python3 -I` rather than Read. The cost estimate already counts one agent per entry.
    - Tell every extraction agent to read `graphify-out/graph.json` read-only and reuse the existing node IDs for its files, so cross-file edges survive.
    - **Prune with the plan's list, not graphify's.** In the merge step, pass `prune_sources` from `.kg/graph-plan.json` to `build_merge`. That list is the deleted files plus the files under `excluded`. graphify's own update procedure prunes deleted files only, so without this the nodes of a newly excluded file would stay in the graph for good.
    - When the plan has `excluded` files but nothing changed or was deleted, graphify's detection reports "No files changed" and stops. Continue anyway: write the empty extraction from `references/update.md` and run the merge with the plan's `prune_sources`.
