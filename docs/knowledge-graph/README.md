@@ -39,6 +39,60 @@ The `kg` script handles every mechanical step, including the workarounds that us
 └── .kg/                      # run log, cluster registry, review list, graph plan, label proposals
 ```
 
+## Example kg.yaml
+
+`kg init` writes a starting `kg.yaml` like the one below. Every key except `source` is optional; leaving one out uses the default shown. Globs follow `fnmatch` rules, where `*` also matches `/`, and are relative to the repo root. The one exception is `graph.excludes`, which uses gitignore-style patterns relative to `staging/`. Unknown keys are rejected.
+
+```yaml
+source: ~/Projects/my-repo           # the repo this folder curates; must match where kg runs
+
+gating:                              # docs steps only (curate, apply, graph); codegraph sync runs anywhere
+  branches: [main, develop, "develop-*"]
+  require_clean: true
+
+phi_globs:                           # never extracted or staged; any trace stops the run (exit 4)
+  - "data/customer-exports/*"
+  - "build/uploads/*/applications/*"
+
+overrides:
+  tracked_only: true                 # stage only git-tracked documents
+  exclude_groups:                    # tracked, but not documentation
+    - note: "test fixture"
+      globs: ["*/src/test/*", "tests/*"]
+    - note: "build/tool config"
+      globs: ["pom.xml", "*/pom.xml", "package.json", "*/package.json"]
+    - note: "agent tooling (not product docs)"
+      enabled: false                 # listed but off; `kg overrides --dry-run` shows what it would drop
+      globs: [".claude/*", ".github/prompts/*"]
+
+known_excluded_keepers: []           # excluded files whose keeper is also excluded, already checked
+
+carry_forward:
+  verdict_overlap: 0.8               # copy a verdict to a re-numbered cluster at this member overlap
+  label_agreement: 0.5               # reuse a community label when this share of members agrees
+
+graph:
+  cost_cap_tokens: 1500000           # an estimate above this needs a separate, explicit yes
+  agent_overhead_tokens: 60000       # fixed cost per extraction agent, added to the estimate
+  big_file_bytes: 400000             # changed files over either limit get their own chunk
+  big_file_line_chars: 20000
+  excludes:                          # which staged files reach the graph; last match wins
+    - "*.xlsx.md"                    # spreadsheets: mostly rows, costly
+    - "*.json.md"
+    - "*.pptx.pdf"                   # decks; their .pptx.notes.md speaker notes stay in
+    - "/docs/form-library/**/*.pdf.md"
+    - "!/specs/api/openapi.yaml.md"  # but the API contract does go in
+
+backups:
+  keep: 3                            # newest snapshots kept, plus the pre-run one of an unfinished graph run
+
+related_repos:                       # other repos whose graphs are read-only from here
+  - name: config-repo
+    path: ~/Projects/config-repo
+    graph: ~/Projects/config-repo/graphify-out/graph.json
+    mapper: map_config_refs.py       # optional script in this folder; run by `kg apply`
+```
+
 ## Usage
 
 ```bash

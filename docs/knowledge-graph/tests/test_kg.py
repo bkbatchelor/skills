@@ -448,3 +448,12 @@ def test_carry_forward_subset_below_threshold(env):
     assert v["carried_forward"]["review_done"] is True and v["carried_forward"]["new_members"] == []
     assert v["revisions"] and v["conflicts"] == []  # the m3/m4 conflict lost m4, so it is dropped
     assert kg.review_state(ctx)["needs_verdict"] == []
+
+
+def test_readme_example_kg_yaml_is_valid():
+    import re
+    import yaml
+    md = (HERE.parent / "README.md").read_text(encoding="utf-8")
+    block = re.search(r"## Example kg.yaml.*?```yaml\n(.*?)```", md, re.S).group(1)
+    cfg = kg.validate_config(yaml.safe_load(block), "README example")
+    assert cfg["graph"]["excludes"] and cfg["related_repos"][0]["name"]
