@@ -370,3 +370,11 @@ def test_snapshot_dedup_and_pin(env, monkeypatch):
         kg.snapshot(ctx, "before curate")
     names = [s.name for s in kg.snapshots(ctx)]
     assert good.name in names and len(names) == 4  # newest 3 plus the pinned pre-run snapshot
+
+
+def test_snapshot_keeps_decisions(env):
+    ctx = env.ctx()
+    ctx.work.mkdir(parents=True, exist_ok=True)
+    (ctx.work / "decisions.jsonl").write_text('{"run_id": "r1", "path": "a", "action": "include"}\n')
+    snap = kg.snapshot(ctx, "before curate")
+    assert (snap / ".docs-curator/decisions.jsonl").read_text().startswith('{"run_id": "r1"')

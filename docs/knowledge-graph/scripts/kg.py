@@ -65,6 +65,7 @@ SNAPSHOT_FILES = [  # (label, path relative to the curated dir)
     ("graph", "staging/graphify-out/cache"),
     ("curator", ".docs-curator/state.json"),
     ("curator", ".docs-curator/analysis.json"),
+    ("curator", ".docs-curator/decisions.jsonl"),  # per-file outcomes; docs-curator keeps only the latest run
     ("curator", ".docs-curator/work/verdicts"),
     ("curator", ".docs-curator/work/verdicts-stale"),
     ("curator", "overrides.yaml"),
