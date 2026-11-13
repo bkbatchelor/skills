@@ -502,3 +502,15 @@ def test_graph_labels_unique_with_existing_suffixes(env):
     kg.cmd_graph_labels(argparse.Namespace(repo=str(env.repo)))
     carried = kg.read_json(ctx.kgdir / "labels-proposed.json")["carried"]
     assert sorted(carried.values()) == ["Epic G", "Epic G (2)", "Epic G (3)"]
+
+
+def test_graph_labels_mostly_new_community_gets_fresh_name(env):
+    ctx = env.ctx()
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "x", "Epic G"), ("b", "x", "Epic G")]))
+    make_plan(ctx, changed=[])
+    # 2 old nodes named "Epic G" + 8 new contract nodes: unanimous among the labelled, but 80% unknown
+    kg.write_json(g / ".graphify_analysis.json", {"communities": {"0": ["a", "b"] + [f"api{i}" for i in range(8)]}})
+    kg.cmd_graph_labels(argparse.Namespace(repo=str(env.repo)))
+    out = kg.read_json(ctx.kgdir / "labels-proposed.json")
+    assert out["carried"] == {} and "0" in out["needs_name"]

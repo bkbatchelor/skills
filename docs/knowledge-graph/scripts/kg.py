@@ -101,6 +101,7 @@ known_excluded_keepers: []
 carry_forward:
   verdict_overlap: 0.8       # Jaccard overlap to copy a verdict to a re-numbered cluster
   label_agreement: 0.5       # share of labelled members that must agree to reuse a community label
+  label_min_known: 0.5       # ...and share of all members that must have had a label before
   subset_max_members: 25     # a cluster that only lost members inherits the verdict of an old one this small
 
 graph:
@@ -290,7 +291,7 @@ def validate_config(cfg, path):
     smax = (cfg.get("carry_forward") or {}).get("subset_max_members")
     if smax is not None and (not isinstance(smax, int) or isinstance(smax, bool) or smax < 1):
         die(f"{path}: carry_forward.subset_max_members must be a whole number of at least 1")
-    for k in ("verdict_overlap", "label_agreement"):
+    for k in ("verdict_overlap", "label_agreement", "label_min_known"):
         v = (cfg.get("carry_forward") or {}).get(k)
         if v is not None and not (0 < float(v) <= 1):
             die(f"{path}: carry_forward.{k} must be in (0, 1]")
@@ -1306,13 +1307,16 @@ def cmd_graph_labels(args):
                 if n.get("community_name") and not str(n.get("community_name")).startswith("Community ")}
     new_nodes = node_index(read_json(gdir / ".graphify_extract.json") or read_json(gdir / "graph.json"))
     agree = float(ctx.get("carry_forward", "label_agreement", default=0.5))
+    known_min = float(ctx.get("carry_forward", "label_min_known", default=0.5))
     carried, todo = {}, {}
     from collections import Counter
 
     for cid, members in sorted(analysis["communities"].items(), key=lambda kv: -len(kv[1])):
         votes = Counter(old_name[m] for m in members if m in old_name)
         labelled = sum(votes.values())
-        if labelled and votes.most_common(1)[0][1] / labelled >= agree:
+        # New nodes have no old name and so no vote: a community made mostly of new nodes would
+        # otherwise inherit the name of its few old members. Require enough of it to be known.
+        if labelled and labelled / len(members) >= known_min and votes.most_common(1)[0][1] / labelled >= agree:
             carried[cid] = votes.most_common(1)[0][0]
         else:
             todo[cid] = [new_nodes.get(m, {}).get("label", m) for m in members[:12]]

@@ -62,7 +62,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
    - **After the merge step and before Step 4**, run `kg graph check`.
      - Exit 0: every lost node comes from a changed, deleted or newly excluded file, so if `to_json`'s shrink guard refuses, pass `force=True`.
      - Exit 3: show the user the unexplained losses. Use `force=True` only after they accept them; otherwise stop and offer `kg restore`.
-   - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique.
+   - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique. A community is carried only if at least `label_min_known` of its members had a label before, so a community made mostly of new material always gets a fresh name.
 7. **`kg graph finish`**: checks the new graph for PHI, records the run, and prunes old snapshots. Report the node, edge and community counts and the query line.
 8. **`kg code`**: runs `codegraph sync`. It works on any branch, because the code index follows the current checkout.
 
