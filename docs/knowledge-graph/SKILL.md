@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Knowledge Graph
@@ -43,7 +43,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 
 `kg all` runs the scripted steps in order and stops before the first one that needs a person. The full sequence:
 
-1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time), purges PHI text cache, carries verdicts forward, and archives stale ones. Exit 3 means clusters are waiting for review.
+1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time) with each PHI glob as `--no-extract` so PHI text is never extracted, purges any PHI text left in the cache, carries verdicts forward, and archives stale ones. Exit 3 means clusters are waiting for review.
    - It also **auto-closes** a pending cluster when fewer than two of its members can reach staging, because no verdict on such a cluster could change staging. The verdict it writes carries a `kg_auto` field that gives the reason.
    - Each `curate` and `apply` re-checks these against the current overrides and reopens any cluster that now has two or more members that can reach staging. Never add `kg_auto` to a verdict you wrote yourself.
 2. **Review** (you): run `kg review`.
@@ -51,13 +51,15 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
    - For each cluster under `recheck:`, the verdict was copied from a re-numbered cluster that overlaps it by at least `carry_forward.verdict_overlap`. Read only the `new_members` listed in its `carried_forward` block. Check them against the carried revisions and conflicts, and against older documents on the same topic for status claims they contradict. Then set `carried_forward.review_done: true`.
    - When a changed document reverses a rule, grep the tracked docs for the old wording; `git diff` of the changed files is the quickest way to see what to look for.
 3. **`kg apply`**: runs docs-curator `apply`. It writes the `graphify-out` and `.docs-curator` symlinks in `$HOME` form, stops on PHI in the cache or staging, checks keeper chains, and runs the mappers for `related_repos`. Exit 3 with `keeper:` lines means content left staging because its keeper is excluded too. Show the user each line and offer either an include in `overrides.manual.yaml` or adding the path to `known_excluded_keepers`. Then run `kg curate` and `kg apply` again.
-4. **`kg graph prepare`**: takes a snapshot, re-keys graphify's manifest if needed (otherwise every update re-extracts the whole corpus), lists changed and deleted files, estimates the token cost, and lists oversized files.
+4. **`kg graph prepare`**: takes a snapshot, re-keys graphify's manifest if needed (otherwise every update re-extracts the whole corpus), and writes `graph.excludes` from `kg.yaml` into graphify's exclude file (`.graphify_build.json`). It then lists changed and deleted files, plus graph sources that the exclude rules now leave out, estimates the token cost, and lists oversized files.
 5. **Ask the user** (one yes/no question): "Update the docs graph? N changed files, about T input tokens." If `over_cap` is true, say that it exceeds the cap and get a separate, explicit yes for the cost. Approval for an earlier run does not carry over.
 6. **Run graphify** (you): run the `graphify_command` printed in `.kg/graph-plan.json`, from the repo root, following the graphify skill and its `references/update.md`. While doing so:
    - Give each `big_files` entry its own extraction chunk, and tell that agent to parse the file with `python3 -I` rather than Read.
    - Tell every extraction agent to read `graphify-out/graph.json` read-only and reuse the existing node IDs for its files, so cross-file edges survive.
+   - **Prune with the plan's list, not graphify's.** In the merge step, pass `prune_sources` from `.kg/graph-plan.json` to `build_merge`. That list is the deleted files plus the files under `excluded`. graphify's own update procedure prunes deleted files only, so without this the nodes of a newly excluded file would stay in the graph for good.
+   - When the plan has `excluded` files but nothing changed or was deleted, graphify's detection reports "No files changed" and stops. Continue anyway: write the empty extraction from `references/update.md` and run the merge with the plan's `prune_sources`.
    - **After the merge step and before Step 4**, run `kg graph check`.
-     - Exit 0: every lost node comes from a changed or deleted file, so if `to_json`'s shrink guard refuses, pass `force=True`.
+     - Exit 0: every lost node comes from a changed, deleted or newly excluded file, so if `to_json`'s shrink guard refuses, pass `force=True`.
      - Exit 3: show the user the unexplained losses. Use `force=True` only after they accept them; otherwise stop and offer `kg restore`.
    - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique.
 7. **`kg graph finish`**: checks the new graph for PHI, records the run, and prunes old snapshots. Report the node, edge and community counts and the query line.

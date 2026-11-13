@@ -447,6 +447,8 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - Requirement-versus-ADR check: documents typed by front matter or path globs are paired by id and by similarity; conflicts go to `CONFLICTS.md`, gaps and unlinked items to the report; report only, no winner picked
 - `applies_to:` front matter ties a document to code paths or symbols; the report lists the links and flags paths missing from the source
 - Optional `config.yaml` and `overrides.yaml` in the output folder; a second run on an unchanged corpus processes nothing new
+- `--no-extract <glob>` on `analyze`/`update`: matching files (e.g. PHI folders) are hashed but never opened, and excluded in a way no override can undo
+- Every staged text file ends with a newline, so graphify's coverage check never flags it as partly read
 - `update` handles a corpus that changed after a finished run: it reports added, modified and removed files in `changes.json` and queues only the clusters containing a new or modified file
 - Thresholds are tuned on a synthetic corpus only; spot-check the first real run
 
@@ -513,6 +515,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Snapshots before each curate and each graph run (keeps 3) and `kg restore`
 - Token-cost estimate with a cap, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
 - Re-keys graphify manifests written by older versions, so `--update` re-extracts only the files that changed
+- Graph exclude rules in `kg.yaml` (`graph.excludes`, gitignore-style) written into graphify's exclude file on every run, with nodes of newly excluded files pruned
 - Repo symlinks written in `$HOME` form; codegraph telemetry kept off
 
 **Usage:**

@@ -107,6 +107,9 @@ graph:
   agent_overhead_tokens: 60000  # fixed cost per extraction agent, added to the estimate
   big_file_bytes: 400000     # changed files above either limit get their own extraction chunk
   big_file_line_chars: 20000
+  # excludes:                # gitignore-style patterns relative to staging/, written to graphify's
+  #   - "*.xlsx.md"          # exclude memory on `kg graph prepare`; `!pattern` re-includes. Unset =
+  #   - "!/docs/keep.md"     # leave graphify-out/.graphify_build.json as it is.
 
 backups:
   keep: 3
@@ -280,6 +283,9 @@ def validate_config(cfg, path):
     for r in cfg.get("related_repos") or []:
         if not isinstance(r, dict) or not r.get("name") or not r.get("path"):
             die(f"{path}: each related_repos entry needs `name` and `path`: {r!r}")
+    gx = (cfg.get("graph") or {}).get("excludes")
+    if gx is not None and (not isinstance(gx, list) or not all(isinstance(x, str) and x.strip() for x in gx)):
+        die(f"{path}: graph.excludes must be a list of gitignore-style patterns (relative to staging/)")
     for k in ("verdict_overlap", "label_agreement"):
         v = (cfg.get("carry_forward") or {}).get(k)
         if v is not None and not (0 < float(v) <= 1):
@@ -343,9 +349,23 @@ def curate_cmd(ctx, *args):
             "python", dc / "scripts/curate.py", *args, "--source", ctx.repo, "--out", ctx.out]
 
 
+def curator_supports_no_extract():
+    path = skill_dir("docs-curator") / "scripts/curate.py"
+    return path.is_file() and "--no-extract" in path.read_text(encoding="utf-8")
+
+
 def run_curate(ctx, *args):
-    print(f"kg: docs-curator {' '.join(args)}", flush=True)
-    run(curate_cmd(ctx, *args), cwd=ctx.out)
+    """Run curate.py. For analyze/update, PHI globs go in as --no-extract so their text never exists
+    (docs-curator >= 1.9.0); older versions extract it and `purge_phi` deletes it afterwards."""
+    extra = []
+    if args and args[0] in ("analyze", "update") and ctx.phi_globs:
+        if curator_supports_no_extract():
+            for g in ctx.phi_globs:
+                extra += ["--no-extract", g]
+        else:
+            warn("installed docs-curator has no --no-extract; PHI text will be extracted, then purged")
+    print(f"kg: docs-curator {' '.join(args)}" + (f" (--no-extract x{len(ctx.phi_globs)})" if extra else ""), flush=True)
+    run(curate_cmd(ctx, *args) + extra, cwd=ctx.out)
 
 
 # ----------------------------------------------------------------------------- overrides
@@ -1004,6 +1024,7 @@ from graphify.watch import _read_build_excludes, _read_build_gitignore
 r = detect_incremental(Path(sys.argv[1]), extra_excludes=_read_build_excludes(out_path()),
                        gitignore=_read_build_gitignore(out_path()))
 print(json.dumps({"new_files": r.get("new_files", {}), "deleted": list(r.get("deleted_files", [])),
+                  "files": sorted({f for fl in r.get("files", {}).values() for f in fl}),
                   "total_files": r.get("total_files"), "new_total": r.get("new_total", 0)}))
 """
 
@@ -1057,6 +1078,43 @@ def fix_manifest_anchor(ctx):
     return fixed
 
 
+def sync_graph_excludes(ctx):
+    """Write kg.yaml graph.excludes into graphify's .graphify_build.json (its --exclude memory).
+
+    graphify reads these as gitignore-style patterns anchored at staging/, `!` re-includes, last
+    match wins. Without graph.excludes in kg.yaml the file is left alone. Returns True if it changed.
+    """
+    pats = ctx.get("graph", "excludes")
+    if pats is None:
+        return False
+    path = ctx.out / "graphify-out/.graphify_build.json"
+    cur = read_json(path, {}) or {}
+    if cur.get("excludes") == list(pats):
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({**cur, "excludes": list(pats)}, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"graph: wrote {len(pats)} exclude rule(s) from kg.yaml to graphify-out/.graphify_build.json "
+          f"(was {len(cur.get('excludes') or [])} entries)")
+    return True
+
+
+def newly_excluded_sources(ctx, scanned_rel):
+    """Graph source files that still exist in staging but are no longer scanned (now excluded).
+
+    graphify's update flow prunes only deleted files, so nodes of a file that became excluded would
+    stay in the graph for good; these must be passed to build_merge as prune_sources too.
+    """
+    graph = read_json(ctx.out / "graphify-out/graph.json") or {}
+    scanned = set(scanned_rel)
+    staging = ctx.out / "staging"
+    out = set()
+    for n in graph.get("nodes", []):
+        sf = rel_to_staging(ctx, n.get("source_file") or "")
+        if sf and not sf.startswith("/") and sf not in scanned and (staging / sf).is_file():
+            out.add(sf)
+    return sorted(out)
+
+
 def cmd_graph_prepare(args):
     ctx = Ctx(args.repo)
     gate(ctx, args, "graph prepare")
@@ -1073,12 +1131,14 @@ def cmd_graph_prepare(args):
     else:
         snap = snapshot(ctx, "before graph")
     rekeyed = fix_manifest_anchor(ctx)
+    excludes_changed = sync_graph_excludes(ctx)
     staging = ctx.out / "staging"
     r = run([graphify_python(ctx), "-c", DETECT_SNIPPET, staging], cwd=ctx.repo, capture=True)
     det = json.loads(r.stdout.strip().splitlines()[-1])
     changed = sorted({f for fl in det["new_files"].values() for f in fl})
     rel_changed = [rel_to_staging(ctx, f) for f in changed]
     rel_deleted = [rel_to_staging(ctx, f) for f in det["deleted"]]
+    rel_excluded = newly_excluded_sources(ctx, [rel_to_staging(ctx, f) for f in det.get("files", [])])
     cost = read_json(ctx.out / "graphify-out/cost.json")
     per_file = avg_tokens_per_file(cost)
     # Each extraction agent costs a fixed ~60k (spec + reading graph.json to reuse IDs) however few
@@ -1093,17 +1153,21 @@ def cmd_graph_prepare(args):
     plan = {
         "at": now_ts(), "snapshot": snap.name, "staging": str(home_form(staging)),
         "mode": "update" if has_graph else "full", "changed": rel_changed, "deleted": rel_deleted,
+        "excluded": rel_excluded,
+        "prune_sources": [str(staging / f) for f in rel_deleted + rel_excluded],
         "total_files": det["total_files"], "tokens_per_file": round(per_file) if per_file else None,
         "estimated_input_tokens": estimate, "estimated_chunks": chunks, "cost_cap_tokens": cap,
         "over_cap": bool(estimate and estimate > cap), "big_files": big,
         "graphify_command": f"cd {home_form(ctx.repo)} && /graphify {home_form(staging)}" + (" --update" if has_graph else ""),
     }
     write_json(ctx.kgdir / "graph-plan.json", plan)
-    ctx.log("graph prepare", changed=len(changed), deleted=len(rel_deleted), estimate=estimate,
-            manifest_rekeyed=rekeyed)
-    print(f"graph: {len(changed)} changed, {len(rel_deleted)} deleted of {det['total_files']} staged files "
-          f"({plan['mode']} run)")
-    if not changed and not rel_deleted:
+    ctx.log("graph prepare", changed=len(changed), deleted=len(rel_deleted), excluded=len(rel_excluded),
+            estimate=estimate, manifest_rekeyed=rekeyed, excludes_changed=excludes_changed)
+    print(f"graph: {len(changed)} changed, {len(rel_deleted)} deleted, {len(rel_excluded)} newly excluded "
+          f"of {det['total_files']} scanned files ({plan['mode']} run)")
+    for f in rel_excluded:
+        print(f"  excluded now (its nodes must be pruned): {f}")
+    if not changed and not rel_deleted and not rel_excluded:
         print("graph: nothing changed since the last build; no graphify run needed")
         return 0
     est = (f"~{estimate:,} input tokens ({len(changed)} files x {plan['tokens_per_file'] or 0:,} avg from cost.json "
@@ -1114,6 +1178,9 @@ def cmd_graph_prepare(args):
     print(f"plan: {ctx.kgdir / 'graph-plan.json'}")
     print(f"next: ask the user (cost above), then run {plan['graphify_command']}; "
           "run `kg graph check` after graphify's merge step and before writing graph.json")
+    if rel_excluded:
+        print("prune: pass plan['prune_sources'] (deleted + newly excluded) to build_merge as prune_sources; "
+              "if nothing changed, still run the merge with an empty extraction")
     return 0
 
 
@@ -1142,7 +1209,7 @@ def cmd_graph_check(args):
         die(f"{new_path} not found")
     on, nn = node_index(old), node_index(new)
     lost = sorted(set(on) - set(nn))
-    touched = set(plan["changed"]) | set(plan["deleted"])
+    touched = set(plan["changed"]) | set(plan["deleted"]) | set(plan.get("excluded", []))
     explained, unexplained = [], []
     for nid in lost:
         sf = rel_to_staging(ctx, on[nid].get("source_file") or "")
