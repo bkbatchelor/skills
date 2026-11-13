@@ -1100,6 +1100,43 @@ def fix_manifest_anchor(ctx):
     return fixed
 
 
+def restamp_newline_only(ctx):
+    """Mark files unchanged in graphify's manifest when the only change is an added final newline.
+
+    docs-curator >= 1.9.0 ends every staged file with a newline. graphify's manifest hashes are MD5s
+    of file content, so a file whose old hash equals MD5(content without the final newline) is
+    proven identical apart from that byte; re-extracting it would cost tokens for nothing.
+    """
+    import hashlib
+
+    mp = ctx.out / "graphify-out/manifest.json"
+    m = read_json(mp)
+    if not isinstance(m, dict) or not m:
+        return []
+    fixed = []
+    for key, row in m.items():
+        if not isinstance(row, dict) or not key.startswith("staging/"):
+            continue
+        f = ctx.out / key
+        if not f.is_file():
+            continue
+        data = f.read_bytes()
+        if not data.endswith(b"\n"):
+            continue
+        full, trimmed = hashlib.md5(data).hexdigest(), hashlib.md5(data[:-1]).hexdigest()
+        hashes = {k: row.get(k) for k in ("ast_hash", "semantic_hash") if row.get(k)}
+        if hashes and all(v == trimmed for v in hashes.values()) and full != trimmed:
+            for k in hashes:
+                row[k] = full
+            row["mtime"] = f.stat().st_mtime
+            fixed.append(key[len("staging/"):])
+    if fixed:
+        mp.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"manifest: {len(fixed)} file(s) changed only by an added final newline; marked unchanged "
+              "(no re-extraction)")
+    return fixed
+
+
 def sync_graph_excludes(ctx):
     """Write kg.yaml graph.excludes into graphify's .graphify_build.json (its --exclude memory).
 
@@ -1154,6 +1191,7 @@ def cmd_graph_prepare(args):
         snap = snapshot(ctx, "before graph")
     rekeyed = fix_manifest_anchor(ctx)
     excludes_changed = sync_graph_excludes(ctx)
+    restamped = restamp_newline_only(ctx)
     staging = ctx.out / "staging"
     r = run([graphify_python(ctx), "-c", DETECT_SNIPPET, staging], cwd=ctx.repo, capture=True)
     det = json.loads(r.stdout.strip().splitlines()[-1])
@@ -1184,7 +1222,8 @@ def cmd_graph_prepare(args):
     }
     write_json(ctx.kgdir / "graph-plan.json", plan)
     ctx.log("graph prepare", changed=len(changed), deleted=len(rel_deleted), excluded=len(rel_excluded),
-            estimate=estimate, manifest_rekeyed=rekeyed, excludes_changed=excludes_changed)
+            estimate=estimate, manifest_rekeyed=rekeyed, excludes_changed=excludes_changed,
+            newline_restamped=len(restamped))
     print(f"graph: {len(changed)} changed, {len(rel_deleted)} deleted, {len(rel_excluded)} newly excluded "
           f"of {det['total_files']} scanned files ({plan['mode']} run)")
     for f in rel_excluded:

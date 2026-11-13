@@ -472,3 +472,21 @@ def test_subset_carry_skips_partial_read(env):
     old = [f"d/m{i}" for i in range(1, 9)]
     an = setup_clusters(ctx, old, old[:3], {**VERDICT, "partial_read": True})
     assert kg.carry_forward(ctx, an)["carried"] == []
+
+
+def test_restamp_newline_only(env):
+    import hashlib
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "same.md").write_text("body\n")      # old content was "body"
+    (st / "edited.md").write_text("new body\n")  # old content was "body" too, but text changed
+    old = hashlib.md5(b"body").hexdigest()
+    kg.write_json(ctx.out / "graphify-out/manifest.json", {
+        "staging/docs/same.md": {"mtime": 1, "ast_hash": old, "semantic_hash": old},
+        "staging/docs/edited.md": {"mtime": 1, "ast_hash": old, "semantic_hash": old}})
+    assert kg.restamp_newline_only(ctx) == ["docs/same.md"]
+    m = kg.read_json(ctx.out / "graphify-out/manifest.json")
+    assert m["staging/docs/same.md"]["semantic_hash"] == hashlib.md5(b"body\n").hexdigest()
+    assert m["staging/docs/edited.md"]["semantic_hash"] == old  # a real change still re-extracts
+    assert kg.restamp_newline_only(ctx) == []
