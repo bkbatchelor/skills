@@ -435,3 +435,16 @@ def test_run_curate_passes_no_extract(env, monkeypatch):
     assert seen[-1][-2:] == ["--no-extract", "out/phi/*"]  # this checkout of docs-curator supports it
     kg.run_curate(ctx, "apply")
     assert "--no-extract" not in seen[-1]
+
+
+def test_carry_forward_subset_below_threshold(env):
+    ctx = env.ctx()
+    old = [f"d/m{i}" for i in range(1, 9)]
+    new = old[:3]  # 3/8 overlap, but nothing was added: the old verdict covers every member
+    an = setup_clusters(ctx, old, new, VERDICT)
+    res = kg.carry_forward(ctx, an)
+    assert [c["cluster"] for c in res["carried"]] == ["new1"] and not res["below_threshold"]
+    v = kg.read_json(ctx.work / "work/verdicts/new1.json")
+    assert v["carried_forward"]["review_done"] is True and v["carried_forward"]["new_members"] == []
+    assert v["revisions"] and v["conflicts"] == []  # the m3/m4 conflict lost m4, so it is dropped
+    assert kg.review_state(ctx)["needs_verdict"] == []

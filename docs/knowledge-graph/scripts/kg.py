@@ -735,9 +735,20 @@ def carry_forward(ctx, analysis):
             if score > best[0]:
                 best = (score, vid, vfile, (old, moved))
         score, vid, vfile, tm = best
-        if vid is None:
+        # A cluster that only lost members (it is a subset of a judged cluster) is still fully covered
+        # by that verdict, however low the overlap ratio; e.g. PHI copies dropping out of a form cluster.
+        subset = None
+        for vid2, vfile2 in sources.items():
+            old2, moved2 = translate_paths(reg[vid2], cur_paths, cur_by_sha)
+            if members and set(members) <= set(old2):
+                if subset is None or len(old2) < len(subset[2][0]):
+                    subset = (vid2, vfile2, (old2, moved2))
+        if subset and (vid is None or score < threshold):
+            vid, vfile, tm = subset
+            score = jaccard(tm[0], members)
+        elif vid is None:
             continue
-        if score < threshold:
+        elif score < threshold:
             below.append({"cluster": q, "best": vid, "overlap": round(score, 3)})
             continue
         old, moved = tm
