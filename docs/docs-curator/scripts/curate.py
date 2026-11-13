@@ -738,6 +738,7 @@ def cmd_analyze(args):
     tdir.mkdir(parents=True, exist_ok=True)
 
     files, texts, new_or_changed = [], {}, 0
+    no_extract = list(getattr(args, "no_extract", None) or [])
     for full in walk(source):
         rel = full.relative_to(source).as_posix()
         ext = full.suffix.lower()
@@ -755,6 +756,10 @@ def cmd_analyze(args):
         }
         if ext not in SUPPORTED:
             rec["status"] = "not_ingestible"
+            files.append(rec)
+            continue
+        if no_extract and _glob_match(rel, no_extract):
+            rec["status"] = "skipped"  # hashed for change detection, never opened for text
             files.append(rec)
             continue
         cache, err = tdir / f"{rec['sha256']}.md", tdir / f"{rec['sha256']}.err"
@@ -1063,6 +1068,8 @@ def decide(an, cfg, overrides, verdicts):
             put(p, "not_ingestible", "not_ingestible", evidence={"extension": f["ext"]})
         elif f["status"] == "unreadable":
             put(p, "unreadable", "unreadable", evidence={"error": f["error"]})
+        elif f["status"] == "skipped":
+            put(p, "exclude", "no_extract", evidence={"note": "matched --no-extract; never opened"})
 
     reps = an["reps"]
     rep_paths = set(reps.values())
@@ -1163,8 +1170,8 @@ def decide(an, cfg, overrides, verdicts):
         if p not in files:
             warnings.append(f"override for unknown path ignored: {p}")
             continue
-        if dec[p]["action"] in ("unreadable", "not_ingestible"):
-            warnings.append(f"override cannot rescue {dec[p]['action']} file: {p}")
+        if dec[p]["action"] in ("unreadable", "not_ingestible") or dec[p]["reason"] == "no_extract":
+            warnings.append(f"override cannot rescue {dec[p]['reason']} file: {p}")
             continue
         put(p, "include" if o["action"] == "include" else "exclude", f"override_{o['action']}", evidence={"note": o["note"]})
 
@@ -1296,6 +1303,8 @@ def cmd_apply(args):
     def emit(rel, content):
         dest = staging / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
+        if content and not content.endswith("\n"):
+            content += "\n"  # line counters (wc -l, graphify coverage) miss an unterminated last line
         dest.write_text(content, encoding="utf-8")
 
     for p in sorted(files):
@@ -1626,6 +1635,9 @@ def build_parser():
         p.add_argument("--out", help="output folder, outside --source (default: ~/curated/<basename of --source>)")
         p.add_argument("--config", help="config.yaml (default: <out>/config.yaml)")
         p.add_argument("--overrides", help="overrides.yaml (default: <out>/overrides.yaml)")
+        if name in ("analyze", "update"):
+            p.add_argument("--no-extract", action="append", metavar="GLOB",
+                           help="source-relative glob (repeatable); matching files are hashed but never opened or staged, e.g. PHI folders")
         if name == "link":
             p.add_argument("--gitignore", choices=("project", "global"), help="also add .docs-curator to <source>/.gitignore or to the global git excludes file")
         p.set_defaults(fn=fn)

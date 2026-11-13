@@ -447,6 +447,8 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - Requirement-versus-ADR check: documents typed by front matter or path globs are paired by id and by similarity; conflicts go to `CONFLICTS.md`, gaps and unlinked items to the report; report only, no winner picked
 - `applies_to:` front matter ties a document to code paths or symbols; the report lists the links and flags paths missing from the source
 - Optional `config.yaml` and `overrides.yaml` in the output folder; a second run on an unchanged corpus processes nothing new
+- `--no-extract <glob>` on `analyze`/`update`: matching files (e.g. PHI folders) are hashed but never opened, and excluded in a way no override can undo
+- Every staged text file ends with a newline, so graphify's coverage check never flags it as partly read
 - `update` handles a corpus that changed after a finished run: it reports added, modified and removed files in `changes.json` and queues only the clusters containing a new or modified file
 - Thresholds are tuned on a synthetic corpus only; spot-check the first real run
 
