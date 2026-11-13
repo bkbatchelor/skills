@@ -417,8 +417,8 @@ def test_newly_excluded_sources_and_check(env):
     g = ctx.out / "graphify-out"
     kg.write_json(g / "graph.json", graph([("a1", "docs/a.md", None), ("f1", "docs/form.pdf.md", None),
                                            ("gone", "docs/deleted.md", None)]))
-    # form.pdf.md still exists but is no longer scanned -> must be pruned; deleted.md is graphify's job
-    assert kg.newly_excluded_sources(ctx, ["docs/a.md"]) == ["docs/form.pdf.md"]
+    # form.pdf.md still exists but is no longer scanned; deleted.md is gone and never in the manifest
+    assert kg.newly_excluded_sources(ctx, ["docs/a.md"]) == ["docs/deleted.md", "docs/form.pdf.md"]
     snap = kg.snapshot(ctx, "before graph")
     kg.write_json(ctx.kgdir / "graph-plan.json", {"snapshot": snap.name, "changed": [], "deleted": ["docs/deleted.md"],
                                                   "excluded": ["docs/form.pdf.md"]})
@@ -490,3 +490,15 @@ def test_restamp_newline_only(env):
     assert m["staging/docs/same.md"]["semantic_hash"] == hashlib.md5(b"body\n").hexdigest()
     assert m["staging/docs/edited.md"]["semantic_hash"] == old  # a real change still re-extracts
     assert kg.restamp_newline_only(ctx) == []
+
+
+def test_graph_labels_unique_with_existing_suffixes(env):
+    ctx = env.ctx()
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "x", "Epic G"), ("b", "x", "Epic G"), ("c", "x", "Epic G (2)"),
+                                           ("d", "x", "Epic G (2)"), ("e", "x", "Epic G")]))
+    make_plan(ctx, changed=[])
+    kg.write_json(g / ".graphify_analysis.json", {"communities": {"0": ["a", "b"], "1": ["c", "d"], "2": ["e"]}})
+    kg.cmd_graph_labels(argparse.Namespace(repo=str(env.repo)))
+    carried = kg.read_json(ctx.kgdir / "labels-proposed.json")["carried"]
+    assert sorted(carried.values()) == ["Epic G", "Epic G (2)", "Epic G (3)"]

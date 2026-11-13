@@ -1158,18 +1158,18 @@ def sync_graph_excludes(ctx):
 
 
 def newly_excluded_sources(ctx, scanned_rel):
-    """Graph source files that still exist in staging but are no longer scanned (now excluded).
+    """Graph source files that are no longer scanned: excluded by the rules, or gone from staging.
 
-    graphify's update flow prunes only deleted files, so nodes of a file that became excluded would
-    stay in the graph for good; these must be passed to build_merge as prune_sources too.
+    graphify's update flow prunes only files its manifest knows were deleted. Nodes of a file that
+    became excluded, or of a file that left staging without ever being stamped in the manifest
+    (e.g. one flagged partial), would stay in the graph for good; these go into prune_sources too.
     """
     graph = read_json(ctx.out / "graphify-out/graph.json") or {}
     scanned = set(scanned_rel)
-    staging = ctx.out / "staging"
     out = set()
     for n in graph.get("nodes", []):
         sf = rel_to_staging(ctx, n.get("source_file") or "")
-        if sf and not sf.startswith("/") and sf not in scanned and (staging / sf).is_file():
+        if sf and not sf.startswith("/") and sf not in scanned:
             out.add(sf)
     return sorted(out)
 
@@ -1316,12 +1316,17 @@ def cmd_graph_labels(args):
             carried[cid] = votes.most_common(1)[0][0]
         else:
             todo[cid] = [new_nodes.get(m, {}).get("label", m) for m in members[:12]]
-    seen = Counter()
+    # Largest community keeps the plain label; the rest get the next free " (n)" suffix. Old labels
+    # may already carry suffixes, so check against every label handed out, not a per-base counter.
+    used = set()
     for cid in sorted(carried, key=lambda c: -len(analysis["communities"][c])):
-        base = carried[cid]
-        seen[base] += 1
-        if seen[base] > 1:
-            carried[cid] = f"{base} ({seen[base]})"
+        base = re.sub(r" \(\d+\)$", "", carried[cid])
+        name, n = base, 1
+        while name in used:
+            n += 1
+            name = f"{base} ({n})"
+        carried[cid] = name
+        used.add(name)
     out = {"carried": carried, "needs_name": todo}
     write_json(ctx.kgdir / "labels-proposed.json", out)
     print(f"labels: carried {len(carried)} of {len(analysis['communities'])} communities; "
