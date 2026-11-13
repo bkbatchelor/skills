@@ -648,3 +648,11 @@ def test_graph_check_counts_fixup_merges_as_explained(env):
     (ctx.out / "graph-fixups.yaml").write_text("merge:\n  - {drop: a_dup, into: a}\n")
     kg.write_json(g / ".graphify_extract.json", graph([("a", "x.md", None)]))
     assert kg.cmd_graph_check(argparse.Namespace(repo=str(env.repo), new=None)) == 0
+
+
+def test_apply_fixups_keeps_one_edge_per_pair():
+    g = {"directed": False, "nodes": [{"id": "a"}, {"id": "a2"}, {"id": "b"}],
+         "links": [{"source": "a", "target": "b", "relation": "references", "confidence_score": 0.75},
+                   {"source": "b", "target": "a2", "relation": "shares_data_with", "confidence_score": 0.95}]}
+    st = kg.apply_fixups(g, {"merge": [{"drop": "a2", "into": "a"}], "links": []})
+    assert st["dup_edges"] == 1 and len(g["links"]) == 1 and g["links"][0]["relation"] == "shares_data_with"
