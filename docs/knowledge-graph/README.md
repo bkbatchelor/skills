@@ -21,6 +21,7 @@ The `kg` script handles every mechanical step, including the workarounds that us
   - A list of oversized files that need their own extraction chunk.
   - Lost nodes sorted into "from changed files" and "unexplained" before `force=True`.
   - Community labels carried forward wherever at least 50% of a community's labelled members agree.
+- **Graph excludes**: `graph.excludes` in `kg.yaml` holds the rules for which staged files reach the graph, as gitignore-style patterns such as `*.xlsx.md` or `!/specs/api/decp.openapi.yaml.md`. kg writes them into graphify's exclude file before each run, so new files follow the rules too, and it prunes the nodes of files the rules newly exclude.
 - **Manifest re-keying**: rewrites graphify manifests written by older versions so that `--update` only re-extracts the files that changed.
 - **Links**: the repo's `graphify-out` and `.docs-curator` symlinks are written as `$HOME` paths, so they work on other machines.
 - **Code**: `kg code` runs `codegraph sync` on any branch and keeps codegraph's telemetry off.

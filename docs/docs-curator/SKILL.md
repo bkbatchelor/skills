@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify on the docs only after the user approves. Requires the heavy-file-ingestion skill to convert PDF, Word, Excel and PowerPoint files to Markdown. Skip for a single file (use heavy-file-ingestion), for source-code structure or call graphs (use code-graph), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.8.1
+  version: 1.9.0
 ---
 
 # Docs Curator
@@ -38,7 +38,7 @@ Building the docs graph (steps 6 and 7) also needs Graphify (`uv tool install gr
 
 The output folder defaults to `~/curated/<project-name>/`, where `<project-name>` is the basename of `--source`. Omit `--out` to use it; a different `--out` must still be outside `--source`. Everything generated lives there: `staging/`, `.docs-curator/` and `graphify-out/`. Nothing generated goes in the project folder.
 
-1. **Analyze.** `$RUN python $SKILL/scripts/curate.py analyze --source <src> --out <out>`. It inventories and hashes the files, extracts text (converting binary documents with `heavy-file-ingestion`), groups duplicates, finds revision chains and topic clusters, and writes one queue item per cluster to `<out>/.docs-curator/work/queue/<cluster_id>.json`. Re-running costs nothing for unchanged files.
+1. **Analyze.** `$RUN python $SKILL/scripts/curate.py analyze --source <src> --out <out>`. It inventories and hashes the files, extracts text (converting binary documents with `heavy-file-ingestion`), groups duplicates, finds revision chains and topic clusters, and writes one queue item per cluster to `<out>/.docs-curator/work/queue/<cluster_id>.json`. Re-running costs nothing for unchanged files. Pass `--no-extract <glob>` (repeatable, source-relative) for folders whose text must never be read, such as PHI. Matching files are hashed for change detection but never opened, and `apply` excludes them with reason `no_extract`, which no override can rescue. Pass the same globs to `update`.
 2. **Review each queued cluster** (the LLM phase, done by you):
    - Read the queue item, then each member's `text_path`. Read the first ~6,000 words by default (`read_words` in the item). For longer members, diff them against the others instead of reading end to end. If you did not read everything, set `partial_read: true`.
    - Decide whether any member **supersedes** another (a later revision, an updated copy) and whether members **contradict** each other on a fact (numbers, dates, limits, owners).
@@ -89,6 +89,7 @@ A Markdown doc (an ADR, a design note) can declare which code it constrains with
 
 ## What staging looks like
 
+- Every staged text file ends with a newline, so line counters (graphify's coverage check, `wc -l`) read it in full.
 - Every kept document except `.pptx` becomes Markdown named `<source path>.md` (a source `.md` keeps its name), with front matter: `source_path`, `source_format`, `sha256`, `status`, `description`. Text only: layout, images and formatting of PDF, Word and Excel files are not carried over; XML, JSON, CSV and YAML are kept verbatim in a fenced block (structure preserved).
 - A kept `.pptx` becomes `<name>.pptx.pdf` plus `<name>.pptx.notes.md` (speaker notes).
 - `_curated/CONFLICTS.md` lists contradictions; `_curated/historical/` holds superseded files that had unique content.
