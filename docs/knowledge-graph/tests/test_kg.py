@@ -457,3 +457,18 @@ def test_readme_example_kg_yaml_is_valid():
     block = re.search(r"## Example kg.yaml.*?```yaml\n(.*?)```", md, re.S).group(1)
     cfg = kg.validate_config(yaml.safe_load(block), "README example")
     assert cfg["graph"]["excludes"] and cfg["related_repos"][0]["name"]
+
+
+def test_subset_carry_limited_to_small_fully_read(env):
+    ctx = env.ctx()
+    big = [f"d/m{i}" for i in range(1, 31)]  # 30 members > subset_max_members (25)
+    an = setup_clusters(ctx, big, big[:3], VERDICT)
+    assert kg.carry_forward(ctx, an)["carried"] == []
+    assert kg.review_state(ctx)["needs_verdict"] == ["new1"]
+
+
+def test_subset_carry_skips_partial_read(env):
+    ctx = env.ctx()
+    old = [f"d/m{i}" for i in range(1, 9)]
+    an = setup_clusters(ctx, old, old[:3], {**VERDICT, "partial_read": True})
+    assert kg.carry_forward(ctx, an)["carried"] == []
