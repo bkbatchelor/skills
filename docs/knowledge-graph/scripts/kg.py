@@ -101,6 +101,7 @@ known_excluded_keepers: []
 carry_forward:
   verdict_overlap: 0.8       # Jaccard overlap to copy a verdict to a re-numbered cluster
   label_agreement: 0.5       # share of labelled members that must agree to reuse a community label
+  subset_max_members: 25     # a cluster that only lost members inherits the verdict of an old one this small
 
 graph:
   cost_cap_tokens: 1500000   # an estimate above this needs a separate explicit yes
@@ -286,6 +287,9 @@ def validate_config(cfg, path):
     gx = (cfg.get("graph") or {}).get("excludes")
     if gx is not None and (not isinstance(gx, list) or not all(isinstance(x, str) and x.strip() for x in gx)):
         die(f"{path}: graph.excludes must be a list of gitignore-style patterns (relative to staging/)")
+    smax = (cfg.get("carry_forward") or {}).get("subset_max_members")
+    if smax is not None and (not isinstance(smax, int) or isinstance(smax, bool) or smax < 1):
+        die(f"{path}: carry_forward.subset_max_members must be a whole number of at least 1")
     for k in ("verdict_overlap", "label_agreement"):
         v = (cfg.get("carry_forward") or {}).get(k)
         if v is not None and not (0 < float(v) <= 1):
@@ -706,6 +710,7 @@ def carry_verdict(verdict, new_id, members, moved, info):
 def carry_forward(ctx, analysis):
     """Copy verdicts to queued clusters that are re-numbered versions of a judged cluster."""
     threshold = float(ctx.get("carry_forward", "verdict_overlap", default=0.8))
+    subset_max = int(ctx.get("carry_forward", "subset_max_members", default=25))
     vdir, sdir = ctx.work / "work/verdicts", ctx.work / "work/verdicts-stale"
     vdir.mkdir(parents=True, exist_ok=True)
     reg = read_json(registry_path(ctx), {})
@@ -737,12 +742,18 @@ def carry_forward(ctx, analysis):
         score, vid, vfile, tm = best
         # A cluster that only lost members (it is a subset of a judged cluster) is still fully covered
         # by that verdict, however low the overlap ratio; e.g. PHI copies dropping out of a form cluster.
+        # Only a thorough review is passed down: a small old cluster (a reviewer could read every
+        # member) whose verdict was not a partial read. A large cluster's shallow review would
+        # otherwise be inherited by every piece it splits into.
         subset = None
         for vid2, vfile2 in sources.items():
             old2, moved2 = translate_paths(reg[vid2], cur_paths, cur_by_sha)
-            if members and set(members) <= set(old2):
-                if subset is None or len(old2) < len(subset[2][0]):
-                    subset = (vid2, vfile2, (old2, moved2))
+            if not members or not set(members) <= set(old2) or len(old2) > subset_max:
+                continue
+            if (read_json(vfile2) or {}).get("partial_read"):
+                continue
+            if subset is None or len(old2) < len(subset[2][0]):
+                subset = (vid2, vfile2, (old2, moved2))
         if subset and (vid is None or score < threshold):
             vid, vfile, tm = subset
             score = jaccard(tm[0], members)

@@ -12,7 +12,7 @@ The `kg` script handles every mechanical step, including the workarounds that us
 - **Gate**: the docs steps only run on `main`, `develop` or `develop-*` with a clean working tree, so the graph reflects only reviewed, merged content. `--allow-any-branch` overrides this, and every override is logged.
 - **PHI**: paths listed in `phi_globs` are always excluded. Their extracted text is purged after every analyze. Any trace of them in the text cache, staging or the graph stops the run with exit code 4.
 - **Overrides**: `overrides.yaml` is generated from git (only tracked documents are staged) plus the exclude groups in `kg.yaml` and your hand decisions in `overrides.manual.yaml`. The file rules are imported from docs-curator's `curate.py`, so they can't drift from it.
-- **Verdict carry-forward**: when a cluster gets a new ID because a member changed, its verdict is copied across if the old and new member sets overlap by at least 80%. Moved files are followed. Only the new members are listed for review.
+- **Verdict carry-forward**: when a cluster gets a new ID because a member changed, its verdict is copied across if the old and new member sets overlap by at least 80%. Moved files are followed. Only the new members are listed for review. A cluster that only lost members keeps its old verdict when that cluster had at most 25 members and was read in full; otherwise it gets a full review.
 - **Auto-close**: a cluster where fewer than two members can reach staging gets a verdict marked `kg_auto`, because there is nothing to judge. The verdict is reopened automatically if an override change gives it a second member that can reach staging.
 - **Keeper check**: catches documents that silently left staging because their duplicate's keeper is also excluded.
 - **Snapshots**: the graph, graphify's semantic cache, the docs-curator state, per-file decisions and the verdicts are saved before each curate and each graph run. The last 3 are kept, and `kg restore` puts one back. Unchanged state is not snapshotted twice, and the snapshot an unfinished graph run started from is never pruned, so retries can't push out the last good graph.
@@ -70,6 +70,7 @@ known_excluded_keepers: []           # excluded files whose keeper is also exclu
 carry_forward:
   verdict_overlap: 0.8               # copy a verdict to a re-numbered cluster at this member overlap
   label_agreement: 0.5               # reuse a community label when this share of members agrees
+  subset_max_members: 25             # a cluster that only lost members keeps the verdict of an old one this small
 
 graph:
   cost_cap_tokens: 1500000           # an estimate above this needs a separate, explicit yes
