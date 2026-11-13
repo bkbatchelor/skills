@@ -514,3 +514,25 @@ def test_graph_labels_mostly_new_community_gets_fresh_name(env):
     kg.cmd_graph_labels(argparse.Namespace(repo=str(env.repo)))
     out = kg.read_json(ctx.kgdir / "labels-proposed.json")
     assert out["carried"] == {} and "0" in out["needs_name"]
+
+
+def test_prepare_prunes_phi_already_in_graph(env, monkeypatch):
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "a.md").write_text("x\n")
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a1", "docs/a.md", None), ("p1", "out/phi/app.md", None)]))
+    (ctx.repo / "graphify-out").symlink_to(g, target_is_directory=True)
+
+    def fake_run(cmd, **kw):  # graphify detection: only docs/a.md is scanned
+        return argparse.Namespace(stdout=json.dumps({"new_files": {}, "deleted": [], "files": [str(st / "a.md")],
+                                                     "total_files": 1, "new_total": 0}))
+    monkeypatch.setattr(kg, "run", fake_run)
+    monkeypatch.setattr(kg, "graphify_python", lambda ctx: "python")
+    assert kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True)) == 0
+    plan = kg.read_json(ctx.kgdir / "graph-plan.json")
+    assert plan["phi_pruned"] == ["out/phi/app.md"] and "out/phi/app.md" in plan["excluded"]
+    with pytest.raises(SystemExit) as e:  # finish refuses while the PHI node is still in the graph
+        kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
+    assert e.value.code == kg.EXIT_PHI
