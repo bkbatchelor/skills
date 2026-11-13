@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.2.2
+  version: 1.3.0
 ---
 
 # Knowledge Graph
@@ -62,6 +62,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
    - **After the merge step and before Step 4**, run `kg graph check`.
      - Exit 0: every lost node comes from a changed, deleted or newly excluded file, so if `to_json`'s shrink guard refuses, pass `force=True`.
      - Exit 3: show the user the unexplained losses. Use `force=True` only after they accept them; otherwise stop and offer `kg restore`.
+   - **Right after `kg graph check`**, run `kg graph fixups`. It applies `~/curated/<repo>/graph-fixups.yaml` to the merged extraction before graphify builds and clusters: `links` to add, `merge` entries that fold a duplicate node into the one to keep, and self-loops always dropped. Nodes removed by a listed merge count as explained in `kg graph check`. Add a fixup only after checking that the two nodes are the same thing, not two instances (for example the same clause on two forms).
    - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique. A community is carried only if at least `label_min_known` of its members had a label before, so a community made mostly of new material always gets a fresh name.
 7. **`kg graph finish`**: checks the new graph for PHI, records the run, and prunes old snapshots. Report the node, edge and community counts and the query line.
 8. **`kg code`**: runs `codegraph sync`. It works on any branch, because the code index follows the current checkout.

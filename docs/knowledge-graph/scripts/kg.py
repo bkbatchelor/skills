@@ -1288,6 +1288,119 @@ def cmd_graph_prepare(args):
     return 0
 
 
+def load_fixups(ctx):
+    """~/curated/<repo>/graph-fixups.yaml: hand-reviewed corrections kg re-applies after every run.
+
+      links: [{source, target, relation, note}]   edges to add (skipped if an endpoint is missing)
+      merge: [{drop, into, note}]                 fold a duplicate node into the one to keep
+    Self-loop edges are always dropped.
+    """
+    path = ctx.out / "graph-fixups.yaml"
+    if not path.exists():
+        return {"links": [], "merge": []}
+    data = load_yaml(path) or {}
+    unknown = sorted(set(data) - {"links", "merge"})
+    if unknown:
+        die(f"unknown keys in {path}: {', '.join(unknown)}")
+    for item in data.get("links") or []:
+        if not isinstance(item, dict) or not item.get("source") or not item.get("target"):
+            die(f"{path}: each link needs source and target: {item!r}")
+    for item in data.get("merge") or []:
+        if not isinstance(item, dict) or not item.get("drop") or not item.get("into") or item["drop"] == item["into"]:
+            die(f"{path}: each merge needs distinct drop and into: {item!r}")
+    return {"links": list(data.get("links") or []), "merge": list(data.get("merge") or [])}
+
+
+def apply_fixups(graph, fixups):
+    """Apply fixups to a graphify graph dict (nodes plus links or edges). Idempotent. Returns counts."""
+    ekey = "links" if "links" in graph else "edges"
+    nodes = {n["id"]: n for n in graph.get("nodes", [])}
+    stats = {"merged": 0, "merge_skipped": [], "linked": 0, "link_skipped": [], "self_loops": 0, "dup_edges": 0}
+    rename = {}
+    for m in fixups.get("merge", []):
+        drop, into = m["drop"], m["into"]
+        if drop not in nodes:
+            continue  # already merged, or not extracted this time
+        if into not in nodes:
+            stats["merge_skipped"].append(f"{drop} -> {into} (target missing)")
+            continue
+        keep = nodes[into]
+        keep["aliases"] = sorted(set(keep.get("aliases") or []) | {drop} | set(nodes[drop].get("aliases") or []))
+        rename[drop] = into
+        del nodes[drop]
+        stats["merged"] += 1
+    def res(x):
+        seen = set()
+        while x in rename and x not in seen:
+            seen.add(x)
+            x = rename[x]
+        return x
+    directed = bool(graph.get("directed"))
+    # graphify builds a simple graph: one edge per node pair (per direction when directed). Merging can
+    # leave two edges between the same pair; keep the strongest so nothing collapses silently.
+    pair = (lambda a, b: (a, b)) if directed else (lambda a, b: tuple(sorted((a, b))))
+    best = {}
+    for e in graph.get(ekey, []):
+        e = dict(e)
+        e["source"], e["target"] = res(e["source"]), res(e["target"])
+        if e["source"] == e["target"]:
+            stats["self_loops"] += 1
+            continue
+        k = pair(e["source"], e["target"])
+        if k in best:
+            stats["dup_edges"] += 1
+            if float(e.get("confidence_score") or 0) > float(best[k].get("confidence_score") or 0):
+                best[k] = e
+            continue
+        best[k] = e
+    edges = list(best.values())
+    seen_edges = {(e["source"], e["target"], e.get("relation")) for e in edges} | set(best)
+    for l in fixups.get("links", []):
+        src, tgt = l["source"], l["target"]
+        if src not in nodes or tgt not in nodes:
+            stats["link_skipped"].append(f"{src} -> {tgt}")
+            continue
+        k = (src, tgt, l.get("relation", "references"))
+        if pair(src, tgt) in best:
+            continue  # the pair is already connected
+        best[pair(src, tgt)] = True
+        seen_edges.add(k)
+        edges.append({"source": src, "target": tgt, "relation": k[2], "confidence": "INFERRED",
+                      "confidence_score": float(l.get("confidence_score", 0.95)), "weight": 1.0,
+                      "source_file": nodes[src].get("source_file"), "source_location": None,
+                      "_origin": "kg_fixup", "note": l.get("note", "")})
+        stats["linked"] += 1
+    for h in graph.get("hyperedges", []) or []:
+        h["nodes"] = list(dict.fromkeys(res(x) for x in h.get("nodes", [])))
+    graph["nodes"] = list(nodes.values())
+    graph[ekey] = edges
+    return stats
+
+
+def fixups_summary(stats):
+    return (f"merged {stats['merged']}, linked {stats['linked']}, dropped {stats['self_loops']} self-loop(s) "
+            f"and {stats['dup_edges']} duplicate edge(s)"
+            + (f"; {len(stats['merge_skipped'])} merge(s) skipped" if stats["merge_skipped"] else "")
+            + (f"; {len(stats['link_skipped'])} link(s) skipped (endpoint missing)" if stats["link_skipped"] else ""))
+
+
+def cmd_graph_fixups(args):
+    """Apply graph-fixups.yaml to the merged extraction (before graphify builds and clusters)."""
+    ctx = Ctx(args.repo)
+    gdir = ctx.out / "graphify-out"
+    target = Path(args.file) if args.file else (gdir / ".graphify_extract.json" if (gdir / ".graphify_extract.json").exists() else gdir / "graph.json")
+    data = read_json(target)
+    if data is None:
+        die(f"{target} not found")
+    stats = apply_fixups(data, load_fixups(ctx))
+    target.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    ctx.log("graph fixups", file=target.name, **{k: (len(v) if isinstance(v, list) else v) for k, v in stats.items()})
+    print(f"fixups ({target.name}): {fixups_summary(stats)}")
+    for x in stats["merge_skipped"] + stats["link_skipped"]:
+        print(f"  skipped: {x}")
+    return 0
+
+
 def plan_or_die(ctx):
     plan = read_json(ctx.kgdir / "graph-plan.json")
     if not plan:
@@ -1314,8 +1427,13 @@ def cmd_graph_check(args):
     on, nn = node_index(old), node_index(new)
     lost = sorted(set(on) - set(nn))
     touched = set(plan["changed"]) | set(plan["deleted"]) | set(plan.get("excluded", []))
+    merged_away = {m["drop"] for m in load_fixups(ctx)["merge"]}  # folded into another node on purpose
     explained, unexplained = [], []
     for nid in lost:
+        if nid in merged_away:
+            explained.append({"id": nid, "source_file": on[nid].get("source_file"), "label": on[nid].get("label"),
+                              "why": "merged by graph-fixups.yaml"})
+            continue
         sf = rel_to_staging(ctx, on[nid].get("source_file") or "")
         (explained if sf in touched else unexplained).append({"id": nid, "source_file": sf,
                                                                "label": on[nid].get("label")})
@@ -1384,7 +1502,13 @@ def cmd_graph_labels(args):
 def cmd_graph_finish(args):
     ctx = Ctx(args.repo)
     phi_gate(ctx, ("graph",), "graph finish")
-    g = read_json(ctx.out / "graphify-out/graph.json") or {}
+    gpath = ctx.out / "graphify-out/graph.json"
+    g = read_json(gpath) or {}
+    stats = apply_fixups(g, load_fixups(ctx))  # no-op when `kg graph fixups` already ran
+    if stats["merged"] or stats["linked"] or stats["self_loops"] or stats["dup_edges"]:
+        gpath.write_text(json.dumps(g, ensure_ascii=False, indent=2), encoding="utf-8")
+        warn(f"graph fixups were not applied before the build; applied to graph.json now ({fixups_summary(stats)}). "
+             "Run `kg graph fixups` before graphify's Step 4 next time so communities reflect them.")
     plan = read_json(ctx.kgdir / "graph-plan.json") or {}
     # A prune-only pass (or a run that skipped files) leaves planned files unextracted; remember them
     # so `kg status` does not report the graph as up to date while they are still queued.
@@ -1690,6 +1814,7 @@ def build_parser():
     for name, fn, help_ in (("prepare", cmd_graph_prepare, "PHI check, snapshot, changed files, cost estimate"),
                             ("check", cmd_graph_check, "classify node loss against the snapshot"),
                             ("labels", cmd_graph_labels, "carry community labels forward"),
+                            ("fixups", cmd_graph_fixups, "apply graph-fixups.yaml (merges, links, no self-loops)"),
                             ("finish", cmd_graph_finish, "PHI check the new graph, prune, log")):
         p = g.add_parser(name, help=help_, description=help_)
         p.add_argument("--repo")
@@ -1697,6 +1822,8 @@ def build_parser():
             p.add_argument("--allow-any-branch", action="store_true")
         if name == "check":
             p.add_argument("--new", help="graph to compare (default .graphify_extract.json, else graph.json)")
+        if name == "fixups":
+            p.add_argument("--file", help="graph file to fix (default .graphify_extract.json, else graph.json)")
         p.set_defaults(fn=fn)
     add("code", cmd_code, "codegraph sync (any branch)")
     add("status", cmd_status, "pipeline state and next step")
