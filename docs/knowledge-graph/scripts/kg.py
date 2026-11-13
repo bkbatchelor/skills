@@ -520,7 +520,30 @@ def rel_to_staging(ctx, path):
 # ----------------------------------------------------------------------------- snapshots
 
 
+def tree_digest(ctx):
+    """Content hash of everything a snapshot would copy, to skip identical snapshots."""
+    import hashlib
+
+    h = hashlib.sha256()
+    for _, rel in SNAPSHOT_FILES:
+        src = ctx.out / rel
+        files = sorted(f for f in src.rglob("*") if f.is_file()) if src.is_dir() else ([src] if src.exists() else [])
+        for f in files:
+            h.update(str(f.relative_to(ctx.out)).encode())
+            with open(f, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+    return h.hexdigest()
+
+
 def snapshot(ctx, reason):
+    """Copy the restorable state to backups/<ts>/. An unchanged state reuses the latest snapshot,
+    so retries cannot push older, different snapshots out of the retention window."""
+    digest = tree_digest(ctx)
+    snaps = snapshots(ctx)
+    if snaps and read_json(snaps[-1] / "SNAPSHOT.json", {}).get("digest") == digest:
+        print(f"snapshot: state unchanged since {snaps[-1].name}; reusing it (reason: {reason})")
+        return snaps[-1]
     ts = now_ts()
     dest = ctx.out / "backups" / ts
     n = 0
@@ -535,7 +558,7 @@ def snapshot(ctx, reason):
         else:
             shutil.copy2(src, tgt)
         n += 1
-    write_json(dest / "SNAPSHOT.json", {"reason": reason, "at": ts, "items": n,
+    write_json(dest / "SNAPSHOT.json", {"reason": reason, "at": ts, "items": n, "digest": digest,
                                         "head": git(ctx.repo, "rev-parse", "HEAD")})
     prune_snapshots(ctx)
     print(f"snapshot: {dest} ({n} item(s), reason: {reason})")
@@ -548,8 +571,14 @@ def snapshots(ctx):
 
 
 def prune_snapshots(ctx):
+    """Keep the newest backups.keep snapshots, plus the one an unfinished graph run started from
+    (that is the last good graph; retries of a failed run must never push it out)."""
     keep = int(ctx.get("backups", "keep", default=3))
+    plan = read_json(ctx.kgdir / "graph-plan.json") or {}
+    pinned = plan.get("snapshot")
     for old in snapshots(ctx)[:-keep]:
+        if old.name == pinned:
+            continue
         shutil.rmtree(old)
 
 
@@ -1033,7 +1062,15 @@ def cmd_graph_prepare(args):
     if not (ctx.repo / "graphify-out").is_symlink():
         die("graphify-out symlink missing in the repo; run `kg apply` first")
     phi_gate(ctx, ("cache", "staging", "graph"), "graph prepare")
-    snap = snapshot(ctx, "before graph")
+    open_plan = read_json(ctx.kgdir / "graph-plan.json")
+    if open_plan and (ctx.out / "backups" / open_plan.get("snapshot", "-")).is_dir():
+        # An earlier graph run never reached `kg graph finish`: the graph on disk may be half-written.
+        # Keep the snapshot that run started from as the restore point instead of snapshotting again.
+        snap = ctx.out / "backups" / open_plan["snapshot"]
+        warn(f"an earlier graph run did not finish; keeping its pre-run snapshot {snap.name} as the restore point. "
+             f"If that run left a broken graph, `kg restore {snap.name} --only graph --yes` before retrying.")
+    else:
+        snap = snapshot(ctx, "before graph")
     rekeyed = fix_manifest_anchor(ctx)
     staging = ctx.out / "staging"
     r = run([graphify_python(ctx), "-c", DETECT_SNIPPET, staging], cwd=ctx.repo, capture=True)

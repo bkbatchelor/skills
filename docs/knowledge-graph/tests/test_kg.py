@@ -354,3 +354,19 @@ def test_auto_close_reopens_after_include(env):
     # a hand-written verdict is never reopened
     kg.write_json(ctx.work / "work/verdicts/c1.json", {"cluster_id": "c1", "reviewed": True})
     assert kg.reopen_auto(ctx, an) == []
+
+
+def test_snapshot_dedup_and_pin(env, monkeypatch):
+    ctx = env.ctx()
+    g = ctx.out / "graphify-out/graph.json"
+    kg.write_json(g, {"v": "good"})
+    monkeypatch.setattr(kg, "now_ts", lambda: "20260101T000000")
+    good = kg.snapshot(ctx, "before graph")
+    assert kg.snapshot(ctx, "retry").name == good.name  # unchanged state: no new snapshot
+    kg.write_json(ctx.kgdir / "graph-plan.json", {"snapshot": good.name, "changed": [], "deleted": []})
+    for i in range(5):  # failed retries, each with a different broken graph
+        kg.write_json(g, {"v": f"broken{i}"})
+        monkeypatch.setattr(kg, "now_ts", lambda i=i: f"2026010{i + 2}T000000")
+        kg.snapshot(ctx, "before curate")
+    names = [s.name for s in kg.snapshots(ctx)]
+    assert good.name in names and len(names) == 4  # newest 3 plus the pinned pre-run snapshot

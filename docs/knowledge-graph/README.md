@@ -15,7 +15,7 @@ The `kg` script handles every mechanical step, including the workarounds that us
 - **Verdict carry-forward**: when a cluster gets a new ID because a member changed, its verdict is copied across if the old and new member sets overlap by at least 80%. Moved files are followed. Only the new members are listed for review.
 - **Auto-close**: a cluster where fewer than two members can reach staging gets a verdict marked `kg_auto`, because there is nothing to judge. The verdict is reopened automatically if an override change gives it a second member that can reach staging.
 - **Keeper check**: catches documents that silently left staging because their duplicate's keeper is also excluded.
-- **Snapshots**: the graph, graphify's semantic cache, the docs-curator state and the verdicts are saved before each curate and each graph run. The last 3 are kept, and `kg restore` puts one back.
+- **Snapshots**: the graph, graphify's semantic cache, the docs-curator state and the verdicts are saved before each curate and each graph run. The last 3 are kept, and `kg restore` puts one back. Unchanged state is not snapshotted twice, and the snapshot an unfinished graph run started from is never pruned, so retries can't push out the last good graph.
 - **Graph runs**:
   - A token-cost estimate from `cost.json`, with a cap.
   - A list of oversized files that need their own extraction chunk.
