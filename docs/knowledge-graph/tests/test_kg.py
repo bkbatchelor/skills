@@ -608,3 +608,43 @@ def test_estimate_counts_long_files(env, monkeypatch):
     kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True))
     plan = kg.read_json(ctx.kgdir / "graph-plan.json")
     assert plan["long_files"] == ["docs/long.json.md"] and plan["estimated_chunks"] == 2  # 3 small + 1 long
+
+
+def test_apply_fixups_merge_link_selfloop_idempotent():
+    g = {"nodes": [{"id": "a"}, {"id": "a_dup"}, {"id": "b"}, {"id": "c"}],
+         "links": [{"source": "a_dup", "target": "b", "relation": "references"},
+                   {"source": "a", "target": "b", "relation": "references"},
+                   {"source": "a", "target": "a_dup", "relation": "semantically_similar_to"},
+                   {"source": "c", "target": "c", "relation": "references"}],
+         "hyperedges": [{"id": "h", "nodes": ["a", "a_dup", "b"]}]}
+    fx = {"merge": [{"drop": "a_dup", "into": "a"}], "links": [{"source": "c", "target": "b", "relation": "calls"},
+                                                              {"source": "c", "target": "missing"}]}
+    st = kg.apply_fixups(g, fx)
+    assert st["merged"] == 1 and st["linked"] == 1 and st["self_loops"] == 2 and st["dup_edges"] == 1
+    assert {n["id"] for n in g["nodes"]} == {"a", "b", "c"} and next(n for n in g["nodes"] if n["id"] == "a")["aliases"] == ["a_dup"]
+    assert sorted((e["source"], e["target"], e["relation"]) for e in g["links"]) == [("a", "b", "references"), ("c", "b", "calls")]
+    assert g["hyperedges"][0]["nodes"] == ["a", "b"] and st["link_skipped"] == ["c -> missing"]
+    st2 = kg.apply_fixups(g, fx)  # second run changes nothing
+    assert st2["merged"] == st2["linked"] == st2["self_loops"] == st2["dup_edges"] == 0
+
+
+def test_graph_fixups_command_and_finish(env):
+    ctx = env.ctx()
+    (ctx.out / "graph-fixups.yaml").write_text("merge:\n  - {drop: x2, into: x1}\n")
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", {"nodes": [{"id": "x1", "source_file": "d/a.md"}, {"id": "x2", "source_file": "d/b.md"}], "links": []})
+    kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))  # finish applies fixups it finds unapplied
+    assert [n["id"] for n in kg.read_json(g / "graph.json")["nodes"]] == ["x1"]
+    (ctx.out / "graph-fixups.yaml").write_text("bogus: 1\n")
+    with pytest.raises(SystemExit):
+        kg.load_fixups(ctx)
+
+
+def test_graph_check_counts_fixup_merges_as_explained(env):
+    ctx = env.ctx()
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "x.md", None), ("a_dup", "y.md", None)]))
+    make_plan(ctx, changed=[])
+    (ctx.out / "graph-fixups.yaml").write_text("merge:\n  - {drop: a_dup, into: a}\n")
+    kg.write_json(g / ".graphify_extract.json", graph([("a", "x.md", None)]))
+    assert kg.cmd_graph_check(argparse.Namespace(repo=str(env.repo), new=None)) == 0
