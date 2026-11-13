@@ -101,6 +101,8 @@ known_excluded_keepers: []
 carry_forward:
   verdict_overlap: 0.8       # Jaccard overlap to copy a verdict to a re-numbered cluster
   label_agreement: 0.5       # share of labelled members that must agree to reuse a community label
+  label_min_known: 0.5       # ...and share of all members that must have had a label before
+  subset_max_members: 25     # a cluster that only lost members inherits the verdict of an old one this small
 
 graph:
   cost_cap_tokens: 1500000   # an estimate above this needs a separate explicit yes
@@ -286,7 +288,10 @@ def validate_config(cfg, path):
     gx = (cfg.get("graph") or {}).get("excludes")
     if gx is not None and (not isinstance(gx, list) or not all(isinstance(x, str) and x.strip() for x in gx)):
         die(f"{path}: graph.excludes must be a list of gitignore-style patterns (relative to staging/)")
-    for k in ("verdict_overlap", "label_agreement"):
+    smax = (cfg.get("carry_forward") or {}).get("subset_max_members")
+    if smax is not None and (not isinstance(smax, int) or isinstance(smax, bool) or smax < 1):
+        die(f"{path}: carry_forward.subset_max_members must be a whole number of at least 1")
+    for k in ("verdict_overlap", "label_agreement", "label_min_known"):
         v = (cfg.get("carry_forward") or {}).get(k)
         if v is not None and not (0 < float(v) <= 1):
             die(f"{path}: carry_forward.{k} must be in (0, 1]")
@@ -706,6 +711,7 @@ def carry_verdict(verdict, new_id, members, moved, info):
 def carry_forward(ctx, analysis):
     """Copy verdicts to queued clusters that are re-numbered versions of a judged cluster."""
     threshold = float(ctx.get("carry_forward", "verdict_overlap", default=0.8))
+    subset_max = int(ctx.get("carry_forward", "subset_max_members", default=25))
     vdir, sdir = ctx.work / "work/verdicts", ctx.work / "work/verdicts-stale"
     vdir.mkdir(parents=True, exist_ok=True)
     reg = read_json(registry_path(ctx), {})
@@ -735,9 +741,26 @@ def carry_forward(ctx, analysis):
             if score > best[0]:
                 best = (score, vid, vfile, (old, moved))
         score, vid, vfile, tm = best
-        if vid is None:
+        # A cluster that only lost members (it is a subset of a judged cluster) is still fully covered
+        # by that verdict, however low the overlap ratio; e.g. PHI copies dropping out of a form cluster.
+        # Only a thorough review is passed down: a small old cluster (a reviewer could read every
+        # member) whose verdict was not a partial read. A large cluster's shallow review would
+        # otherwise be inherited by every piece it splits into.
+        subset = None
+        for vid2, vfile2 in sources.items():
+            old2, moved2 = translate_paths(reg[vid2], cur_paths, cur_by_sha)
+            if not members or not set(members) <= set(old2) or len(old2) > subset_max:
+                continue
+            if (read_json(vfile2) or {}).get("partial_read"):
+                continue
+            if subset is None or len(old2) < len(subset[2][0]):
+                subset = (vid2, vfile2, (old2, moved2))
+        if subset and (vid is None or score < threshold):
+            vid, vfile, tm = subset
+            score = jaccard(tm[0], members)
+        elif vid is None:
             continue
-        if score < threshold:
+        elif score < threshold:
             below.append({"cluster": q, "best": vid, "overlap": round(score, 3)})
             continue
         old, moved = tm
@@ -1078,6 +1101,43 @@ def fix_manifest_anchor(ctx):
     return fixed
 
 
+def restamp_newline_only(ctx):
+    """Mark files unchanged in graphify's manifest when the only change is an added final newline.
+
+    docs-curator >= 1.9.0 ends every staged file with a newline. graphify's manifest hashes are MD5s
+    of file content, so a file whose old hash equals MD5(content without the final newline) is
+    proven identical apart from that byte; re-extracting it would cost tokens for nothing.
+    """
+    import hashlib
+
+    mp = ctx.out / "graphify-out/manifest.json"
+    m = read_json(mp)
+    if not isinstance(m, dict) or not m:
+        return []
+    fixed = []
+    for key, row in m.items():
+        if not isinstance(row, dict) or not key.startswith("staging/"):
+            continue
+        f = ctx.out / key
+        if not f.is_file():
+            continue
+        data = f.read_bytes()
+        if not data.endswith(b"\n"):
+            continue
+        full, trimmed = hashlib.md5(data).hexdigest(), hashlib.md5(data[:-1]).hexdigest()
+        hashes = {k: row.get(k) for k in ("ast_hash", "semantic_hash") if row.get(k)}
+        if hashes and all(v == trimmed for v in hashes.values()) and full != trimmed:
+            for k in hashes:
+                row[k] = full
+            row["mtime"] = f.stat().st_mtime
+            fixed.append(key[len("staging/"):])
+    if fixed:
+        mp.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"manifest: {len(fixed)} file(s) changed only by an added final newline; marked unchanged "
+              "(no re-extraction)")
+    return fixed
+
+
 def sync_graph_excludes(ctx):
     """Write kg.yaml graph.excludes into graphify's .graphify_build.json (its --exclude memory).
 
@@ -1099,18 +1159,18 @@ def sync_graph_excludes(ctx):
 
 
 def newly_excluded_sources(ctx, scanned_rel):
-    """Graph source files that still exist in staging but are no longer scanned (now excluded).
+    """Graph source files that are no longer scanned: excluded by the rules, or gone from staging.
 
-    graphify's update flow prunes only deleted files, so nodes of a file that became excluded would
-    stay in the graph for good; these must be passed to build_merge as prune_sources too.
+    graphify's update flow prunes only files its manifest knows were deleted. Nodes of a file that
+    became excluded, or of a file that left staging without ever being stamped in the manifest
+    (e.g. one flagged partial), would stay in the graph for good; these go into prune_sources too.
     """
     graph = read_json(ctx.out / "graphify-out/graph.json") or {}
     scanned = set(scanned_rel)
-    staging = ctx.out / "staging"
     out = set()
     for n in graph.get("nodes", []):
         sf = rel_to_staging(ctx, n.get("source_file") or "")
-        if sf and not sf.startswith("/") and sf not in scanned and (staging / sf).is_file():
+        if sf and not sf.startswith("/") and sf not in scanned:
             out.add(sf)
     return sorted(out)
 
@@ -1132,6 +1192,7 @@ def cmd_graph_prepare(args):
         snap = snapshot(ctx, "before graph")
     rekeyed = fix_manifest_anchor(ctx)
     excludes_changed = sync_graph_excludes(ctx)
+    restamped = restamp_newline_only(ctx)
     staging = ctx.out / "staging"
     r = run([graphify_python(ctx), "-c", DETECT_SNIPPET, staging], cwd=ctx.repo, capture=True)
     det = json.loads(r.stdout.strip().splitlines()[-1])
@@ -1162,7 +1223,8 @@ def cmd_graph_prepare(args):
     }
     write_json(ctx.kgdir / "graph-plan.json", plan)
     ctx.log("graph prepare", changed=len(changed), deleted=len(rel_deleted), excluded=len(rel_excluded),
-            estimate=estimate, manifest_rekeyed=rekeyed, excludes_changed=excludes_changed)
+            estimate=estimate, manifest_rekeyed=rekeyed, excludes_changed=excludes_changed,
+            newline_restamped=len(restamped))
     print(f"graph: {len(changed)} changed, {len(rel_deleted)} deleted, {len(rel_excluded)} newly excluded "
           f"of {det['total_files']} scanned files ({plan['mode']} run)")
     for f in rel_excluded:
@@ -1245,22 +1307,30 @@ def cmd_graph_labels(args):
                 if n.get("community_name") and not str(n.get("community_name")).startswith("Community ")}
     new_nodes = node_index(read_json(gdir / ".graphify_extract.json") or read_json(gdir / "graph.json"))
     agree = float(ctx.get("carry_forward", "label_agreement", default=0.5))
+    known_min = float(ctx.get("carry_forward", "label_min_known", default=0.5))
     carried, todo = {}, {}
     from collections import Counter
 
     for cid, members in sorted(analysis["communities"].items(), key=lambda kv: -len(kv[1])):
         votes = Counter(old_name[m] for m in members if m in old_name)
         labelled = sum(votes.values())
-        if labelled and votes.most_common(1)[0][1] / labelled >= agree:
+        # New nodes have no old name and so no vote: a community made mostly of new nodes would
+        # otherwise inherit the name of its few old members. Require enough of it to be known.
+        if labelled and labelled / len(members) >= known_min and votes.most_common(1)[0][1] / labelled >= agree:
             carried[cid] = votes.most_common(1)[0][0]
         else:
             todo[cid] = [new_nodes.get(m, {}).get("label", m) for m in members[:12]]
-    seen = Counter()
+    # Largest community keeps the plain label; the rest get the next free " (n)" suffix. Old labels
+    # may already carry suffixes, so check against every label handed out, not a per-base counter.
+    used = set()
     for cid in sorted(carried, key=lambda c: -len(analysis["communities"][c])):
-        base = carried[cid]
-        seen[base] += 1
-        if seen[base] > 1:
-            carried[cid] = f"{base} ({seen[base]})"
+        base = re.sub(r" \(\d+\)$", "", carried[cid])
+        name, n = base, 1
+        while name in used:
+            n += 1
+            name = f"{base} ({n})"
+        carried[cid] = name
+        used.add(name)
     out = {"carried": carried, "needs_name": todo}
     write_json(ctx.kgdir / "labels-proposed.json", out)
     print(f"labels: carried {len(carried)} of {len(analysis['communities'])} communities; "

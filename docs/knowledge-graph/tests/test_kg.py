@@ -417,8 +417,8 @@ def test_newly_excluded_sources_and_check(env):
     g = ctx.out / "graphify-out"
     kg.write_json(g / "graph.json", graph([("a1", "docs/a.md", None), ("f1", "docs/form.pdf.md", None),
                                            ("gone", "docs/deleted.md", None)]))
-    # form.pdf.md still exists but is no longer scanned -> must be pruned; deleted.md is graphify's job
-    assert kg.newly_excluded_sources(ctx, ["docs/a.md"]) == ["docs/form.pdf.md"]
+    # form.pdf.md still exists but is no longer scanned; deleted.md is gone and never in the manifest
+    assert kg.newly_excluded_sources(ctx, ["docs/a.md"]) == ["docs/deleted.md", "docs/form.pdf.md"]
     snap = kg.snapshot(ctx, "before graph")
     kg.write_json(ctx.kgdir / "graph-plan.json", {"snapshot": snap.name, "changed": [], "deleted": ["docs/deleted.md"],
                                                   "excluded": ["docs/form.pdf.md"]})
@@ -435,3 +435,82 @@ def test_run_curate_passes_no_extract(env, monkeypatch):
     assert seen[-1][-2:] == ["--no-extract", "out/phi/*"]  # this checkout of docs-curator supports it
     kg.run_curate(ctx, "apply")
     assert "--no-extract" not in seen[-1]
+
+
+def test_carry_forward_subset_below_threshold(env):
+    ctx = env.ctx()
+    old = [f"d/m{i}" for i in range(1, 9)]
+    new = old[:3]  # 3/8 overlap, but nothing was added: the old verdict covers every member
+    an = setup_clusters(ctx, old, new, VERDICT)
+    res = kg.carry_forward(ctx, an)
+    assert [c["cluster"] for c in res["carried"]] == ["new1"] and not res["below_threshold"]
+    v = kg.read_json(ctx.work / "work/verdicts/new1.json")
+    assert v["carried_forward"]["review_done"] is True and v["carried_forward"]["new_members"] == []
+    assert v["revisions"] and v["conflicts"] == []  # the m3/m4 conflict lost m4, so it is dropped
+    assert kg.review_state(ctx)["needs_verdict"] == []
+
+
+def test_readme_example_kg_yaml_is_valid():
+    import re
+    import yaml
+    md = (HERE.parent / "README.md").read_text(encoding="utf-8")
+    block = re.search(r"## Example kg.yaml.*?```yaml\n(.*?)```", md, re.S).group(1)
+    cfg = kg.validate_config(yaml.safe_load(block), "README example")
+    assert cfg["graph"]["excludes"] and cfg["related_repos"][0]["name"]
+
+
+def test_subset_carry_limited_to_small_fully_read(env):
+    ctx = env.ctx()
+    big = [f"d/m{i}" for i in range(1, 31)]  # 30 members > subset_max_members (25)
+    an = setup_clusters(ctx, big, big[:3], VERDICT)
+    assert kg.carry_forward(ctx, an)["carried"] == []
+    assert kg.review_state(ctx)["needs_verdict"] == ["new1"]
+
+
+def test_subset_carry_skips_partial_read(env):
+    ctx = env.ctx()
+    old = [f"d/m{i}" for i in range(1, 9)]
+    an = setup_clusters(ctx, old, old[:3], {**VERDICT, "partial_read": True})
+    assert kg.carry_forward(ctx, an)["carried"] == []
+
+
+def test_restamp_newline_only(env):
+    import hashlib
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "same.md").write_text("body\n")      # old content was "body"
+    (st / "edited.md").write_text("new body\n")  # old content was "body" too, but text changed
+    old = hashlib.md5(b"body").hexdigest()
+    kg.write_json(ctx.out / "graphify-out/manifest.json", {
+        "staging/docs/same.md": {"mtime": 1, "ast_hash": old, "semantic_hash": old},
+        "staging/docs/edited.md": {"mtime": 1, "ast_hash": old, "semantic_hash": old}})
+    assert kg.restamp_newline_only(ctx) == ["docs/same.md"]
+    m = kg.read_json(ctx.out / "graphify-out/manifest.json")
+    assert m["staging/docs/same.md"]["semantic_hash"] == hashlib.md5(b"body\n").hexdigest()
+    assert m["staging/docs/edited.md"]["semantic_hash"] == old  # a real change still re-extracts
+    assert kg.restamp_newline_only(ctx) == []
+
+
+def test_graph_labels_unique_with_existing_suffixes(env):
+    ctx = env.ctx()
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "x", "Epic G"), ("b", "x", "Epic G"), ("c", "x", "Epic G (2)"),
+                                           ("d", "x", "Epic G (2)"), ("e", "x", "Epic G")]))
+    make_plan(ctx, changed=[])
+    kg.write_json(g / ".graphify_analysis.json", {"communities": {"0": ["a", "b"], "1": ["c", "d"], "2": ["e"]}})
+    kg.cmd_graph_labels(argparse.Namespace(repo=str(env.repo)))
+    carried = kg.read_json(ctx.kgdir / "labels-proposed.json")["carried"]
+    assert sorted(carried.values()) == ["Epic G", "Epic G (2)", "Epic G (3)"]
+
+
+def test_graph_labels_mostly_new_community_gets_fresh_name(env):
+    ctx = env.ctx()
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "x", "Epic G"), ("b", "x", "Epic G")]))
+    make_plan(ctx, changed=[])
+    # 2 old nodes named "Epic G" + 8 new contract nodes: unanimous among the labelled, but 80% unknown
+    kg.write_json(g / ".graphify_analysis.json", {"communities": {"0": ["a", "b"] + [f"api{i}" for i in range(8)]}})
+    kg.cmd_graph_labels(argparse.Namespace(repo=str(env.repo)))
+    out = kg.read_json(ctx.kgdir / "labels-proposed.json")
+    assert out["carried"] == {} and "0" in out["needs_name"]
