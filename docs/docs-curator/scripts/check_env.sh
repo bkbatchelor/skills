@@ -12,10 +12,10 @@ py="${PYTHON:-python3}"
 missing=()
 
 if ! command -v "$py" >/dev/null 2>&1; then
-  echo "missing: $py (python 3.10+)" >&2
+  echo "missing: $py (python 3.11+)" >&2
   exit 1
 fi
-"$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || missing+=("python>=3.10 (found $("$py" -V 2>&1))")
+"$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || missing+=("python>=3.11 (found $("$py" -V 2>&1))")
 
 command -v soffice >/dev/null 2>&1 || command -v libreoffice >/dev/null 2>&1 || missing+=("soffice (LibreOffice, for pptx to pdf)")
 
