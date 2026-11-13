@@ -13,8 +13,10 @@ knowledge-graph skill, which calls these subcommands around them.
   kg preflight                   check tools, skills, versions, config, symlinks, telemetry
   kg overrides [--dry-run]       regenerate overrides.yaml from git + kg.yaml rules
   kg curate                      snapshot, overrides, docs-curator analyze/update, PHI purge,
-                                 verdict carry-forward, stale-verdict archive
-  kg review                      list clusters still waiting for a verdict or a re-check
+                                 verdict carry-forward, stale-verdict archive; stops first when
+                                 documents are waiting for classifier labels
+  kg review                      list batches waiting for labels, and clusters waiting for a
+                                 verdict or a re-check
   kg apply                       docs-curator apply, $HOME symlinks, keeper + PHI checks, related repos
   kg graph prepare               PHI check, snapshot, changed files, cost estimate, big-file list
   kg graph check                 classify node loss of the merged graph against the snapshot
@@ -67,6 +69,7 @@ SNAPSHOT_FILES = [  # (label, path relative to the curated dir)
     ("curator", ".docs-curator/analysis.json"),
     ("curator", ".docs-curator/decisions.jsonl"),  # per-file outcomes; docs-curator keeps only the latest run
     ("curator", ".docs-curator/work/verdicts"),
+    ("curator", ".docs-curator/work/classify/labels"),  # paid-for classifier labels
     ("curator", ".docs-curator/work/verdicts-stale"),
     ("curator", "overrides.yaml"),
 ]
@@ -847,27 +850,61 @@ def archive_stale(ctx):
     return moved
 
 
+def classify_state(ctx):
+    """Classifier batches docs-curator queued (`classify_untyped: true`): (waiting for labels, labelled but not applied).
+
+    The queue is rebuilt by every analyze and holds only unlabelled documents, so a batch with a labels file is
+    waiting for the next `kg curate` to apply it.
+    """
+    qdir, ldir = ctx.work / "work/classify/queue", ctx.work / "work/classify/labels"
+    batches = sorted(q.stem for q in qdir.glob("*.json")) if qdir.exists() else []
+    waiting = [b for b in batches if not (ldir / f"{b}.json").exists()]
+    return waiting, [b for b in batches if b not in waiting]
+
+
 def review_state(ctx):
     vdir = ctx.work / "work/verdicts"
     queued = sorted(q.stem for q in (ctx.work / "work/queue").glob("*.json"))
+    needs_labels, labels_unapplied = classify_state(ctx)
     missing = [q for q in queued if not (vdir / f"{q}.json").exists()]
+    if needs_labels or labels_unapplied:
+        # Typing changes cluster membership and ids, so a verdict written now would go stale. Label first.
+        missing = []
+    escalate = []  # a standard-tier review found something: docs-curator queued it again for the deep model
+    for q in queued:
+        reasons = ((read_json(ctx.work / f"work/queue/{q}.json", {}) or {}).get("review") or {}).get("reasons") or []
+        why = next((r[len("escalated_"):] for r in reasons if r.startswith("escalated_")), None)
+        if why and (read_json(vdir / f"{q}.json", {}) or {}).get("review_tier") != "deep":
+            escalate.append({"cluster": q, "reason": why})
+    if needs_labels or labels_unapplied:
+        escalate = []
     recheck = []
     for f in sorted(vdir.glob("*.json")) if vdir.exists() else []:
         cf = (read_json(f) or {}).get("carried_forward")
         if cf and not cf.get("review_done"):
             recheck.append({"cluster": f.stem, "from": cf["from"], "overlap": cf["overlap"],
                             "new_members": cf["new_members"]})
-    return {"queued": len(queued), "needs_verdict": missing, "needs_recheck": recheck}
+    return {"queued": len(queued), "needs_labels": needs_labels, "labels_unapplied": labels_unapplied,
+            "needs_verdict": missing, "needs_escalation": escalate, "needs_recheck": recheck}
 
 
 def cmd_review(args):
     ctx = Ctx(args.repo)
     st = review_state(ctx)
     write_json(ctx.kgdir / "review.json", st)
-    print(f"review: {len(st['needs_verdict'])} cluster(s) need a verdict, "
+    print(f"review: {len(st['needs_labels'])} classifier batch(es) need labels, "
+          f"{len(st['needs_verdict'])} cluster(s) need a verdict, "
+          f"{len(st['needs_escalation'])} need a deeper re-review, "
           f"{len(st['needs_recheck'])} carried verdict(s) need their new members checked")
+    for b in st["needs_labels"]:
+        item = read_json(ctx.work / f"work/classify/queue/{b}.json", {})
+        print(f"  label: work/classify/queue/{b}.json ({len(item.get('docs', []))} document(s), model {item.get('model')})")
+    if st["labels_unapplied"]:
+        print(f"  labelled: {len(st['labels_unapplied'])} batch(es) await `kg curate` to take effect; verdicts wait until then")
     for q in st["needs_verdict"]:
         print(f"  verdict: work/queue/{q}.json")
+    for e in st["needs_escalation"]:
+        print(f"  escalate: work/queue/{e['cluster']}.json ({e['reason']}): redo with the deep model, write review_tier: deep")
     for r in st["needs_recheck"]:
         print(f"  recheck: work/verdicts/{r['cluster']}.json (from {r['from']}, overlap {r['overlap']}): "
               f"{len(r['new_members'])} new member(s)")
@@ -888,6 +925,17 @@ def cmd_curate(args, ctx=None):
     run_curate(ctx, "analyze" if first else "update")
     analysis = read_json(ctx.work / "analysis.json")
     purged = purge_phi(ctx)
+    needs_labels, _ = classify_state(ctx)
+    if needs_labels:
+        # Stop before the cluster bookkeeping: once the labels are applied, requirements and ADRs are merged
+        # into clusters, so these clusters are about to be re-numbered and must not be registered, carried
+        # onto, auto-closed or have verdicts archived as stale.
+        write_json(ctx.kgdir / "state.json", {**read_json(ctx.kgdir / "state.json", {}),
+                                              "curated_head": git(ctx.repo, "rev-parse", "HEAD"), "curated_at": now_ts()})
+        ctx.log("curate", branch_ok=st["ok"], phi_purged=purged, classify_batches=len(needs_labels))
+        cmd_review(args)
+        print("next: label the batches above (knowledge-graph skill), then run `kg curate` again to apply the labels")
+        return EXIT_REVIEW
     register_analysis(ctx, analysis)
     cf = carry_forward(ctx, analysis)
     for c in cf["carried"]:
@@ -905,7 +953,7 @@ def cmd_curate(args, ctx=None):
     ctx.log("curate", branch_ok=st["ok"], phi_purged=purged, carried=len(cf["carried"]),
             restored=len(cf["restored"]), auto_closed=len(closed), stale_archived=len(stale))
     rs = cmd_review(args)
-    if rs["needs_verdict"] or rs["needs_recheck"]:
+    if rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"]:
         print("next: review the clusters above (knowledge-graph skill), then `kg apply`")
         return EXIT_REVIEW
     print("next: `kg apply`")
@@ -976,8 +1024,13 @@ def cmd_apply(args, ctx=None):
     gate(ctx, args, "apply")
     reopen_auto(ctx, read_json(ctx.work / "analysis.json"))
     rs = review_state(ctx)
-    if (rs["needs_verdict"] or rs["needs_recheck"]) and not args.allow_unreviewed:
-        die(f"apply refused: {len(rs['needs_verdict'])} cluster(s) without a verdict and "
+    if (rs["needs_labels"] or rs["labels_unapplied"]) and not args.allow_unreviewed:
+        die(f"apply refused: {len(rs['needs_labels'])} classifier batch(es) without labels and "
+            f"{len(rs['labels_unapplied'])} labelled but not applied (`kg review`, then `kg curate`). "
+            "Pass --allow-unreviewed to apply anyway (untyped documents skip the requirement-vs-ADR check).", EXIT_REVIEW)
+    if (rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"]) and not args.allow_unreviewed:
+        die(f"apply refused: {len(rs['needs_verdict'])} cluster(s) without a verdict, "
+            f"{len(rs['needs_escalation'])} awaiting a deeper re-review and "
             f"{len(rs['needs_recheck'])} carried verdict(s) not re-checked (`kg review`). "
             "Pass --allow-unreviewed to apply anyway (unreviewed clusters keep every member).", EXIT_REVIEW)
     archive_stale(ctx)
@@ -1574,7 +1627,9 @@ def cmd_init(args):
     if not kg_yaml.exists():
         kg_yaml.write_text(DEFAULT_KG_YAML.format(name=repo.name, source=home_form(repo)), encoding="utf-8")
         made.append("kg.yaml")
-    for name, body in (("config.yaml", f"# docs-curator settings for {repo.name}; keys: docs-curator's curate.py DEFAULTS\n"),
+    config_body = (f"# docs-curator settings for {repo.name}; keys: docs-curator's curate.py DEFAULTS\n"
+                   "# classify_untyped: true   # have the skill label untyped documents (requirement / ADR / other) before review\n")
+    for name, body in (("config.yaml", config_body),
                        ("overrides.manual.yaml", "# hand-made docs-curator decisions; win over generated rules\noverrides: []\n"),
                        (".gitignore", GITIGNORE)):
         if not (out / name).exists():
@@ -1714,7 +1769,11 @@ def next_step(ctx):
     if not (ctx.work / "analysis.json").exists() or st.get("curated_head") != head:
         return ("kg", "curate")
     rs = review_state(ctx)
-    if rs["needs_verdict"] or rs["needs_recheck"]:
+    if rs["needs_labels"]:
+        return ("skill", "label untyped documents (kg review)")
+    if rs["labels_unapplied"]:
+        return ("kg", "curate")  # apply the labels; this re-clusters
+    if rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"]:
         return ("skill", "review clusters (kg review)")
     an_m = (ctx.work / "analysis.json").stat().st_mtime
     staged = (ctx.out / "staging").exists() and (ctx.work / "decisions.jsonl").exists() \
@@ -1745,7 +1804,10 @@ def cmd_status(args):
     if kst.get("graph_pending"):
         print(f"queued   {len(kst['graph_pending'])} changed file(s) not yet extracted into the graph")
     rs = review_state(ctx)
-    print(f"review   {len(rs['needs_verdict'])} need a verdict, {len(rs['needs_recheck'])} carried need a re-check")
+    if rs["needs_labels"] or rs["labels_unapplied"]:
+        print(f"classify {len(rs['needs_labels'])} batch(es) need labels, {len(rs['labels_unapplied'])} labelled and not yet applied")
+    print(f"review   {len(rs['needs_verdict'])} need a verdict, {len(rs['needs_escalation'])} need a deeper re-review, "
+          f"{len(rs['needs_recheck'])} carried need a re-check")
     for name, state, cur in link_state(ctx):
         print(f"link     {name}: {state}")
     print(f"codegraph {'indexed' if (ctx.repo / '.codegraph').is_dir() else 'not indexed'}; telemetry {codegraph_telemetry()}")

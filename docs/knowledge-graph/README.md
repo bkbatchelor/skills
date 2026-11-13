@@ -20,6 +20,7 @@ kg turns a repository's documents and code into two searchable knowledge graphs,
 
 ### For managers: less rework, predictable cost
 
+- **Cheap work stays cheap.** If `classify_untyped` is on, kg stops before clustering until a small model has labelled the untyped documents, then re-clusters, so no verdict is written for a cluster that is about to change. Cluster reviews are routed to a standard or a deep model, and a standard review that finds a conflict is re-done once by the deep one before `kg apply` will run.
 - **Review effort is spent once.** When a document cluster is renumbered because a member changed, its earlier verdict carries over if the old and new member sets overlap by at least 80%, and moved files are followed. Reviewers see only the new members, not the whole cluster again. Clusters where fewer than two members can reach staging are closed automatically (`kg_auto`) and reopened if an override gives them a second.
 - **Incremental runs cost less.** Manifests written by older versions are re-keyed, so `--update` re-extracts only the files that changed.
 - **Naming stays stable.** Community labels carry forward wherever at least 50% of a community's labelled members agree, so the graph's vocabulary doesn't churn between runs.
@@ -110,7 +111,7 @@ kg init ~/Projects/my-repo        # once; then fill in phi_globs in kg.yaml
 kg preflight --fix
 kg status                         # where things stand and the next step
 kg all                            # scripted steps up to the next one that needs a person
-kg review                         # clusters waiting for a verdict or a re-check
+kg review                         # batches waiting for labels, clusters waiting for a verdict, a deeper re-review or a re-check
 kg graph prepare                  # before the graphify run: cost estimate, plan
 kg graph check | labels | finish  # around graphify's merge and labelling steps
 kg code                           # codegraph sync
@@ -123,7 +124,7 @@ Ask Claude to "refresh the knowledge graphs" and the skill runs these commands, 
 
 - `SKILL.md`: the workflow Claude follows, gates, exit codes and hard rules
 - `scripts/kg.py`: the pipeline script (a single PEP 723 file run with `uv run --python 3.12 --script`)
-- `tests/test_kg.py`: pytest suite covering gating, overrides, PHI, carry-forward, node-loss check, labels, snapshots, links and manifest re-keying
+- `tests/test_kg.py`: pytest suite covering gating, overrides, PHI, carry-forward, classifier batches and escalation, node-loss check, labels, snapshots, links and manifest re-keying
 
 ## Requirements
 

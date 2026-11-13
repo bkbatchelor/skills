@@ -1,6 +1,6 @@
 # How docs-curator works
 
-The script is `docs/docs-curator/scripts/curate.py`, a single-file CLI. It is deterministic everywhere except one step. That step is the semantic review, where the agent (Claude) reads queued clusters and writes verdict JSON files. The script never calls an LLM itself.
+The script is `docs/docs-curator/scripts/curate.py`, a single-file CLI. It is deterministic everywhere except two steps, both done by the agent (Claude): the optional classification of untyped documents, and the semantic review of queued clusters. The script writes the queues and reads the results back as JSON files. It never calls an LLM itself. It also decides which model alias each piece of work should go to (sections 2.10 and 2.11), so the agent can run cheap work on a small model and hard work on a strong one.
 
 ## 1. Architecture
 
@@ -15,15 +15,16 @@ flowchart TD
         A3[exact groups<br/>+ keeper rank]
         A4[near / cross-format dups<br/>MinHash LSH + Indel]
         A5[subsumption<br/>bottom-k + containment]
-        A6[topic clusters<br/>embeddings + union-find]
+        A6[topic clusters<br/>embeddings + union-find<br/>typed docs merged]
         A7[revision chains<br/>multi-signal ordering]
         A8[ID collisions<br/>+ naming anomalies]
-        A9[LLM queue<br/>max 25 clusters]
+        A9[LLM queue<br/>max 25 clusters<br/>tier + model per cluster]
         A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8 --> A9
     end
 
     WORK[(".docs-curator/<br/>analysis.json<br/>text cache<br/>work/queue")]
-    LLM{{"Agent review<br/>(non-deterministic)<br/>writes work/verdicts/*.json"}}
+    CLS{{"Classifier (optional)<br/>small model<br/>writes work/classify/labels/*.json"}}
+    LLM{{"Agent review<br/>(non-deterministic)<br/>standard or deep model<br/>writes work/verdicts/*.json"}}
 
     subgraph B["apply (deterministic)"]
         direction TB
@@ -41,6 +42,8 @@ flowchart TD
     GFY(["/graphify staging<br/>run by the user"])
 
     SRC --> A1
+    A1 -.-> CLS
+    CLS -.->|"analyze again"| A6
     A9 --> WORK
     WORK --> LLM
     LLM --> B1
@@ -56,7 +59,8 @@ flowchart TD
 The OUT layout is:
 - `text/v1/<sha>.md` or `.err`: the extraction cache.
 - `analysis.json`: the full analysis.
-- `work/queue` and `work/verdicts`: the review hand-off.
+- `work/queue` and `work/verdicts`: the review hand-off. `work/routing.json` groups the queued clusters by model.
+- `work/classify/queue` and `work/classify/labels`: the optional classification hand-off.
 - `state.json`, `changes.json`, `decisions.jsonl`, `REPORT.md`, and `pdf/<sha>.pdf`.
 - `staging/` and `graphify-out/`.
 
@@ -118,6 +122,15 @@ This detects a short document that is mostly contained in a longer one, such as 
 - The cluster ID is `sha256(sorted member shas)[:16]`. It is stable under renames or moves, and it changes when membership or content changes. That is what makes verdict caching correct: a stale verdict stops matching its cluster.
 - If fastembed can't load its model, for example when offline, the run aborts with a hint to switch to TF-IDF. It does not fall back silently.
 
+### 2.6.1 Typing and the classifier (optional)
+Which documents are requirements and which are ADRs decides whether the requirement-vs-ADR check runs. The type comes from front matter `type`, then the path globs. With `classify_untyped: true` a third source is added: classifier labels.
+
+- A document with no type, and no `type` of any kind in its front matter (even `policy`, which means "this is something else"), and no label yet, is queued in `work/classify/queue/<batch_id>.json`. A batch holds `classify_batch_size` documents (25), each with its title and the first `classify_snippet_words` words (300). At most `classify_max_docs_per_run` (500) are queued per run; the rest are reported as deferred.
+- The agent writes `work/classify/labels/<batch_id>.json`: `{sha256, type: requirement | adr | other, confidence}` per document.
+- On the next `analyze`, a `requirement` or `adr` label at or above `classify_min_confidence` (0.8) types the document with `type_source: classifier`. It then takes part in id pairing, similarity pairing and `decision_check` exactly like a front-matter type. Any other label, or a weaker one, leaves the document untyped, and it is not queued again.
+- Labels are keyed by content hash, like the text cache. A rename keeps the label, an edit drops it.
+- Classification has to happen before review, because typing changes which clusters exist.
+
 ### 2.7 Revision chains
 Candidates are alive documents in the same cluster that share a normalized filename stem. The grouping key is `(directory, stem, cluster_id)`, or an empty directory when `revision_chain_scope: corpus`.
 
@@ -165,6 +178,20 @@ Clusters are sorted by size descending, then ID. Any cluster that already has a 
 - `read_words` (6000), a read budget for the reviewing agent.
 
 Deferred clusters show up in the report as pending.
+
+### 2.11 Review routing
+Each queue item carries `review: {tier, model, reasons}`, chosen from deterministic signals only:
+
+| Signal | Reason | Why it needs the stronger model |
+|---|---|---|
+| The cluster holds requirements and ADRs (`decision_check`) | `requirement_vs_adr` | Judging whether a requirement and a decision can both hold, and whether the ADR is still binding. |
+| A revision chain that is not `deterministic` | `ambiguous_revision_chain` | The signals could not order it, so the verdict decides, and a wrong one drops a file. |
+| At least `deep_review_min_members` (6) members | `large_cluster` | More pairs to compare for contradictions. |
+| A standard review that found something | `escalated_*` | See below. |
+
+Any reason makes the tier `deep` and the model `review_model_deep` (default `opus`); otherwise it is `standard` and `review_model_standard` (`sonnet`). The model names are aliases for the agent to pass to a subagent. The script only records them. `work/routing.json` lists the queued ids per model, plus the escalations.
+
+**Escalation.** A verdict can carry `review_tier: standard`. On the next `analyze`, a standard verdict with a conflict, or with a revision under `low_confidence_threshold`, is queued again with the deep tier (`escalated_conflict_found` or `escalated_low_confidence_revision`). It uses one slot of `max_llm_clusters_per_run`. The deep review overwrites the verdict with `review_tier: deep`, which ends the loop. Verdicts without a `review_tier` are never re-queued, so older verdicts and the `kg` carry-forward are unaffected.
 
 ## 3. `update`
 This is a diff wrapper around `analyze`. It snapshots the old `path → sha` map and re-runs `analyze`. Cached extractions make this cheap. It then computes added, modified and removed files. It lists the clusters that contain a new or modified file, the currently queued clusters, and "stale verdicts" that match no current cluster. The result goes to `changes.json`.
@@ -214,3 +241,4 @@ It creates `OUT/graphify-out/` and symlinks `SRC/graphify-out` to it. This is th
 - Chains only form inside a cluster, directory and stem. A revision with a different filename stem won't be linked, unless the LLM verdict catches it.
 - Indel similarity is roughly quadratic per pair. Very long documents use the weaker Dice fallback.
 - Scanned PDFs and images yield no text, so they are staged empty and can't be deduplicated by content.
+- Routing is advice. The script cannot make the agent use the named model, and cannot tell which model wrote a verdict except by the `model` field the agent fills in.

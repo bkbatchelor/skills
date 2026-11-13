@@ -656,3 +656,91 @@ def test_apply_fixups_keeps_one_edge_per_pair():
                    {"source": "b", "target": "a2", "relation": "shares_data_with", "confidence_score": 0.95}]}
     st = kg.apply_fixups(g, {"merge": [{"drop": "a2", "into": "a"}], "links": []})
     assert st["dup_edges"] == 1 and len(g["links"]) == 1 and g["links"][0]["relation"] == "shares_data_with"
+
+
+# ----------------------------------------------------------------------------- classifier batches
+
+
+def queue_batch(ctx, batch="b1", docs=2):
+    kg.write_json(ctx.work / f"work/classify/queue/{batch}.json",
+                  {"batch_id": batch, "model": "haiku", "docs": [{"path": f"docs/{i}.md"} for i in range(docs)]})
+
+
+def test_classify_state_and_review_state(env):
+    ctx = env.ctx()
+    assert kg.classify_state(ctx) == ([], [])
+    queue_batch(ctx, "b1")
+    queue_batch(ctx, "b2")
+    kg.write_json(ctx.work / "work/queue/c1.json", {})
+    kg.write_json(ctx.work / "work/classify/labels/b2.json", {"batch_id": "b2", "labels": []})
+    assert kg.classify_state(ctx) == (["b1"], ["b2"])
+    rs = kg.review_state(ctx)
+    assert rs["needs_labels"] == ["b1"] and rs["labels_unapplied"] == ["b2"]
+    assert rs["needs_verdict"] == []  # verdicts wait: typing will renumber the clusters
+
+
+def test_next_step_labels_before_verdicts(env):
+    ctx = env.ctx()
+    head = kg.git(ctx.repo, "rev-parse", "HEAD")
+    kg.write_json(ctx.work / "analysis.json", {"files": [], "clusters": []})
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": head})
+    kg.write_json(ctx.work / "work/queue/c1.json", {})
+    assert kg.next_step(ctx) == ("skill", "review clusters (kg review)")
+    queue_batch(ctx)
+    assert kg.next_step(ctx) == ("skill", "label untyped documents (kg review)")
+    kg.write_json(ctx.work / "work/classify/labels/b1.json", {"labels": []})
+    assert kg.next_step(ctx) == ("kg", "curate")  # apply the labels
+
+
+def test_apply_refuses_while_labels_are_missing(env):
+    ctx = env.ctx()
+    queue_batch(ctx)
+    args = argparse.Namespace(repo=ctx.repo, allow_any_branch=False, allow_unreviewed=False, skip_related=True)
+    with pytest.raises(SystemExit) as e:
+        kg.cmd_apply(args, ctx)
+    assert e.value.code == kg.EXIT_REVIEW
+
+
+def test_curate_stops_for_labels_before_cluster_bookkeeping(env, monkeypatch, capsys):
+    ctx = env.ctx()
+
+    def fake_curate(c, *a):
+        write_analysis(c, [("docs/a.md", "1"), ("docs/b.md", "2")], [("c1", ["docs/a.md", "docs/b.md"])])
+        kg.write_json(c.work / "work/queue/c1.json", {})
+        queue_batch(c)
+
+    monkeypatch.setattr(kg, "run_curate", fake_curate)
+    args = argparse.Namespace(repo=ctx.repo, allow_any_branch=False)
+    assert kg.cmd_curate(args, ctx) == kg.EXIT_REVIEW
+    out = capsys.readouterr().out
+    assert "classifier batch(es) need labels" in out and "label: work/classify/queue/b1.json (2 document(s), model haiku)" in out
+    assert not kg.registry_path(ctx).exists()  # the pre-typing clusters were not registered
+    assert not (ctx.work / "work/verdicts").exists() or not any((ctx.work / "work/verdicts").iterdir())
+    # labels arrive, the next curate re-analyzes and (with the queue rebuilt empty) carries on
+    kg.write_json(ctx.work / "work/classify/labels/b1.json", {"labels": []})
+
+    def fake_curate_again(c, *a):
+        write_analysis(c, [("docs/a.md", "1"), ("docs/b.md", "2")], [("c2", ["docs/a.md", "docs/b.md"])])
+        for f in list((c.work / "work/queue").glob("*.json")) + list((c.work / "work/classify/queue").glob("*.json")):
+            f.unlink()  # analyze rebuilds both queues
+        kg.write_json(c.work / "work/queue/c2.json", {})
+
+    monkeypatch.setattr(kg, "run_curate", fake_curate_again)
+    assert kg.cmd_curate(args, ctx) == kg.EXIT_REVIEW  # now a cluster needs a verdict
+    assert "1 cluster(s) need a verdict" in capsys.readouterr().out
+
+
+def test_labels_are_snapshotted():
+    assert ("curator", ".docs-curator/work/classify/labels") in kg.SNAPSHOT_FILES
+
+
+def test_escalation_blocks_until_the_deep_verdict_is_written(env):
+    ctx = env.ctx()
+    kg.write_json(ctx.work / "work/queue/c1.json", {"review": {"tier": "deep", "reasons": ["escalated_conflict_found"]}})
+    kg.write_json(ctx.work / "work/verdicts/c1.json", {"cluster_id": "c1", "reviewed": True, "review_tier": "standard"})
+    kg.write_json(ctx.work / "work/queue/c2.json", {"review": {"tier": "deep", "reasons": ["large_cluster"]}})
+    kg.write_json(ctx.work / "work/verdicts/c2.json", {"cluster_id": "c2", "reviewed": True})
+    rs = kg.review_state(ctx)
+    assert rs["needs_escalation"] == [{"cluster": "c1", "reason": "conflict_found"}] and rs["needs_verdict"] == []
+    kg.write_json(ctx.work / "work/verdicts/c1.json", {"cluster_id": "c1", "reviewed": True, "review_tier": "deep"})
+    assert kg.review_state(ctx)["needs_escalation"] == []

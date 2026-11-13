@@ -109,6 +109,7 @@ skills/
 │   │       ├── test_units.py
 │   │       ├── test_pipeline.py
 │   │       ├── test_requirement_adr.py
+│   │       ├── test_routing.py
 │   │       └── fixtures/verdicts/    # Hand-written verdicts, one per cluster
 │   ├── knowledge-graph/          # Repeatable docs + code graph pipeline (kg script)
 │   │   ├── SKILL.md              # Skill definition: workflow, gates, exit codes, hard rules
@@ -214,8 +215,8 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
 | html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
 | code-graph | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, and checks business requirements against ADRs | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
-| knowledge-graph | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
+| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| knowledge-graph | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
@@ -430,7 +431,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.103` is installed only to check its accepted extensions in tests)
 - `docker/Dockerfile`: Reference image (Python 3.11, LibreOffice, cached embedding model)
 - `plan/DECISIONS.md`: Every settled decision and where the build departed from `plan/PLAN.md`
-- `tests/`: Dev-only synthetic corpus generator with an answer key, `score.py`, fixture verdicts, and a pytest suite, including `test_requirement_adr.py` for the requirement-versus-ADR check (not needed at runtime)
+- `tests/`: Dev-only synthetic corpus generator with an answer key, `score.py`, fixture verdicts, and a pytest suite, including `test_requirement_adr.py` for the requirement-versus-ADR check and `test_routing.py` for classification and review routing (not needed at runtime)
 
 **Requirements:**
 - `uv` and Python 3.11+ (pass `--python 3.12` so uv fetches it); run through `uv run --no-project --python 3.12 --with-requirements requirements.txt python scripts/curate.py ...`
@@ -445,6 +446,8 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - Every kept document except `.pptx` is staged as Markdown with front matter (`source_path`, `source_format`, `sha256`, `status`, `description`); decks become a PDF plus a speaker-notes sidecar
 - `_curated/CONFLICTS.md` for contradictions (quotes are checked against the text) and `_curated/historical/` for superseded files with unique content
 - Requirement-versus-ADR check: documents typed by front matter or path globs are paired by id and by similarity; conflicts go to `CONFLICTS.md`, gaps and unlinked items to the report; report only, no winner picked
+- Optional classification pre-step (`classify_untyped: true`): untyped documents are queued in batches for a small model (Haiku by default) to label as requirement, ADR or other; labels are keyed by content hash, applied above `classify_min_confidence`, and never override front matter or globs
+- Per-cluster review routing: each queue item names a tier and model alias (Sonnet for ordinary clusters; Opus for requirement-vs-ADR checks, unorderable revision chains and large clusters), `work/routing.json` groups them, and a standard-tier verdict that finds a conflict or an unsure supersession is re-queued once at the deep tier. The script only records the aliases; it never calls a model
 - `applies_to:` front matter ties a document to code paths or symbols; the report lists the links and flags paths missing from the source
 - Optional `config.yaml` and `overrides.yaml` in the output folder; a second run on an unchanged corpus processes nothing new
 - `--no-extract <glob>` on `analyze`/`update`: matching files (e.g. PHI folders) are hashed but never opened, and excluded in a way no override can undo
@@ -499,7 +502,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - `SKILL.md`: The run sequence (curate, review, apply, graph prepare, ask, Graphify with check and labels, finish, code), gating, restore, exit codes, and hard rules
 - `README.md`: What kg automates, the `~/curated/<repo>/` layout, and usage
 - `scripts/kg.py`: Subcommands `init`, `preflight`, `overrides`, `curate`, `review`, `apply`, `graph prepare|check|fixups|labels|finish`, `code`, `status`, `restore`, `all` and `install-shim`
-- `tests/test_kg.py`: pytest suite (gating, overrides, PHI, carry-forward, node-loss check, labels, snapshots, links, manifest re-keying)
+- `tests/test_kg.py`: pytest suite (gating, overrides, PHI, carry-forward, classifier batches and escalation, node-loss check, labels, snapshots, links, manifest re-keying)
 
 **Requirements:**
 - `uv` (Python 3.12 is fetched), the `graphify` CLI 0.9.103 or later with its skill, `codegraph`, and the docs-curator, heavy-file-ingestion and code-graph skills. kg installs none of them
@@ -509,6 +512,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Docs steps only run on `main`, `develop` or `develop-*` with a clean tree; `--allow-any-branch` overrides this and is logged. `codegraph sync` runs on any branch
 - PHI globs: always excluded, their extracted text purged after every analyze, and any trace in the cache, staging or graph stops the run (exit 4)
 - `overrides.yaml` generated from git plus the exclude groups, using file rules imported from docs-curator's `curate.py`
+- With docs-curator's `classify_untyped` on, `kg curate` stops (exit 3) before cluster bookkeeping until untyped documents are labelled, then re-clusters; `kg review` lists batches to label and standard-tier verdicts queued for a deeper re-review, and `kg apply` refuses until both are done; labels are snapshotted
 - Verdicts carried to re-numbered clusters when membership overlaps by at least 80%, with moved files followed; only the new members go to review
 - Clusters where fewer than two members can reach staging are auto-closed (`kg_auto`) and reopened if an override change gives them a second
 - Keeper-chain check for documents that silently left staging

@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.3.1
+  version: 1.4.0
 ---
 
 # Knowledge Graph
@@ -43,11 +43,14 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 
 `kg all` runs the scripted steps in order and stops before the first one that needs a person. The full sequence:
 
-1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time) with each PHI glob as `--no-extract` so PHI text is never extracted, purges any PHI text left in the cache, carries verdicts forward, and archives stale ones. Exit 3 means clusters are waiting for review.
+1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time) with each PHI glob as `--no-extract` so PHI text is never extracted, purges any PHI text left in the cache, carries verdicts forward, and archives stale ones. Exit 3 means a person is needed: classifier batches waiting for labels (below), or clusters waiting for review.
    - A cluster that only **lost** members keeps the old verdict, marked done, when the old cluster had at most `carry_forward.subset_max_members` (default 25) members and its verdict was not a partial read. Larger or partly read clusters come back for a full review, because a shallow review must not be inherited by every piece a large cluster splits into.
    - It also **auto-closes** a pending cluster when fewer than two of its members can reach staging, because no verdict on such a cluster could change staging. The verdict it writes carries a `kg_auto` field that gives the reason.
    - Each `curate` and `apply` re-checks these against the current overrides and reopens any cluster that now has two or more members that can reach staging. Never add `kg_auto` to a verdict you wrote yourself.
-2. **Review** (you): run `kg review`.
+   - **Classifier labels (optional).** When `config.yaml` has `classify_untyped: true`, docs-curator queues documents with no `type` front matter and no glob match (override-excluded and PHI files are never queued). If any batch has no labels yet, `kg curate` stops right after the PHI purge, before any cluster bookkeeping, and exits 3: typing merges requirements and ADRs into clusters, so these clusters are about to be re-numbered. Do the labelling in step 2, then run `kg curate` again.
+2. **Label and review** (you): run `kg review`.
+   - For each batch under `label:`, follow the docs-curator skill's classification step: label it with a subagent on the model named in the batch (Haiku by default) and write `.docs-curator/work/classify/labels/<batch_id>.json` (`references/verdict-schema.md` in that skill has the format). Then run `kg curate` again to apply the labels. Repeat while batches remain, because large corpora are queued in parts. Until then `kg review` lists no cluster verdicts, `kg apply` refuses, and `kg status` shows the next step as labelling. Labels are snapshotted with the verdicts.
+   - Route each cluster review by the `review` field of its queue item, as the docs-curator skill's step 2 describes (Sonnet for `standard`, Opus for `deep`), and write `review_tier` and `model` in the verdict. After the verdicts are in, run `kg curate` once more: a standard verdict with a conflict or a low-confidence revision is queued again for a deep review, and `kg review` lists it under `escalate:` (`kg apply` refuses until it is redone with the deep model and the verdict says `review_tier: deep`).
    - For each cluster under `verdict:`, follow the docs-curator skill's step 2 and `references/verdict-schema.md` (in that skill), and write `.docs-curator/work/verdicts/<id>.json`.
    - For each cluster under `recheck:`, the verdict was copied from a re-numbered cluster that overlaps it by at least `carry_forward.verdict_overlap`. Read only the `new_members` listed in its `carried_forward` block. Check them against the carried revisions and conflicts, and against older documents on the same topic for status claims they contradict. Then set `carried_forward.review_done: true`.
    - When a changed document reverses a rule, grep the tracked docs for the old wording; `git diff` of the changed files is the quickest way to see what to look for.
