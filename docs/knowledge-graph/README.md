@@ -9,23 +9,30 @@ The `kg` script handles every mechanical step, including the workarounds that us
 
 ## What kg does for you
 
-- **Gate**: the docs steps only run on `main`, `develop` or `develop-*` with a clean working tree, so the graph reflects only reviewed, merged content. `--allow-any-branch` overrides this, and every override is logged.
-- **PHI**: paths listed in `phi_globs` are always excluded. Their extracted text is purged after every analyze. Any trace of them in the text cache, staging or the graph stops the run with exit code 4.
-- **Overrides**: `overrides.yaml` is generated from git (only tracked documents are staged) plus the exclude groups in `kg.yaml` and your hand decisions in `overrides.manual.yaml`. The file rules are imported from docs-curator's `curate.py`, so they can't drift from it.
-- **Verdict carry-forward**: when a cluster gets a new ID because a member changed, its verdict is copied across if the old and new member sets overlap by at least 80%. Moved files are followed. Only the new members are listed for review. A cluster that only lost members keeps its old verdict when that cluster had at most 25 members and was read in full; otherwise it gets a full review.
-- **Auto-close**: a cluster where fewer than two members can reach staging gets a verdict marked `kg_auto`, because there is nothing to judge. The verdict is reopened automatically if an override change gives it a second member that can reach staging.
-- **Keeper check**: catches documents that silently left staging because their duplicate's keeper is also excluded.
-- **Snapshots**: the graph, graphify's semantic cache, the docs-curator state, per-file decisions and the verdicts are saved before each curate and each graph run. The last 3 are kept, and `kg restore` puts one back. Unchanged state is not snapshotted twice, and the snapshot an unfinished graph run started from is never pruned, so retries can't push out the last good graph.
-- **Graph runs**:
-  - A token-cost estimate from `cost.json`, with a cap.
-  - A list of oversized files that need their own extraction chunk.
-  - Lost nodes sorted into "from changed files" and "unexplained" before `force=True`.
-  - Community labels carried forward wherever at least 50% of a community's labelled members agree.
-- **Graph excludes**: `graph.excludes` in `kg.yaml` holds the rules for which staged files reach the graph, as gitignore-style patterns such as `*.xlsx.md` or `!/specs/api/decp.openapi.yaml.md`. kg writes them into graphify's exclude file before each run, so new files follow the rules too, and it prunes the nodes of files the rules newly exclude.
-- **Graph fixups**: `graph-fixups.yaml` next to `kg.yaml` lists hand-reviewed corrections (links to add, duplicate nodes to merge) that kg applies after every run, so they survive re-extraction. Self-loop edges are always dropped.
-- **Manifest re-keying**: rewrites graphify manifests written by older versions so that `--update` only re-extracts the files that changed.
-- **Links**: the repo's `graphify-out` and `.docs-curator` symlinks are written as `$HOME` paths, so they work on other machines.
-- **Code**: `kg code` runs `codegraph sync` on any branch and keeps codegraph's telemetry off.
+kg turns a repository's documents and code into two searchable knowledge graphs, and keeps them current as the repo changes. Each point below says what you get, then how kg delivers it.
+
+### For everyone: why you can trust the graph
+
+- **Only reviewed content goes in.** The docs steps run only on `main`, `develop` or `develop-*` with a clean working tree, so the graph never reflects half-finished or unmerged work. `--allow-any-branch` overrides this, and every override is logged.
+- **Sensitive data stays out.** Paths listed in `phi_globs` are always excluded, and their extracted text is purged after every analyze. If any trace of them appears in the text cache, staging or the graph, the run stops with exit code 4. It is a hard stop, not a warning.
+- **A bad run can be undone.** The graph, graphify's semantic cache, the docs-curator state, per-file decisions and verdicts are saved before each curate and each graph run. The last 3 snapshots are kept, and `kg restore` puts one back. Retries can never push out the last good graph.
+- **Spend is visible before it happens.** Each graph run shows a token-cost estimate (from `cost.json`) and stops for a separate, explicit yes if it passes the cap. Lost nodes are sorted into "from changed files" and "unexplained" before anything is forced through.
+
+### For managers: less rework, predictable cost
+
+- **Review effort is spent once.** When a document cluster is renumbered because a member changed, its earlier verdict carries over if the old and new member sets overlap by at least 80%, and moved files are followed. Reviewers see only the new members, not the whole cluster again. Clusters where fewer than two members can reach staging are closed automatically (`kg_auto`) and reopened if an override gives them a second.
+- **Incremental runs cost less.** Manifests written by older versions are re-keyed, so `--update` re-extracts only the files that changed.
+- **Naming stays stable.** Community labels carry forward wherever at least 50% of a community's labelled members agree, so the graph's vocabulary doesn't churn between runs.
+- **Nothing is lost silently.** The keeper check catches documents that dropped out of staging because their duplicate's keeper was also excluded.
+
+### For developers: control and repeatability
+
+- **Overrides are generated, not hand-maintained.** `overrides.yaml` is built from git (only tracked documents are staged), the exclude groups in `kg.yaml`, and your hand decisions in `overrides.manual.yaml`. The file rules are imported from docs-curator's `curate.py`, so they can't drift from it.
+- **Graph excludes are declarative.** `graph.excludes` in `kg.yaml` holds gitignore-style patterns such as `*.xlsx.md` or `!/specs/api/decp.openapi.yaml.md`. kg writes them into graphify's exclude file before each run, so new files follow the rules too, and it prunes the nodes of files the rules newly exclude.
+- **Hand corrections survive re-extraction.** `graph-fixups.yaml` next to `kg.yaml` lists reviewed fixes (links to add, duplicate nodes to merge) that kg applies after every run. Self-loop edges are always dropped.
+- **Oversized files are planned for.** A graph run lists files that need their own extraction chunk instead of failing midway.
+- **Code graph in one command.** `kg code` runs `codegraph sync` on any branch and keeps codegraph's telemetry off.
+- **Portable setup.** The repo's `graphify-out` and `.docs-curator` symlinks are written as `$HOME` paths, so they work on other machines.
 
 ## Layout
 
