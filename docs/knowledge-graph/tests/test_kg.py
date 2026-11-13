@@ -425,3 +425,13 @@ def test_newly_excluded_sources_and_check(env):
     kg.write_json(g / ".graphify_extract.json", graph([("a1", "docs/a.md", None)]))
     assert kg.cmd_graph_check(argparse.Namespace(repo=str(env.repo), new=None)) == 0
     assert kg.read_json(ctx.kgdir / "graph-check.json")["explained"] == 2
+
+
+def test_run_curate_passes_no_extract(env, monkeypatch):
+    ctx = env.ctx()
+    seen = []
+    monkeypatch.setattr(kg, "run", lambda cmd, **kw: seen.append([str(c) for c in cmd]))
+    kg.run_curate(ctx, "update")
+    assert seen[-1][-2:] == ["--no-extract", "out/phi/*"]  # this checkout of docs-curator supports it
+    kg.run_curate(ctx, "apply")
+    assert "--no-extract" not in seen[-1]
