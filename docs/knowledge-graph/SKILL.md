@@ -69,7 +69,9 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 
 ## Restore
 
-`kg restore` shows what the latest snapshot would put back. `kg restore <timestamp> [--only graph|curator]` picks a specific snapshot or part. Nothing is restored without `--yes`, so get the user's yes first. Snapshots live in `~/curated/<repo>/backups/`, and the newest `backups.keep` (default 3) are kept.
+`kg restore` shows what the latest snapshot would put back. `kg restore <timestamp> [--only graph|curator]` picks a specific snapshot or part. Nothing is restored without `--yes`, so get the user's yes first. Snapshots live in `~/curated/<repo>/backups/`, and the newest `backups.keep` (default 3) are kept. Two guards protect them: an unchanged state reuses the latest snapshot instead of adding one, and the snapshot an unfinished graph run started from (named in `.kg/graph-plan.json`) is never pruned.
+
+**If a graphify run fails partway, restore first, then retry.** `kg graph prepare` warns when the previous run never reached `kg graph finish` and keeps that run's pre-run snapshot as the restore point. Offer `kg restore <that snapshot> --only graph`, and run it with `--yes` once the user agrees, before preparing again.
 
 ## Exit codes
 
