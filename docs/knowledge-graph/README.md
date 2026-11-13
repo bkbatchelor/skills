@@ -70,6 +70,7 @@ known_excluded_keepers: []           # excluded files whose keeper is also exclu
 carry_forward:
   verdict_overlap: 0.8               # copy a verdict to a re-numbered cluster at this member overlap
   label_agreement: 0.5               # reuse a community label when this share of members agrees
+  label_min_known: 0.5               # ...and at least this share of all members had a label before
   subset_max_members: 25             # a cluster that only lost members keeps the verdict of an old one this small
 
 graph:
