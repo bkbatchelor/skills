@@ -1058,6 +1058,30 @@ def avg_tokens_per_file(cost):
     return (sum(r.get("input_tokens", 0) for r in runs) / files) if files else None
 
 
+def line_count(path):
+    try:
+        with open(path, "rb") as fh:
+            return sum(1 for _ in fh)
+    except OSError:
+        return 0
+
+
+def pending_extraction(ctx, rels):
+    """Planned files whose content does not match graphify's manifest, i.e. not extracted yet."""
+    import hashlib
+
+    m = read_json(ctx.out / "graphify-out/manifest.json") or {}
+    pending = []
+    for rel in rels:
+        f = ctx.out / "staging" / rel
+        if not f.is_file():
+            continue
+        row = m.get("staging/" + rel) or m.get(rel) or {}
+        if row.get("semantic_hash") != hashlib.md5(f.read_bytes()).hexdigest():
+            pending.append(rel)
+    return pending
+
+
 def big_file(path, max_bytes, max_line):
     p = Path(path)
     try:
@@ -1203,17 +1227,23 @@ def cmd_graph_prepare(args):
     changed = sorted({f for fl in det["new_files"].values() for f in fl})
     rel_changed = [rel_to_staging(ctx, f) for f in changed]
     rel_deleted = [rel_to_staging(ctx, f) for f in det["deleted"]]
-    rel_excluded = newly_excluded_sources(ctx, [rel_to_staging(ctx, f) for f in det.get("files", [])])
+    rel_excluded = [f for f in newly_excluded_sources(ctx, [rel_to_staging(ctx, f) for f in det.get("files", [])])
+                    if f not in set(rel_deleted)]  # graphify already prunes what it sees as deleted
     cost = read_json(ctx.out / "graphify-out/cost.json")
     per_file = avg_tokens_per_file(cost)
     # Each extraction agent costs a fixed ~60k (spec + reading graph.json to reuse IDs) however few
     # files it gets; the per-file average hides that on small runs. Chunks follow graphify's ~22 files.
     overhead = int(ctx.get("graph", "agent_overhead_tokens", default=60_000))
-    chunks = -(-len(changed) // 22) if changed else 0
-    estimate = int((per_file or 0) * len(changed) + overhead * chunks) if (per_file or chunks) else None
-    cap = int(ctx.get("graph", "cost_cap_tokens", default=1_500_000))
     mb, ml = int(ctx.get("graph", "big_file_bytes", default=400_000)), int(ctx.get("graph", "big_file_line_chars", default=20_000))
     big = [{"path": rel_to_staging(ctx, f), "why": w} for f in changed if (w := big_file(f, mb, ml))]
+    big_set = {b["path"] for b in big}
+    # graphify gives any file over 2000 lines a chunk of its own (Read's single-call cap), big or not
+    long_files = [rel_to_staging(ctx, f) for f in changed
+                  if rel_to_staging(ctx, f) not in big_set and line_count(f) > 2000]
+    rest = len(changed) - len(big) - len(long_files)
+    chunks = (-(-rest // 22) if rest else 0) + len(big) + len(long_files)  # one agent per big or long file
+    estimate = int((per_file or 0) * len(changed) + overhead * chunks) if (per_file or chunks) else None
+    cap = int(ctx.get("graph", "cost_cap_tokens", default=1_500_000))
     has_graph = (ctx.out / "graphify-out/graph.json").exists()
     plan = {
         "at": now_ts(), "snapshot": snap.name, "staging": str(home_form(staging)),
@@ -1223,7 +1253,7 @@ def cmd_graph_prepare(args):
         "prune_sources": [str(staging / f) for f in rel_deleted + rel_excluded],
         "total_files": det["total_files"], "tokens_per_file": round(per_file) if per_file else None,
         "estimated_input_tokens": estimate, "estimated_chunks": chunks, "cost_cap_tokens": cap,
-        "over_cap": bool(estimate and estimate > cap), "big_files": big,
+        "over_cap": bool(estimate and estimate > cap), "big_files": big, "long_files": long_files,
         "graphify_command": f"cd {home_form(ctx.repo)} && /graphify {home_form(staging)}" + (" --update" if has_graph else ""),
     }
     write_json(ctx.kgdir / "graph-plan.json", plan)
@@ -1235,7 +1265,7 @@ def cmd_graph_prepare(args):
           f"of {det['total_files']} scanned files ({plan['mode']} run)")
     for f in rel_excluded:
         print(f"  excluded now (its nodes must be pruned): {f}")
-    missing = sorted(set(plan["phi_pruned"]) - set(rel_excluded))
+    missing = sorted(set(plan["phi_pruned"]) - set(rel_excluded) - set(rel_deleted))
     if plan["phi_pruned"]:
         print(f"phi: {len(plan['phi_pruned'])} PHI source(s) are in the graph and will be pruned by this run; "
               "`kg graph finish` fails if any remain")
@@ -1245,7 +1275,7 @@ def cmd_graph_prepare(args):
         print("graph: nothing changed since the last build; no graphify run needed")
         return 0
     est = (f"~{estimate:,} input tokens ({len(changed)} files x {plan['tokens_per_file'] or 0:,} avg from cost.json "
-           f"+ {chunks} agent(s) x {overhead:,} overhead; at least 2 agents if big files need their own chunk)") if estimate else "unknown"
+           f"+ {chunks} agent(s) x {overhead:,} overhead, {len(big) + len(long_files)} of them for big or 2000+-line files)") if estimate else "unknown"
     print(f"cost: {est}; cap {cap:,}" + ("  ** OVER CAP: needs a separate explicit yes **" if plan["over_cap"] else ""))
     for b in big:
         print(f"big file (own chunk, parse with python3 -I, not Read): {b['path']} ({b['why']})")
@@ -1355,9 +1385,16 @@ def cmd_graph_finish(args):
     ctx = Ctx(args.repo)
     phi_gate(ctx, ("graph",), "graph finish")
     g = read_json(ctx.out / "graphify-out/graph.json") or {}
+    plan = read_json(ctx.kgdir / "graph-plan.json") or {}
+    # A prune-only pass (or a run that skipped files) leaves planned files unextracted; remember them
+    # so `kg status` does not report the graph as up to date while they are still queued.
+    pending = pending_extraction(ctx, plan.get("changed", []))
     write_json(ctx.kgdir / "state.json", {**read_json(ctx.kgdir / "state.json", {}),
                                           "graphed_head": git(ctx.repo, "rev-parse", "HEAD"),
-                                          "graphed_at": now_ts()})
+                                          "graphed_at": now_ts(), "graph_pending": pending})
+    if pending:
+        print(f"graph: {len(pending)} planned file(s) were not extracted and stay queued; "
+              "`kg graph prepare` picks them up next")
     for name in ("graph-plan.json",):
         p = ctx.kgdir / name
         if p.exists():
@@ -1564,6 +1601,8 @@ def next_step(ctx):
         return ("skill", "graphify run in progress (plan exists): ask, run graphify, kg graph check/labels/finish")
     if st.get("graphed_head") != head:
         return ("kg", "graph prepare")
+    if st.get("graph_pending"):
+        return ("kg", f"graph prepare ({len(st['graph_pending'])} changed file(s) still queued for extraction)")
     return ("none", "up to date")
 
 
@@ -1579,6 +1618,8 @@ def cmd_status(args):
         drift = "" if h == head else (f" ({len((git(ctx.repo, 'log', '--oneline', f'{h}..HEAD') or '').splitlines())} commit(s) behind)"
                                       if h else " (never by kg)")
         print(f"{label:8} {(h or '-')[:10]} at {kst.get(key.replace('head', 'at'), '-')}{drift}")
+    if kst.get("graph_pending"):
+        print(f"queued   {len(kst['graph_pending'])} changed file(s) not yet extracted into the graph")
     rs = review_state(ctx)
     print(f"review   {len(rs['needs_verdict'])} need a verdict, {len(rs['needs_recheck'])} carried need a re-check")
     for name, state, cur in link_state(ctx):

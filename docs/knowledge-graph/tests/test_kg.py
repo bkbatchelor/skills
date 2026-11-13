@@ -533,6 +533,78 @@ def test_prepare_prunes_phi_already_in_graph(env, monkeypatch):
     assert kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True)) == 0
     plan = kg.read_json(ctx.kgdir / "graph-plan.json")
     assert plan["phi_pruned"] == ["out/phi/app.md"] and "out/phi/app.md" in plan["excluded"]
+    assert len(plan["prune_sources"]) == len(set(plan["prune_sources"]))  # no file listed twice
     with pytest.raises(SystemExit) as e:  # finish refuses while the PHI node is still in the graph
         kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
     assert e.value.code == kg.EXIT_PHI
+
+
+def test_prepare_phi_in_graph_already_deleted(env, monkeypatch):
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "a.md").write_text("x\n")
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a1", "docs/a.md", None), ("p1", "out/phi/app.md", None)]))
+    (ctx.repo / "graphify-out").symlink_to(g, target_is_directory=True)
+    phi_abs = str(ctx.out / "staging/out/phi/app.md")
+
+    def fake_run(cmd, **kw):  # graphify itself reports the PHI file as deleted
+        return argparse.Namespace(stdout=json.dumps({"new_files": {}, "deleted": [phi_abs], "files": [str(st / "a.md")],
+                                                     "total_files": 1, "new_total": 0}))
+    monkeypatch.setattr(kg, "run", fake_run)
+    monkeypatch.setattr(kg, "graphify_python", lambda ctx: "python")
+    assert kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True)) == 0
+    plan = kg.read_json(ctx.kgdir / "graph-plan.json")
+    assert plan["deleted"] == ["out/phi/app.md"] and plan["excluded"] == [] and plan["prune_sources"] == [phi_abs]
+
+
+def test_finish_records_files_still_queued(env):
+    import hashlib
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "done.md").write_text("done\n")
+    (st / "queued.md").write_text("queued\n")
+    kg.write_json(ctx.out / "graphify-out/graph.json", graph([("a", "docs/done.md", None)]))
+    kg.write_json(ctx.out / "graphify-out/manifest.json", {
+        "staging/docs/done.md": {"semantic_hash": hashlib.md5(b"done\n").hexdigest()},
+        "staging/docs/queued.md": {"semantic_hash": "old"}})
+    kg.write_json(ctx.kgdir / "graph-plan.json", {"snapshot": "x", "changed": ["docs/done.md", "docs/queued.md"]})
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": kg.git(ctx.repo, "rev-parse", "HEAD")})
+    kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
+    assert kg.read_json(ctx.kgdir / "state.json")["graph_pending"] == ["docs/queued.md"]
+
+
+def test_next_step_reports_queued_files(env, monkeypatch):
+    ctx = env.ctx()
+    head = kg.git(ctx.repo, "rev-parse", "HEAD")
+    ctx.work.mkdir(parents=True, exist_ok=True)
+    kg.write_json(ctx.work / "analysis.json", {"files": [], "clusters": []})
+    (ctx.work / "decisions.jsonl").write_text("")
+    (ctx.out / "staging").mkdir(exist_ok=True)
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": head, "graphed_head": head})
+    assert kg.next_step(ctx) == ("none", "up to date")
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": head, "graphed_head": head, "graph_pending": ["docs/q.md"]})
+    who, what = kg.next_step(ctx)
+    assert who == "kg" and what.startswith("graph prepare") and "1 changed file(s) still queued" in what
+
+
+def test_estimate_counts_long_files(env, monkeypatch):
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "long.json.md").write_text("x\n" * 2500)
+    for i in range(3):
+        (st / f"small{i}.md").write_text("x\n")
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "docs/small0.md", None)]))
+    kg.write_json(g / "cost.json", {"runs": [{"input_tokens": 1000, "files": 1}]})
+    (ctx.repo / "graphify-out").symlink_to(g, target_is_directory=True)
+    files = [str(st / f) for f in ("long.json.md", "small0.md", "small1.md", "small2.md")]
+    monkeypatch.setattr(kg, "run", lambda cmd, **kw: argparse.Namespace(stdout=json.dumps(
+        {"new_files": {"document": files}, "deleted": [], "files": files, "total_files": 4, "new_total": 4})))
+    monkeypatch.setattr(kg, "graphify_python", lambda ctx: "python")
+    kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True))
+    plan = kg.read_json(ctx.kgdir / "graph-plan.json")
+    assert plan["long_files"] == ["docs/long.json.md"] and plan["estimated_chunks"] == 2  # 3 small + 1 long
