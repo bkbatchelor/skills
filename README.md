@@ -177,6 +177,10 @@ skills/
 │       ├── README.md             # Install, usage, helper commands, state location
 │       └── scripts/              # Helper scripts
 │           └── tokensaver.py     # search, count, fields, dates, diff, accept, current
+├── testing/                  # Testing and verification skills
+│   └── testing-runbook-creator/  # Repo-local testing runbook skill
+│       ├── SKILL.md              # Skill definition
+│       └── README.md             # Install, runbook location, entry fields, rules
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -219,6 +223,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | knowledge-graph | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
 | mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
+| testing-runbook-creator | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -579,6 +584,29 @@ Token discipline for the rest of a job. It cannot erase the call it was loaded i
 - Never retries a token-limit or usage-limit failure; reduces the input instead
 - Reports usage numbers only when the harness provides them, otherwise `unavailable`
 - The skill picks the job slug and runs the script itself, so the user manages no state file or paths
+
+#### testing-runbook-creator
+
+---
+
+Makes testing knowledge persist in the repo. Triggers on any testing, verification, smoke-testing, QA, or debugging activity, not only when a runbook is mentioned.
+
+**Key Components:**
+- `SKILL.md`: Four rules (read first, update on mismatch, record as you go, record only what is reusable), the entry format, and the hard rules
+- `README.md`: Install, runbook location, entry fields
+
+**Requirements:**
+- None
+
+**Features:**
+- Runbook location: an existing testing doc wins, else `docs/testing-runbook.md`, else `TESTING-RUNBOOK.md` at the repo root; created at the first discovery
+- Entry fields: Scope, Last verified (date and commit), Prerequisites / seed, Steps, Safe actions, Destructive actions, Verification (exact command plus expected output), Cleanup, Gotchas
+- Never records secrets, never runs destructive steps without approval, never commits the runbook on its own
+
+**Usage:**
+```bash
+ln -s "$PWD/testing/testing-runbook-creator" ~/.claude/skills/testing-runbook-creator
+```
 
 #### visible-delegation
 
