@@ -498,7 +498,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 **Key Components:**
 - `SKILL.md`: The run sequence (curate, review, apply, graph prepare, ask, Graphify with check and labels, finish, code), gating, restore, exit codes, and hard rules
 - `README.md`: What kg automates, the `~/curated/<repo>/` layout, and usage
-- `scripts/kg.py`: Subcommands `init`, `preflight`, `overrides`, `curate`, `review`, `apply`, `graph prepare|check|labels|finish`, `code`, `status`, `restore`, `all` and `install-shim`
+- `scripts/kg.py`: Subcommands `init`, `preflight`, `overrides`, `curate`, `review`, `apply`, `graph prepare|check|fixups|labels|finish`, `code`, `status`, `restore`, `all` and `install-shim`
 - `tests/test_kg.py`: pytest suite (gating, overrides, PHI, carry-forward, node-loss check, labels, snapshots, links, manifest re-keying)
 
 **Requirements:**
@@ -516,6 +516,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Token-cost estimate with a cap, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
 - Re-keys graphify manifests written by older versions, so `--update` re-extracts only the files that changed
 - Graph exclude rules in `kg.yaml` (`graph.excludes`, gitignore-style) written into graphify's exclude file on every run, with nodes of newly excluded files pruned
+- `graph-fixups.yaml` per repo: hand-reviewed links and duplicate-node merges re-applied after every graph run (`kg graph fixups`); self-loops always dropped
 - Repo symlinks written in `$HOME` form; codegraph telemetry kept off
 
 **Usage:**
