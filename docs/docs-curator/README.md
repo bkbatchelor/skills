@@ -61,9 +61,10 @@ Whichever option you choose, Claude needs the source folder. If it is missing, i
 ## What happens
 
 1. **Analyze.** Claude scans the folder, reads every file, and groups exact duplicates, copies in different formats (a deck and its PDF export), near-identical text, revision chains (`v1`, `v2`, `final`, dated copies) and related topics.
-2. **Review.** Claude reads each group and decides whether one document supersedes another and whether any contradict each other. Contradictions are quoted word for word, and the quotes are checked against the documents afterwards. Claude only marks a file as superseded when it can defend that from the text.
-3. **Apply.** Claude builds the curated folder and a report, then gives you a summary.
-4. **Docs graph (with your approval).** Claude asks whether to build the docs graph from `staging/`. Nothing runs until you say yes. Code is mapped by the separate `code-graph` skill.
+2. **Classify (optional).** If you turned on `classify_untyped`, Claude has a small, cheap model (Haiku by default) label each untyped document as a requirement, an ADR or other, then re-runs the analysis so those documents join the requirement-versus-ADR check. Labels below 0.8 confidence are ignored.
+3. **Review.** Claude reads each group and decides whether one document supersedes another and whether any contradict each other. Contradictions are quoted word for word, and the quotes are checked against the documents afterwards. Claude only marks a file as superseded when it can defend that from the text. Each group is sent to a model matched to its difficulty: Sonnet for ordinary groups, Opus for requirement-versus-ADR checks, revision chains the signals could not order and large groups. If a Sonnet review finds a contradiction or an unsure supersession, that group is reviewed again by Opus.
+4. **Apply.** Claude builds the curated folder and a report, then gives you a summary.
+5. **Docs graph (with your approval).** Claude asks whether to build the docs graph from `staging/`. Nothing runs until you say yes. Code is mapped by the separate `code-graph` skill.
 
 After the folder changes, ask for an update. Claude lists the files added, modified and removed (saved in `.docs-curator/changes.json`), reviews only the groups that contain a new or modified file, and rebuilds `staging/`. Reviews of untouched groups are kept. Reviews of groups that changed are listed as stale and left in place.
 
@@ -102,6 +103,8 @@ If your folder holds business requirements and ADRs (architecture decision recor
 adr_globs: ["adr/*", "docs/adr/*"]
 requirement_globs: ["requirements/*"]
 ```
+
+If your documents have neither, set `classify_untyped: true` and a small model will guess the type of each one (see "Adjusting the result"). Guesses are listed in the report as "typed by the classifier".
 
 To pair them exactly, give each document an `id` and link them: an ADR with `satisfies: REQ-12`, or a requirement with `decided_by: ADR-7`. The skill also pairs each requirement with its most similar ADR on its own. That similarity cutoff (`cross_type_threshold`) is untuned, so expect some pairs to be missed or wrong.
 
@@ -158,7 +161,13 @@ Both files are optional and go in the output folder. Ask Claude to create them, 
   near_duplicate_action: exclude   # default is flag (keep and report)
   low_confidence_threshold: 0.75   # below this, older files are kept and flagged
   embedding_backend: tfidf         # skip the model download
+  classify_untyped: true           # have a small model label untyped documents (default false)
+  classify_min_confidence: 0.8     # ignore labels below this
+  review_model_standard: sonnet    # model for ordinary groups
+  review_model_deep: opus          # model for hard groups
+  deep_review_min_members: 6       # groups this large count as hard
   ```
+  The model names are aliases Claude passes to the subagents it starts, so the cheap and strong models can be changed here without touching the skill.
   Unknown keys are rejected. Leave `near_duplicate_action` on `flag` unless the folder is prose where near-identical text really is redundant. Near-identical forms can be different documents.
 
 Thresholds were tuned on a synthetic corpus only, so spot-check "Flagged but kept" and the superseded list after your first real run.

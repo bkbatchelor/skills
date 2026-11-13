@@ -58,6 +58,15 @@ DEFAULTS = {
     "adr_globs": [],  # path globs for ADRs, used when front matter has no `type`
     "requirement_globs": [],  # path globs for business requirements
     "cross_type_threshold": None,  # similarity to pair a requirement with an ADR; None = the cluster floor
+    "classify_untyped": False,  # queue documents with no type for a cheap classifier pass (requirement | adr | other)
+    "classify_model": "haiku",  # model alias the agent should use for the classify batches
+    "classify_min_confidence": 0.8,  # a label below this is ignored
+    "classify_batch_size": 25,  # documents per classify batch
+    "classify_snippet_words": 300,  # words of each document shown to the classifier
+    "classify_max_docs_per_run": 500,  # the rest are deferred to the next run
+    "review_model_standard": "sonnet",  # model alias for ordinary cluster reviews
+    "review_model_deep": "opus",  # model alias for clusters that need the strongest reasoning
+    "deep_review_min_members": 6,  # a cluster this large goes to the deep tier
 }
 
 STOPWORDS = set(
@@ -103,6 +112,16 @@ def load_config(out, explicit=None):
     for key in ("adr_globs", "requirement_globs"):
         if not isinstance(cfg[key], list) or not all(isinstance(g, str) for g in cfg[key]):
             die(f"{key} must be a list of path globs")
+    for key in ("classify_model", "review_model_standard", "review_model_deep"):
+        if not isinstance(cfg[key], str) or not cfg[key].strip():
+            die(f"{key} must be a non-empty model alias")
+    if not isinstance(cfg["classify_untyped"], bool):
+        die("classify_untyped must be true or false")
+    if not 0 <= float(cfg["classify_min_confidence"]) <= 1:
+        die("classify_min_confidence must be between 0 and 1")
+    for key in ("classify_batch_size", "classify_snippet_words", "classify_max_docs_per_run", "deep_review_min_members"):
+        if not isinstance(cfg[key], int) or isinstance(cfg[key], bool) or cfg[key] < 1:
+            die(f"{key} must be a positive integer")
     return cfg
 
 
@@ -551,10 +570,88 @@ def classify_doc(path, text, fmt, cfg):
     return {
         "type": doc_type,
         "type_source": source,
+        "declared": str(meta.get("type", "")).strip().lower() or None,  # front matter says what it is, whatever that is
         "id": str(meta["id"]) if meta.get("id") else None,
         "status": str(meta["status"]) if meta.get("status") else None,
         "links": _as_list(meta.get("satisfies")) + _as_list(meta.get("decided_by")),
     }
+
+
+CLASSIFY_LABELS = ("requirement", "adr", "other")
+
+
+def load_labels(work):
+    """Read classifier labels (`work/classify/labels/*.json`) into {sha256: {type, confidence}}.
+
+    Keyed by content hash, so a label survives a rename and stops applying when the file changes. A malformed
+    file or entry is skipped with a warning; a missing label just leaves the document untyped.
+    """
+    labels, warnings = {}, []
+    ldir = work / "work" / "classify" / "labels"
+    for lf in sorted(ldir.glob("*.json")) if ldir.exists() else []:
+        try:
+            data = json.loads(lf.read_text(encoding="utf-8"))
+            entries = data["labels"] if isinstance(data, dict) else data
+            if not isinstance(entries, list):
+                raise ValueError("no labels list")
+        except Exception as exc:
+            warnings.append(f"classify labels {lf.name} ignored: {exc}")
+            continue
+        for e in entries:
+            try:
+                sha, typ, conf = str(e["sha256"]), str(e["type"]).strip().lower(), float(e["confidence"])
+                if typ not in CLASSIFY_LABELS or not 0 <= conf <= 1:
+                    raise ValueError("bad type or confidence")
+                labels[sha] = {"type": typ, "confidence": conf}
+            except Exception:
+                warnings.append(f"classify labels {lf.name}: entry ignored ({e!r:.80})")
+    return labels, warnings
+
+
+def apply_labels(alive, byp, doctypes, labels, cfg):
+    """Type documents the front matter and path globs left untyped, from classifier labels. Returns how many."""
+    applied = 0
+    for p in alive:
+        d = doctypes[p]
+        lab = labels.get(byp[p]["sha256"])
+        if d["type"] or d["declared"] or not lab:
+            continue
+        if lab["type"] in ("requirement", "adr") and lab["confidence"] >= cfg["classify_min_confidence"]:
+            d["type"], d["type_source"], d["confidence"] = lab["type"], "classifier", lab["confidence"]
+            applied += 1
+    return applied
+
+
+def write_classify_queue(work, alive, byp, texts, doctypes, labels, cfg, skip=frozenset()):
+    """Queue untyped, unlabelled documents for the classifier, in batches. Returns (docs queued, deferred).
+
+    `skip` holds paths an override excludes: they never reach staging, so spending tokens on them is waste.
+    """
+    qdir = work / "work" / "classify" / "queue"
+    if qdir.exists():
+        shutil.rmtree(qdir)
+    if not cfg["classify_untyped"]:
+        return 0, 0
+    qdir.mkdir(parents=True)
+    todo = [p for p in alive if not doctypes[p]["type"] and not doctypes[p]["declared"] and byp[p]["sha256"] not in labels and p not in skip]
+    deferred = max(0, len(todo) - cfg["classify_max_docs_per_run"])
+    todo = todo[: cfg["classify_max_docs_per_run"]]
+    size = cfg["classify_batch_size"]
+    for i in range(0, len(todo), size):
+        batch = todo[i : i + size]
+        docs = []
+        for p in batch:
+            words = re.findall(r"\S+", _COMMENT.sub(" ", texts[p]))
+            docs.append({
+                "path": p,
+                "sha256": byp[p]["sha256"],
+                "format": byp[p]["format"],
+                "title": describe(texts[p], Path(p).stem),
+                "snippet": " ".join(words[: cfg["classify_snippet_words"]]),
+            })
+        batch_id = cluster_id([d["sha256"] for d in docs])
+        write_json(qdir / f"{batch_id}.json", {"batch_id": batch_id, "model": cfg["classify_model"], "labels": list(CLASSIFY_LABELS), "docs": docs})
+    return len(todo), deferred
 
 
 def merge_cross_type(groups, alive, snippets, doctypes, cfg):
@@ -728,6 +825,66 @@ def find_collisions(site_map):
 # ------------------------------------------------------------------------ analyze
 
 
+def escalation_reason(verdict, cfg):
+    """Why a verdict written at the standard tier should be re-reviewed at the deep tier, or None.
+
+    Only verdicts that say `review_tier: standard` are escalated, once: the deep re-review overwrites the verdict
+    with `review_tier: deep`. Escalate when the cheaper review found a contradiction or made a revision claim it was
+    not confident about.
+    """
+    if not isinstance(verdict, dict) or verdict.get("review_tier") != "standard":
+        return None
+    if verdict.get("conflicts"):
+        return "conflict_found"
+    for r in verdict.get("revisions") or []:
+        try:
+            if float(r.get("confidence", 1)) < cfg["low_confidence_threshold"]:
+                return "low_confidence_revision"
+        except (TypeError, ValueError, AttributeError):
+            return "low_confidence_revision"
+    return None
+
+
+def route_review(cluster, chains, decision_check, escalated, cfg):
+    """Pick the review tier and model alias for one cluster from deterministic signals.
+
+    Deep: a requirement-vs-ADR check, a revision chain the signals could not order, or a large cluster (more
+    contradictions to find), or an escalation from a standard review. Everything else is standard.
+    """
+    reasons = []
+    if decision_check:
+        reasons.append("requirement_vs_adr")
+    if any(not ch.get("deterministic") for ch in chains):
+        reasons.append("ambiguous_revision_chain")
+    if len(cluster["members"]) >= cfg["deep_review_min_members"]:
+        reasons.append("large_cluster")
+    if escalated:
+        reasons.append("escalated_" + escalated)
+    tier = "deep" if reasons else "standard"
+    return {"tier": tier, "model": cfg["review_model_deep" if reasons else "review_model_standard"], "reasons": reasons}
+
+
+def write_routing(work, ranked, cfg, classify_queued, classify_deferred):
+    """Group the queued work by model, so the agent can fan it out: `work/routing.json`."""
+    by_model = collections.defaultdict(list)
+    escalate = []
+    for c in ranked:
+        if not c.get("queued"):
+            continue
+        by_model[c["review"]["model"]].append(c["id"])
+        if any(r.startswith("escalated_") for r in c["review"]["reasons"]):
+            escalate.append({"cluster_id": c["id"], "reason": c["review"]["reasons"][-1][len("escalated_"):]})
+    cdir = work / "work" / "classify" / "queue"
+    routing = {
+        "classify": {"model": cfg["classify_model"], "batches": sorted(f.stem for f in cdir.glob("*.json")) if cdir.exists() else [],
+                     "documents": classify_queued, "deferred": classify_deferred},
+        "review": {m: sorted(ids) for m, ids in sorted(by_model.items())},
+        "escalate": escalate,
+    }
+    write_json(work / "work" / "routing.json", routing)
+    return routing
+
+
 def cmd_analyze(args):
     source = Path(args.source).expanduser().resolve()
     out = resolve_out(args)
@@ -848,6 +1005,12 @@ def cmd_analyze(args):
     cut = None
     clusters = []
     doctypes = {p: classify_doc(p, texts[p], byp[p]["format"], cfg) for p in alive}
+    labels, label_warnings = load_labels(work)
+    for w in label_warnings:
+        print(f"warning: {w}", file=sys.stderr)
+    labelled = apply_labels(alive, byp, doctypes, labels, cfg) if cfg["classify_untyped"] else 0
+    overridden = {p for p, o in load_overrides(out, getattr(args, "overrides", None)).items() if o["action"] == "exclude"}
+    classify_queued, classify_deferred = write_classify_queue(work, alive, byp, texts, doctypes, labels, cfg, overridden)
     if len(alive) >= 2:
         snippets = [" ".join(re.findall(r"\S+", _COMMENT.sub(" ", texts[p]))[:400]) for p in alive]
         groups, cut = cluster_documents(alive, snippets, cfg)
@@ -901,11 +1064,16 @@ def cmd_analyze(args):
     # LLM queue -------------------------------------------------------------------
     verdict_dir = work / "work" / "verdicts"
     verdict_dir.mkdir(parents=True, exist_ok=True)
-    reviewed = set()
+    reviewed, escalate = set(), {}
     if verdict_dir.exists():
         for vf in verdict_dir.glob("*.json"):
             try:
-                reviewed.add(json.loads(vf.read_text(encoding="utf-8")).get("cluster_id", vf.stem))
+                v = json.loads(vf.read_text(encoding="utf-8"))
+                cid = v.get("cluster_id", vf.stem)
+                reviewed.add(cid)
+                why = escalation_reason(v, cfg)
+                if why:
+                    escalate[cid] = why
             except Exception:
                 pass
     queue_dir = work / "work" / "queue"
@@ -917,15 +1085,20 @@ def cmd_analyze(args):
     for c in ranked:
         c["reviewed"] = c["id"] in reviewed
         c["queued"] = False
-        if c["reviewed"]:
+        if c["reviewed"] and c["id"] not in escalate:
             continue
         if slots <= 0:
             continue
         slots -= 1
         c["queued"] = True
+        c_chains = [ch for ch in chains if ch["members"][0] in c["members"]]
+        decision_check = {doctypes[m]["type"] for m in c["members"]} >= {"requirement", "adr"}
+        review = route_review(c, c_chains, decision_check, escalate.get(c["id"]), cfg)
+        c["review"] = review
         item = {
             "cluster_id": c["id"],
             "read_words": cfg["llm_read_words"],
+            "review": review,
             "members": [
                 {
                     "path": m,
@@ -937,14 +1110,16 @@ def cmd_analyze(args):
                     "revision_signals": info[m]["name"] | {k: info[m][k] for k in ("text_version", "text_date", "core_modified", "mtime")},
                     **({"doc_type": doctypes[m]["type"], "type_source": doctypes[m]["type_source"], "doc_id": doctypes[m]["id"],
                         "doc_status": doctypes[m]["status"]} if doctypes[m]["type"] else {}),
+                    **({"type_confidence": doctypes[m]["confidence"]} if "confidence" in doctypes[m] else {}),
                 }
                 for m in c["members"]
             ],
-            "chains": [ch for ch in chains if ch["members"][0] in c["members"]],
+            "chains": c_chains,
             "near_duplicate_pairs": [e for e in edges if e["a"] in c["members"] and e["b"] in c["members"]],
-            "decision_check": {doctypes[m]["type"] for m in c["members"]} >= {"requirement", "adr"},
+            "decision_check": decision_check,
         }
         write_json(queue_dir / f"{c['id']}.json", item)
+    routing = write_routing(work, ranked, cfg, classify_queued, classify_deferred)
 
     analysis = {
         "analysis_version": 1,
@@ -962,6 +1137,8 @@ def cmd_analyze(args):
         "collisions": collisions,
         "anomalies": anomalies,
         "doc_types": typed,
+        "classification": {"enabled": cfg["classify_untyped"], "labels_applied": labelled, "queued": classify_queued, "deferred": classify_deferred},
+        "routing": routing,
         "unlinked": unlinked,
         "backend": cfg["embedding_backend"],
         "model": cfg["embedding_model"] if cfg["embedding_backend"] == "fastembed" else None,
@@ -971,6 +1148,12 @@ def cmd_analyze(args):
     queued = sum(c["queued"] for c in ranked)
     print(f"analyzed {len(files)} files ({new_or_changed} new or changed); {len(clusters)} clusters, {queued} queued for review")
     print(f"queue: {queue_dir}")
+    if cfg["classify_untyped"]:
+        print(f"classify: {classify_queued} document(s) to label with {cfg['classify_model']} ({classify_deferred} deferred); {labelled} typed by earlier labels")
+    for model, ids in routing["review"].items():
+        print(f"review routing: {len(ids)} cluster(s) -> {model}")
+    for e in routing["escalate"]:
+        print(f"escalated: {e['cluster_id']} ({e['reason']})")
 
 
 def cmd_update(args):
@@ -1589,8 +1772,13 @@ def build_report(an, cfg, dec, files, verdicts, conflicts, sidecars, warnings, o
     L += linked_code_lines(dec, files, source) or ["- none"]
     L += ["", "## Requirements and ADRs", ""]
     typed = an.get("doc_types", {})
+    by_src = collections.Counter(d.get("type_source") for d in typed.values())
     L += [f"- Requirements: {sum(d['type'] == 'requirement' for d in typed.values())}; ADRs: {sum(d['type'] == 'adr' for d in typed.values())}; "
-          "classified by front matter or path globs."]
+          f"typed by front matter ({by_src['front_matter']}), path globs ({by_src['path']}) or the classifier ({by_src['classifier']})."]
+    cl = an.get("classification") or {}
+    if cl.get("enabled"):
+        L.append(f"- Classifier: {cl.get('labels_applied', 0)} document(s) typed from labels; {cl.get('queued', 0)} still waiting for labels"
+                 + (f"; {cl['deferred']} deferred past classify_max_docs_per_run." if cl.get("deferred") else "."))
     for v in verdicts:
         for g in v["doc_type_guesses"]:
             L.append(f"- guessed by the reviewer (no front matter or glob matched): `{g.get('path')}` as {g.get('type')}")
