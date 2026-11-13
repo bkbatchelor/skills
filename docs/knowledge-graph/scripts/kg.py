@@ -1180,7 +1180,11 @@ def cmd_graph_prepare(args):
     gate(ctx, args, "graph prepare")
     if not (ctx.repo / "graphify-out").is_symlink():
         die("graphify-out symlink missing in the repo; run `kg apply` first")
-    phi_gate(ctx, ("cache", "staging", "graph"), "graph prepare")
+    # Staging and the text cache must be clean before any graph run. PHI already *in the graph*
+    # (a folder just declared PHI) cannot block the run that removes it: those sources are no
+    # longer staged, so they land in prune_sources, and `kg graph finish` re-checks the graph.
+    phi_gate(ctx, ("cache", "staging"), "graph prepare")
+    phi_in_graph = sorted({h.split(" from ", 1)[1] for h in phi_scan(ctx, ("graph",)) if " from " in h})
     open_plan = read_json(ctx.kgdir / "graph-plan.json")
     if open_plan and (ctx.out / "backups" / open_plan.get("snapshot", "-")).is_dir():
         # An earlier graph run never reached `kg graph finish`: the graph on disk may be half-written.
@@ -1215,6 +1219,7 @@ def cmd_graph_prepare(args):
         "at": now_ts(), "snapshot": snap.name, "staging": str(home_form(staging)),
         "mode": "update" if has_graph else "full", "changed": rel_changed, "deleted": rel_deleted,
         "excluded": rel_excluded,
+        "phi_pruned": [rel_to_staging(ctx, f) for f in phi_in_graph],
         "prune_sources": [str(staging / f) for f in rel_deleted + rel_excluded],
         "total_files": det["total_files"], "tokens_per_file": round(per_file) if per_file else None,
         "estimated_input_tokens": estimate, "estimated_chunks": chunks, "cost_cap_tokens": cap,
@@ -1223,12 +1228,19 @@ def cmd_graph_prepare(args):
     }
     write_json(ctx.kgdir / "graph-plan.json", plan)
     ctx.log("graph prepare", changed=len(changed), deleted=len(rel_deleted), excluded=len(rel_excluded),
+            phi_pruned=len(plan["phi_pruned"]),
             estimate=estimate, manifest_rekeyed=rekeyed, excludes_changed=excludes_changed,
             newline_restamped=len(restamped))
     print(f"graph: {len(changed)} changed, {len(rel_deleted)} deleted, {len(rel_excluded)} newly excluded "
           f"of {det['total_files']} scanned files ({plan['mode']} run)")
     for f in rel_excluded:
         print(f"  excluded now (its nodes must be pruned): {f}")
+    missing = sorted(set(plan["phi_pruned"]) - set(rel_excluded))
+    if plan["phi_pruned"]:
+        print(f"phi: {len(plan['phi_pruned'])} PHI source(s) are in the graph and will be pruned by this run; "
+              "`kg graph finish` fails if any remain")
+    if missing:
+        die(f"PHI sources in the graph are not in the prune list: {missing}", EXIT_PHI)
     if not changed and not rel_deleted and not rel_excluded:
         print("graph: nothing changed since the last build; no graphify run needed")
         return 0
