@@ -2,7 +2,7 @@
 name: page-testing-memory
 description: Teaches the general process for QA of any web page or UI, and keeps every page-specific fact in the repo's testing runbook instead of in the skill. Use whenever you QA, verify, smoke-test, or screenshot a web page, route, form, or UI component, even if the user does not say "QA". Covers page states (empty, loaded, error, loading), form testing with valid, invalid and edge input, auth boundaries, responsive breakpoints, and screenshot evidence. Pairs with testing-runbook-creator, which owns the runbook file. Skip for API-only, CLI, or unit-test work with no rendered page.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Page Testing Memory
@@ -63,14 +63,25 @@ Use only the accounts the runbook lists. Never use real credentials.
 Default breakpoints: **375** (mobile), **768** (tablet), **1024** (laptop), **1440** (desktop). If the repo defines its own breakpoints (check the runbook, then the CSS or config), use those and record them. At each width look for horizontal scroll, clipped or overlapping content, unreachable controls, tap targets that are too small, and navigation that breaks.
 
 ### 5. Capture evidence
-Take a screenshot of each state and each breakpoint that you report on, plus every defect. Name files so they sort and explain themselves (`<page>-<state>-<width>.png`). Save them to the scratchpad or a temp directory; do not commit them unless the runbook says the repo keeps evidence. Drive the page with whatever browser automation is available. Which tool works in a given repo is a runbook fact.
+Take a screenshot of each state and each breakpoint that you report on, plus every defect. Name files so they sort and explain themselves (`<page>-<state>-<width>.png`). Save them to the scratchpad or a temp directory; do not commit them unless the runbook says the repo keeps evidence. Drive the page with whatever browser automation is available: Playwright if installed, otherwise headless Chromium with a small driver page or script. Which tool works in a given repo, and how to set it up, is a runbook fact (record it under Prerequisites / seed).
 
 ### 6. Report
 Report findings as pass, fail, or not tested per state, form case, auth check, and breakpoint, with evidence paths. Separate confirmed defects from observations. Say what you could not reach and why.
 
 ## Write it down now
 
-When you learn a page-specific fact during QA, write it into the repo runbook **immediately**, not at the end. That means: a selector, a route, how to reach a state, a test account or seed record, a cleanup step, a quirk, a flaky behavior, a working start command. Use `testing-runbook-creator`'s location and entry format; add the page-specific detail there (routes, selectors, states and how to reach them, accounts as placeholders, seed data, cleanup, gotchas). If a runbook step is wrong, fix it at once and update `Last verified`.
+When you learn a page-specific fact during QA, write it into the repo runbook **immediately**, not at the end. That means: a selector, a route, how to reach a state, a test account or seed record, a cleanup step, a quirk, a flaky behavior, a working start command. Use `testing-runbook-creator`'s location and entry format, and put each page-specific fact in the field that owns it:
+
+| Fact | Entry field |
+|---|---|
+| Route, start command, accounts (placeholders), seed data | Prerequisites / seed |
+| URL or action that forces each state (empty, error, loading), form cases, breakpoints | Steps |
+| Exact command and expected output per check | Verification |
+| Bugs you confirmed, with symptom and evidence path | Known defects |
+| Selectors, flaky behavior, tool quirks | Gotchas |
+| Test data to remove, servers to stop | Cleanup |
+
+If a runbook step is wrong, fix it at once and update `Last verified`.
 
 ## The leak test
 

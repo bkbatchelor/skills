@@ -604,7 +604,7 @@ Makes testing knowledge persist in the repo. Triggers on any testing, verificati
 
 **Features:**
 - Runbook location: an existing testing doc wins, else `docs/testing-runbook.md`, else `TESTING-RUNBOOK.md` at the repo root; created at the first discovery
-- Entry fields: Scope, Last verified (date and commit), Prerequisites / seed, Steps, Safe actions, Destructive actions, Verification (exact command plus expected output), Cleanup, Gotchas
+- Entry fields: Scope, Last verified (date and commit), Prerequisites / seed, Steps, Safe actions, Destructive actions, Verification (exact command plus expected output), Cleanup, Known defects, Gotchas
 - Never records secrets, never runs destructive steps without approval, never commits the runbook on its own
 
 **Usage:**

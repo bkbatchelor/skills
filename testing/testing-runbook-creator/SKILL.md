@@ -2,7 +2,7 @@
 name: testing-runbook-creator
 description: Keeps a repo-local testing runbook so future sessions never rediscover how to test something. Read it before, and update it during, ANY testing, verification, smoke-testing, QA, or debugging activity in a repo - running a test suite, checking a UI page or API endpoint, reproducing a bug, validating a change, trying a CLI or script - whether or not the user mentions a runbook. Records per-workflow steps, safe vs destructive actions, seed/setup, cleanup, and exact verification commands with expected output, and fixes the runbook the moment reality differs. Skip only for pure code reading or editing where nothing is run or observed.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Testing Runbook Creator
@@ -60,10 +60,11 @@ Add the entry title to the index at the top of the file, then add a `##` section
   <trimmed real output>
   ```
 - **Cleanup:** how to restore state (stop services, delete test data, reset DB)
+- **Known defects:** open bugs the testing exposed, each with the symptom, the cause if known, and evidence (screenshot path or command output). Remove an item when it is fixed, or mark it fixed with the date
 - **Gotchas:** non-obvious failures and their fixes
 ```
 
-Omit a field only when it truly has no content; write "none" for Prerequisites and Cleanup rather than dropping them, so readers know it was considered.
+Omit a field only when it truly has no content; write "none" for Prerequisites, Cleanup and Known defects rather than dropping them, so readers know it was considered.
 
 ## Hard rules
 
