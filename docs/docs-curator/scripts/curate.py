@@ -38,6 +38,7 @@ DEFAULT_ID_PATTERN = r"\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b"
 DEFAULTS = {
     "embedding_backend": "fastembed",  # fastembed | tfidf
     "embedding_model": "BAAI/bge-small-en-v1.5",
+    "embedding_batch_size": 32,  # documents per fastembed batch; 256 (its default) OOMs a 16 GB container
     "near_duplicate_threshold": 0.90,
     "near_duplicate_action": "flag",  # flag | exclude
     "keeper_prefers_descriptive_name": True,
@@ -477,7 +478,7 @@ def embed_matrix(texts, cfg):
             from fastembed import TextEmbedding
 
             model = TextEmbedding(cfg["embedding_model"])
-            mat = np.array(list(model.embed(texts)))
+            mat = np.array(list(model.embed(texts, batch_size=int(cfg["embedding_batch_size"]))))
         except Exception as exc:  # model missing offline, no network, bad name
             die(
                 f"fastembed could not load {cfg['embedding_model']!r}: {exc}\n"

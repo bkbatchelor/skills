@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify on the docs only after the user approves. Requires the heavy-file-ingestion skill to convert PDF, Word, Excel and PowerPoint files to Markdown. Skip for a single file (use heavy-file-ingestion), for source-code structure or call graphs (use code-graph), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.8.0
+  version: 1.8.1
 ---
 
 # Docs Curator
@@ -24,11 +24,11 @@ Skip it for:
 The runtime needs only this folder's `SKILL.md`, `scripts/`, `references/` and `requirements.txt`. Set `SKILL=~/.claude/skills/docs-curator` (or wherever it is installed) and run everything through:
 
 ```bash
-RUN="uv run --no-project --with-requirements $SKILL/requirements.txt"
+RUN="uv run --no-project --python 3.12 --with-requirements $SKILL/requirements.txt"
 $RUN bash $SKILL/scripts/check_env.sh        # exit 0 means ready; otherwise it names what is missing
 ```
 
-System: `uv`, `python3` (3.10+), and `soffice` (LibreOffice, for `.pptx` to PDF). The embedding model (`BAAI/bge-small-en-v1.5`) downloads once on first use. If it cannot load, `analyze` stops; the user can set `embedding_backend: tfidf` in `config.yaml`. If you have to fall back to Python 3.12 (`--python 3.12`) because a wheel is missing, say so.
+System: `uv` (it fetches Python 3.12 if needed; a pinned dependency, rapidfuzz, needs 3.11+) and `soffice` (LibreOffice, for `.pptx` to PDF). The embedding model (`BAAI/bge-small-en-v1.5`) downloads once on first use. If it cannot load, `analyze` stops; the user can set `embedding_backend: tfidf` in `config.yaml`.
 
 **Required: the `heavy-file-ingestion` skill.** `analyze` converts every `.pdf`, `.docx`, `.xlsx` and `.pptx` to Markdown by running that skill's `ingest.py` (found at `$HEAVY_FILE_INGESTION_SCRIPT`, else `~/.claude/skills/heavy-file-ingestion/scripts/ingest.py`). Do not convert these files any other way. If the skill is missing, stop and tell the user to install it; those files would otherwise be marked unreadable. It also needs `pdftotext` (poppler) for PDFs.
 
@@ -53,6 +53,8 @@ The output folder defaults to `~/curated/<project-name>/`, where `<project-name>
 6. **Ask before running Graphify.** Never start it without the user's explicit approval in this turn; approval for an earlier run does not carry over. Ask one yes/no question: build the docs graph from `staging/`? State the cost: it uses AI agents and costs tokens, and when `<out>/graphify-out/graph.json` already exists only changed files are re-extracted (`--update`). If the user declines, stop after the report.
 7. **Run the docs graph.** From `<src>`, invoke the `graphify` skill on `<out>/staging`, adding `--update` if `<out>/graphify-out/graph.json` exists. Because of the `link` symlink, the output lands in `<out>/graphify-out/`. Follow the graphify skill's own steps, including its corpus-size warning. Report the node, edge and community counts, the path, and the query line (`graphify query "<q>" --graph <out>/graphify-out/graph.json`).
 
+For a repository whose docs and code graphs are refreshed regularly, the `knowledge-graph` skill wraps this workflow in a repeatable `kg` script (gating, PHI checks, snapshots, verdict carry-forward). Use it when it is installed and the user is refreshing a repo's graphs.
+
 If the queue was capped (`max_llm_clusters_per_run`, default 25, largest clusters first), the rest are listed in the report. Tell the user, and run analyze, review, and apply again to pick them up; existing verdicts are kept.
 
 ## Updating after the source changed
@@ -70,7 +72,7 @@ If nothing changed, `update` says so and `staging/` is already current.
 
 Both files are optional and live in `<out>/`. Missing means defaults. The settings in effect are written to `state.json`.
 
-- `config.yaml`: for example `near_duplicate_action: exclude`, `near_duplicate_threshold: 0.90`, `low_confidence_threshold: 0.75`, `max_llm_clusters_per_run: 25`, `revision_chain_scope: directory|corpus`, `embedding_backend: fastembed|tfidf`. Unknown keys are rejected. Defaults and names are in `scripts/curate.py` (`DEFAULTS`).
+- `config.yaml`: for example `near_duplicate_action: exclude`, `near_duplicate_threshold: 0.90`, `low_confidence_threshold: 0.75`, `max_llm_clusters_per_run: 25`, `revision_chain_scope: directory|corpus`, `embedding_backend: fastembed|tfidf`, `embedding_batch_size: 32` (lower it if analyze is killed for memory). Unknown keys are rejected. Defaults and names are in `scripts/curate.py` (`DEFAULTS`).
 - `overrides.yaml`: a list of `{path, action: include|exclude, note}` keyed by source-relative path. An override wins over every rule except unreadable and not-ingestible files. Offer this when the user disagrees with one file's fate, then re-run `apply`.
 
 `near_duplicate_action` defaults to `flag` (kept and reported). Near-identical text is not proof of duplication when identity lives in an identifier, as in form libraries. Suggest `exclude` only for prose corpora where near-identical text really is redundant, and ask first.
