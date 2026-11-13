@@ -1335,27 +1335,35 @@ def apply_fixups(graph, fixups):
             seen.add(x)
             x = rename[x]
         return x
-    edges, seen_edges = [], set()
+    directed = bool(graph.get("directed"))
+    # graphify builds a simple graph: one edge per node pair (per direction when directed). Merging can
+    # leave two edges between the same pair; keep the strongest so nothing collapses silently.
+    pair = (lambda a, b: (a, b)) if directed else (lambda a, b: tuple(sorted((a, b))))
+    best = {}
     for e in graph.get(ekey, []):
         e = dict(e)
         e["source"], e["target"] = res(e["source"]), res(e["target"])
         if e["source"] == e["target"]:
             stats["self_loops"] += 1
             continue
-        k = (e["source"], e["target"], e.get("relation"))
-        if k in seen_edges:
+        k = pair(e["source"], e["target"])
+        if k in best:
             stats["dup_edges"] += 1
+            if float(e.get("confidence_score") or 0) > float(best[k].get("confidence_score") or 0):
+                best[k] = e
             continue
-        seen_edges.add(k)
-        edges.append(e)
+        best[k] = e
+    edges = list(best.values())
+    seen_edges = {(e["source"], e["target"], e.get("relation")) for e in edges} | set(best)
     for l in fixups.get("links", []):
         src, tgt = l["source"], l["target"]
         if src not in nodes or tgt not in nodes:
             stats["link_skipped"].append(f"{src} -> {tgt}")
             continue
         k = (src, tgt, l.get("relation", "references"))
-        if k in seen_edges or (tgt, src, k[2]) in seen_edges:
-            continue
+        if pair(src, tgt) in best:
+            continue  # the pair is already connected
+        best[pair(src, tgt)] = True
         seen_edges.add(k)
         edges.append({"source": src, "target": tgt, "relation": k[2], "confidence": "INFERRED",
                       "confidence_score": float(l.get("confidence_score", 0.95)), "weight": 1.0,
