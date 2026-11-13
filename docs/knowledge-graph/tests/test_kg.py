@@ -533,6 +533,27 @@ def test_prepare_prunes_phi_already_in_graph(env, monkeypatch):
     assert kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True)) == 0
     plan = kg.read_json(ctx.kgdir / "graph-plan.json")
     assert plan["phi_pruned"] == ["out/phi/app.md"] and "out/phi/app.md" in plan["excluded"]
+    assert len(plan["prune_sources"]) == len(set(plan["prune_sources"]))  # no file listed twice
     with pytest.raises(SystemExit) as e:  # finish refuses while the PHI node is still in the graph
         kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
     assert e.value.code == kg.EXIT_PHI
+
+
+def test_prepare_phi_in_graph_already_deleted(env, monkeypatch):
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True)
+    (st / "a.md").write_text("x\n")
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a1", "docs/a.md", None), ("p1", "out/phi/app.md", None)]))
+    (ctx.repo / "graphify-out").symlink_to(g, target_is_directory=True)
+    phi_abs = str(ctx.out / "staging/out/phi/app.md")
+
+    def fake_run(cmd, **kw):  # graphify itself reports the PHI file as deleted
+        return argparse.Namespace(stdout=json.dumps({"new_files": {}, "deleted": [phi_abs], "files": [str(st / "a.md")],
+                                                     "total_files": 1, "new_total": 0}))
+    monkeypatch.setattr(kg, "run", fake_run)
+    monkeypatch.setattr(kg, "graphify_python", lambda ctx: "python")
+    assert kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True)) == 0
+    plan = kg.read_json(ctx.kgdir / "graph-plan.json")
+    assert plan["deleted"] == ["out/phi/app.md"] and plan["excluded"] == [] and plan["prune_sources"] == [phi_abs]

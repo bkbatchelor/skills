@@ -1203,17 +1203,19 @@ def cmd_graph_prepare(args):
     changed = sorted({f for fl in det["new_files"].values() for f in fl})
     rel_changed = [rel_to_staging(ctx, f) for f in changed]
     rel_deleted = [rel_to_staging(ctx, f) for f in det["deleted"]]
-    rel_excluded = newly_excluded_sources(ctx, [rel_to_staging(ctx, f) for f in det.get("files", [])])
+    rel_excluded = [f for f in newly_excluded_sources(ctx, [rel_to_staging(ctx, f) for f in det.get("files", [])])
+                    if f not in set(rel_deleted)]  # graphify already prunes what it sees as deleted
     cost = read_json(ctx.out / "graphify-out/cost.json")
     per_file = avg_tokens_per_file(cost)
     # Each extraction agent costs a fixed ~60k (spec + reading graph.json to reuse IDs) however few
     # files it gets; the per-file average hides that on small runs. Chunks follow graphify's ~22 files.
     overhead = int(ctx.get("graph", "agent_overhead_tokens", default=60_000))
-    chunks = -(-len(changed) // 22) if changed else 0
-    estimate = int((per_file or 0) * len(changed) + overhead * chunks) if (per_file or chunks) else None
-    cap = int(ctx.get("graph", "cost_cap_tokens", default=1_500_000))
     mb, ml = int(ctx.get("graph", "big_file_bytes", default=400_000)), int(ctx.get("graph", "big_file_line_chars", default=20_000))
     big = [{"path": rel_to_staging(ctx, f), "why": w} for f in changed if (w := big_file(f, mb, ml))]
+    rest = len(changed) - len(big)
+    chunks = (-(-rest // 22) if rest else 0) + len(big)  # every big file gets an agent of its own
+    estimate = int((per_file or 0) * len(changed) + overhead * chunks) if (per_file or chunks) else None
+    cap = int(ctx.get("graph", "cost_cap_tokens", default=1_500_000))
     has_graph = (ctx.out / "graphify-out/graph.json").exists()
     plan = {
         "at": now_ts(), "snapshot": snap.name, "staging": str(home_form(staging)),
@@ -1235,7 +1237,7 @@ def cmd_graph_prepare(args):
           f"of {det['total_files']} scanned files ({plan['mode']} run)")
     for f in rel_excluded:
         print(f"  excluded now (its nodes must be pruned): {f}")
-    missing = sorted(set(plan["phi_pruned"]) - set(rel_excluded))
+    missing = sorted(set(plan["phi_pruned"]) - set(rel_excluded) - set(rel_deleted))
     if plan["phi_pruned"]:
         print(f"phi: {len(plan['phi_pruned'])} PHI source(s) are in the graph and will be pruned by this run; "
               "`kg graph finish` fails if any remain")
@@ -1245,7 +1247,7 @@ def cmd_graph_prepare(args):
         print("graph: nothing changed since the last build; no graphify run needed")
         return 0
     est = (f"~{estimate:,} input tokens ({len(changed)} files x {plan['tokens_per_file'] or 0:,} avg from cost.json "
-           f"+ {chunks} agent(s) x {overhead:,} overhead; at least 2 agents if big files need their own chunk)") if estimate else "unknown"
+           f"+ {chunks} agent(s) x {overhead:,} overhead, {len(big)} of them for big files)") if estimate else "unknown"
     print(f"cost: {est}; cap {cap:,}" + ("  ** OVER CAP: needs a separate explicit yes **" if plan["over_cap"] else ""))
     for b in big:
         print(f"big file (own chunk, parse with python3 -I, not Read): {b['path']} ({b['why']})")
