@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Knowledge Graph
@@ -44,6 +44,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 `kg all` runs the scripted steps in order and stops before the first one that needs a person. The full sequence:
 
 1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time) with each PHI glob as `--no-extract` so PHI text is never extracted, purges any PHI text left in the cache, carries verdicts forward, and archives stale ones. Exit 3 means clusters are waiting for review.
+   - A cluster that only **lost** members keeps the old verdict, marked done, when the old cluster had at most `carry_forward.subset_max_members` (default 25) members and its verdict was not a partial read. Larger or partly read clusters come back for a full review, because a shallow review must not be inherited by every piece a large cluster splits into.
    - It also **auto-closes** a pending cluster when fewer than two of its members can reach staging, because no verdict on such a cluster could change staging. The verdict it writes carries a `kg_auto` field that gives the reason.
    - Each `curate` and `apply` re-checks these against the current overrides and reopens any cluster that now has two or more members that can reach staging. Never add `kg_auto` to a verdict you wrote yourself.
 2. **Review** (you): run `kg review`.
@@ -61,7 +62,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
    - **After the merge step and before Step 4**, run `kg graph check`.
      - Exit 0: every lost node comes from a changed, deleted or newly excluded file, so if `to_json`'s shrink guard refuses, pass `force=True`.
      - Exit 3: show the user the unexplained losses. Use `force=True` only after they accept them; otherwise stop and offer `kg restore`.
-   - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique.
+   - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique. A community is carried only if at least `label_min_known` of its members had a label before, so a community made mostly of new material always gets a fresh name.
 7. **`kg graph finish`**: checks the new graph for PHI, records the run, and prunes old snapshots. Report the node, edge and community counts and the query line.
 8. **`kg code`**: runs `codegraph sync`. It works on any branch, because the code index follows the current checkout.
 
