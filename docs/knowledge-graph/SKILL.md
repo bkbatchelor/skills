@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Knowledge Graph
