@@ -24,7 +24,7 @@ An existing testing doc wins; otherwise `docs/testing-runbook.md`; otherwise `TE
 
 ## Entry fields
 
-Scope, Last verified (date and commit), Prerequisites / seed, Steps, Safe actions, Destructive actions, Verification (exact command plus expected output), Cleanup, Gotchas.
+Scope, Last verified (date and commit), Prerequisites / seed, Steps, Safe actions, Destructive actions, Verification (exact command plus expected output), Cleanup, Known defects, Gotchas.
 
 ## Rules
 
