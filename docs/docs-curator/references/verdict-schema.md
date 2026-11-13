@@ -8,6 +8,8 @@ One JSON file per reviewed cluster, written to `<out>/.docs-curator/work/verdict
 {
   "cluster_id": "adf3d9fe0529eefa",
   "reviewed": true,
+  "review_tier": "standard",
+  "model": "sonnet",
   "partial_read": false,
   "revisions": [
     {
@@ -39,6 +41,8 @@ An empty verdict, `{"cluster_id": "<id>", "reviewed": true}`, means "reviewed, n
 |-------|----------|---------|
 | `cluster_id` | yes | The queue item's id. Ties the verdict to the cluster; a stale id only produces a warning. |
 | `reviewed` | yes | Always `true`. |
+| `review_tier` | no | `standard` or `deep`: copy it from the queue item's `review.tier`. A `standard` verdict that holds a conflict or a revision below `low_confidence_threshold` is queued again at the deep tier on the next `analyze`. Without it a verdict is never re-queued. |
+| `model` | no | The model alias that wrote the verdict (for the record only). |
 | `partial_read` | no | `true` if you did not read every member in full. Listed in the report's warnings. |
 | `revisions[]` | no | Claims that one document replaces another. |
 | `conflicts[]` | no | Places where documents state incompatible facts. |
@@ -88,4 +92,26 @@ For a cluster that holds both business requirements and ADRs (`"decision_check":
 - `members[]`: `path`, `also_at` (byte-identical copies elsewhere), `format`, `text_path` (the extracted text to read), `size_bytes`, `tokens`, and `revision_signals` (filename markers, in-text version and date, document-property date, file mtime).
 - `chains[]`: revision chains the script found, with `order` (oldest to newest), which signals `agreeing` and `contradicting`, and whether it is `deterministic`.
 - `near_duplicate_pairs[]`: pairs of members with high text similarity.
-- `members[].doc_type`, `type_source` (`front_matter` or `path`), `doc_id`, `doc_status`: present when a member is a requirement or ADR. `decision_check` is `true` when the cluster holds both.
+- `members[].doc_type`, `type_source` (`front_matter`, `path` or `classifier`), `doc_id`, `doc_status`: present when a member is a requirement or ADR. `type_confidence` is added when the classifier typed it. `decision_check` is `true` when the cluster holds both.
+- `review`: `{tier, model, reasons[]}`, the routing for this cluster. `tier` is `deep` when `reasons` is non-empty: `requirement_vs_adr`, `ambiguous_revision_chain` (a chain the signals could not order), `large_cluster` (at least `deep_review_min_members` members), or `escalated_conflict_found` / `escalated_low_confidence_revision` (a standard review that found something). `model` is the alias from `review_model_deep` or `review_model_standard`. `<out>/.docs-curator/work/routing.json` groups the queued cluster ids by model.
+
+## Classification pre-step (optional)
+
+Only when `classify_untyped: true`. `analyze` queues documents that have no front matter `type` and match no glob, in batches of `classify_batch_size`: `<out>/.docs-curator/work/classify/queue/<batch_id>.json`.
+
+```json
+{"batch_id": "5b1c0e7d2a9f4c31", "model": "haiku", "labels": ["requirement", "adr", "other"],
+ "docs": [{"path": "docs/retries.md", "sha256": "…", "format": "md", "title": "Payment retries", "snippet": "first 300 words…"}]}
+```
+
+Write one file per batch to `<out>/.docs-curator/work/classify/labels/<batch_id>.json`:
+
+```json
+{"batch_id": "5b1c0e7d2a9f4c31",
+ "labels": [{"sha256": "…", "path": "docs/retries.md", "type": "requirement", "confidence": 0.95}]}
+```
+
+- `type`: `requirement` (a business requirement: what the system must do), `adr` (an architecture decision record: a decision, its context and status) or `other`. Use `other` for anything that is not clearly one of the first two.
+- `confidence`: 0 to 1. Below `classify_min_confidence` (default 0.8) the label is ignored. The document stays untyped and is not queued again.
+- Labels are keyed by `sha256`, so they survive a rename and stop applying when the file changes. A malformed file or entry is skipped with a warning.
+- A document whose front matter declares any `type` (even `policy`) is never queued or overridden. Front matter and globs always win over a label.
