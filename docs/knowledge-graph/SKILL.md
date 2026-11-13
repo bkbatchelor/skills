@@ -43,7 +43,7 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 
 `kg all` runs the scripted steps in order and stops before the first one that needs a person. The full sequence:
 
-1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time), purges PHI text cache, carries verdicts forward, and archives stale ones. Exit 3 means clusters are waiting for review.
+1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time) with each PHI glob as `--no-extract` so PHI text is never extracted, purges any PHI text left in the cache, carries verdicts forward, and archives stale ones. Exit 3 means clusters are waiting for review.
    - It also **auto-closes** a pending cluster when fewer than two of its members can reach staging, because no verdict on such a cluster could change staging. The verdict it writes carries a `kg_auto` field that gives the reason.
    - Each `curate` and `apply` re-checks these against the current overrides and reopens any cluster that now has two or more members that can reach staging. Never add `kg_auto` to a verdict you wrote yourself.
 2. **Review** (you): run `kg review`.

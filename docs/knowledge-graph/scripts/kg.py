@@ -349,9 +349,23 @@ def curate_cmd(ctx, *args):
             "python", dc / "scripts/curate.py", *args, "--source", ctx.repo, "--out", ctx.out]
 
 
+def curator_supports_no_extract():
+    path = skill_dir("docs-curator") / "scripts/curate.py"
+    return path.is_file() and "--no-extract" in path.read_text(encoding="utf-8")
+
+
 def run_curate(ctx, *args):
-    print(f"kg: docs-curator {' '.join(args)}", flush=True)
-    run(curate_cmd(ctx, *args), cwd=ctx.out)
+    """Run curate.py. For analyze/update, PHI globs go in as --no-extract so their text never exists
+    (docs-curator >= 1.9.0); older versions extract it and `purge_phi` deletes it afterwards."""
+    extra = []
+    if args and args[0] in ("analyze", "update") and ctx.phi_globs:
+        if curator_supports_no_extract():
+            for g in ctx.phi_globs:
+                extra += ["--no-extract", g]
+        else:
+            warn("installed docs-curator has no --no-extract; PHI text will be extracted, then purged")
+    print(f"kg: docs-curator {' '.join(args)}" + (f" (--no-extract x{len(ctx.phi_globs)})" if extra else ""), flush=True)
+    run(curate_cmd(ctx, *args) + extra, cwd=ctx.out)
 
 
 # ----------------------------------------------------------------------------- overrides
