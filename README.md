@@ -1,6 +1,6 @@
 # Skills
 
-A collection of reusable skills for AI-powered development workflows.
+A collection of skills for AI coding agents. A skill is a folder with a `SKILL.md` file. The file tells the agent when to use the skill and what steps to follow.
 
 ## Tech Stack
 
@@ -9,47 +9,43 @@ A collection of reusable skills for AI-powered development workflows.
 | Format | Markdown |
 | Version Control | Git |
 
-## Quick Start
-
-```bash
-# Clone the repository
-git clone git@github.com:bkbatchelor/skills.git
-cd skills
-```
-
 ## Installation
 
-### Prerequisites
-- Git
+You need Git, which is a tool that tracks changes to files. Check that you have it by running `git --version`. If the command is not found, install Git first.
 
-### Steps
-
-1. Clone the repository:
+1. Clone the repository. This downloads a copy of it:
    ```bash
    git clone git@github.com:bkbatchelor/skills.git
-   ```
-
-2. Navigate to project directory:
-   ```bash
    cd skills
    ```
+   If you see `Permission denied (publickey)`, Git cannot find an SSH key (a file that proves who you are to GitHub) for your account. Use the HTTPS address instead: `git clone https://github.com/bkbatchelor/skills.git`.
 
-3. Copy skills to your opencode configuration:
-   ```bash
-   # Copy individual skills to your project
-   cp -r docs/generate-readme /path/to/your/project/.opencode/skills/
-   cp -r git/commit-staged-changes /path/to/your/project/.opencode/skills/
-   ```
+2. Add the skills you want. Pick one of these:
 
-4. Or add the skills directory to your global opencode config:
-   ```bash
-   # Add to ~/.config/opencode/opencode.json
-   {
-     "skills": {
-       "paths": ["/path/to/skills"]
+   - **Claude Code.** Link one skill into your skills folder:
+     ```bash
+     mkdir -p ~/.claude/skills
+     ln -s "$PWD/docs/generate-readme" ~/.claude/skills/generate-readme
+     ```
+     Restart Claude Code. If the skill is not listed, run `ls -l ~/.claude/skills/generate-readme` and check that the link points at a folder with a `SKILL.md` file.
+
+   - **opencode, one project.** Copy a skill into the project:
+     ```bash
+     mkdir -p /path/to/your/project/.opencode/skills
+     cp -r docs/generate-readme /path/to/your/project/.opencode/skills/
+     ```
+
+   - **opencode, all projects.** Add the `skills` folder to `~/.config/opencode/opencode.json`:
+     ```json
+     {
+       "skills": {
+         "paths": ["/path/to/skills"]
+       }
      }
-   }
-   ```
+     ```
+     If opencode ignores the setting, check that the file is valid JSON and that the path is absolute.
+
+Each skill's own `README.md` lists anything else it needs, such as extra programs or an API key.
 
 ---
 
@@ -67,13 +63,11 @@ skills/
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition
 │       ├── README.md             # Install and usage
-│       ├── README.md             # Install and usage
 │       └── references/           # Reference materials
 │           └── git-commit-template.md
 ├── docs/                     # Documentation skills
 │   ├── generate-readme/          # README generation skill
 │   │   ├── SKILL.md              # Skill definition
-│   │   ├── README.md             # Install and usage
 │   │   ├── README.md             # Install and usage
 │   │   └── references/           # Reference materials
 │   │       ├── basic-level-template.md
@@ -138,7 +132,6 @@ skills/
 │   └── html-artifacts/           # HTML artifact skill
 │       ├── SKILL.md              # Skill definition
 │       ├── README.md             # Install, usage, house style summary
-│       ├── README.md             # Install, usage, house style summary
 │       ├── references/           # Reference materials
 │       │   └── template.html     # Starter page: tokens, components, every layout pattern
 │       └── scripts/              # Helper scripts
@@ -147,7 +140,6 @@ skills/
 │   ├── image-gateway/            # Image generation and editing skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Install, options, configuration
-│   │   ├── README.md             # Install, options, configuration
 │   │   ├── config.env            # Saved defaults (model, output dir, key file)
 │   │   ├── references/           # Reference materials
 │   │   │   └── api.md
@@ -155,7 +147,6 @@ skills/
 │   │       └── generate.sh
 │   └── media-transcription/      # Audio/video transcription skill
 │       ├── SKILL.md              # Skill definition
-│       ├── README.md             # Install, usage, output package
 │       ├── README.md             # Install, usage, output package
 │       ├── config.env            # Saved defaults (models, key location, prices)
 │       ├── references/           # Reference materials
@@ -167,13 +158,11 @@ skills/
 │   ├── current-info-search/      # Live search for fast-changing facts
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Install, requirements, usage
-│   │   ├── README.md             # Install, requirements, usage
 │   │   ├── config.env            # Saved defaults (model, key file, NotebookLM CLI)
 │   │   └── scripts/              # Helper scripts
 │   │       └── search.py
 │   └── heavy-file-ingestion/     # PDF/Office/large text to chunked Markdown
 │       ├── SKILL.md              # Skill definition
-│       ├── README.md             # Install, requirements, output layout
 │       ├── README.md             # Install, requirements, output layout
 │       └── scripts/              # Helper scripts
 │           └── ingest.py
@@ -197,12 +186,10 @@ skills/
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
     │   ├── README.md             # Install and usage
-    │   ├── README.md             # Install and usage
     │   └── references/           # Reference materials
     │       └── goal-prompt-template.md
     └── visible-delegation/       # Visible agent delegation skill
         ├── SKILL.md              # Skill definition
-        ├── README.md             # Install, requirements, usage
         ├── README.md             # Install, requirements, usage
         ├── references/           # Reference materials
         │   └── delegate-addendum.md
@@ -220,27 +207,26 @@ skills/
 
 Each skill's `SKILL.md` description and `## Triggers` section define when it activates and when it should be skipped.
 
-| Skill | Description | Key Files |
-|-------|-------------|-----------|
-| commit-staged-changes | Commits staged changes using conventional commit format | `SKILL.md`, `README.md`, `references/git-commit-template.md` |
-| generate-readme | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `README.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
-| goal-prompt-generator | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
-| current-info-search | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `README.md`, `config.env`, `scripts/search.py` |
-| media-transcription | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
-| image-gateway | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
-| heavy-file-ingestion | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
-| html-artifacts | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
-| code-graph | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
-| docs-curator | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
-| knowledge-graph | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
-| mermaid-to-image | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
-| token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
-| testing-runbook-creator | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
-| page-testing-memory | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
-| browser-qa | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
-| plain-english-docs | Writes human-facing documentation in plain English: one documentation mode per section, terms defined where they first appear, steps as commands, failure coverage, a growing agent-English ban list, and a self-check with a script for em dashes and ban-list hits | `SKILL.md`, `README.md`, `banned-words.md`, `scripts/check.py` |
-| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
-| visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| Skill | Version | Description | Key Files |
+|-------|---------|-------------|-----------|
+| commit-staged-changes | 1.0.4 | Commits staged changes using conventional commit format | `SKILL.md`, `README.md`, `references/git-commit-template.md` |
+| generate-readme | 1.1.0 | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `README.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
+| goal-prompt-generator | 1.0.4 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
+| current-info-search | 1.0.3 | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `README.md`, `config.env`, `scripts/search.py` |
+| media-transcription | 1.0.3 | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
+| image-gateway | 1.0.4 | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
+| heavy-file-ingestion | 1.2.0 | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
+| html-artifacts | 1.1.2 | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
+| code-graph | 1.0.0 | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
+| docs-curator | 1.10.0 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
+| knowledge-graph | 1.4.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
+| mermaid-to-image | 1.2.0 | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
+| token-saver | 1.0.1 | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
+| testing-runbook-creator | 1.1.0 | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
+| page-testing-memory | 1.1.0 | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
+| browser-qa | 1.0.0 | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
+| plain-english-docs | 1.0.0 | Writes human-facing documentation in plain English: one documentation mode per section, terms defined where they first appear, steps as commands, failure coverage, a growing agent-English ban list, and a self-check with a script for em dashes and ban-list hits | `SKILL.md`, `README.md`, `banned-words.md`, `scripts/check.py` |
+| visible-delegation | 1.0.4 | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -560,7 +546,6 @@ Renders dense or visual output (plans, reports, research explainers, review summ
 **Key Components:**
 - `SKILL.md`: Skill definition with trigger conditions, hard rules, the house style tokens, layout patterns, and the verify-before-done rule
 - `README.md`: Install, usage, requirements, and a summary of the house style
-- `README.md`: Install, usage, requirements, and a summary of the house style
 - `references/template.html`: Starter page with the tokens, components, theme toggle, print styles, and an example of each layout pattern
 - `scripts/verify.sh`: Renders the file with headless Chromium and checks the result
 
@@ -694,7 +679,7 @@ Writes anything a person reads to get something done in plain English a non-tech
 - Picks one mode per section and never mixes them; a how-to's background goes in a skippable block
 - Defines each term in the sentence where it first appears
 - Steps are commands: one action each, place before action, labels instead of screen directions
-- Reasons stay out of steps; no em dashes; plain words; no "simply", "just", "easy", or "please" in instructions
+- Reasons stay out of steps; no em dashes; plain words; talking-down words stay out of instructions (the list is in `banned-words.md`)
 - Every step that can fail says what failure looks like and what to do
 - Self-check before delivery: em dash count, undefined terms, doing versus why, weakest sentence read aloud
 
@@ -736,18 +721,21 @@ Delegates a bounded task to another coding-agent session (Claude Code or opencod
 
 ### Development Setup
 
-1. Fork the repository
-2. Enable the shared git hooks (once per clone, since git does not copy hooks):
+1. Fork the repository. A fork is your own copy of it on GitHub.
+2. Clone your fork and open it.
+3. Turn on the shared git hooks. A hook is a script that Git runs for you, for example when you commit. Run this once per clone, because Git does not copy hooks:
    ```bash
    git config core.hooksPath .githooks
    ```
-3. Create a feature branch:
+4. Create a branch for your change:
    ```bash
    git checkout -b feature/add-new-skill
    ```
-4. Make your changes
-5. Test your skill in an opencode session
-6. Submit a pull request
+5. Make your changes.
+6. Test your skill in an opencode or Claude Code session.
+7. Open a pull request. This is a request to merge your branch into the main project.
+
+If a commit is rejected, read the message. The `commit-msg` hook explains which rule the message broke. See Commit Convention below.
 
 ### Code Style
 
