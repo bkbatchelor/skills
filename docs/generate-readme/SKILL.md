@@ -2,7 +2,7 @@
 name: generate-readme
 description: Generates or updates a project's README.md at BASIC, STANDARD, or ADVANCE fidelity, with Mermaid diagrams at ADVANCE, backing up any existing README and respecting .gitignore. Use whenever the user asks to write, create, generate, draft, refresh, rewrite, or update a README, or says a repo "needs a README" or "project docs", even without naming a fidelity level. Not for API reference sites, changelogs, or tweaking one section of an existing README (edit it directly). Hand SVG output of diagrams to mermaid-to-image and banner or hero images to image-gateway.
 metadata:
-  version: 1.1.0
+  version: 1.1.1
 ---
 
 # Generate README Skill

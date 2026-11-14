@@ -1,42 +1,54 @@
 # html-artifacts
 
-Renders dense or visual output (plans, reports, research explainers, review summaries, comparisons, timelines, diagrams, walkthroughs, dashboards) as one self-contained HTML file in a fixed house style, instead of a long chat reply. The chat gets a short summary and the file path.
+Turns dense or visual output into one web page file. You open the file in a browser. The output can be a plan, report, research explainer, review summary, comparison, timeline, diagram, walkthrough or dashboard. The page uses one fixed look, called the house style. The chat then gets a short summary and the file path, instead of a long reply.
 
 ## Triggers
 
-Produces an artifact when you explicitly ask for one of the above, and offers one in a single line when an answer would run past about 40 lines or hold a table wider than 3 columns. Skips short answers, code edits, and requests for another file type. See `SKILL.md` for the full list.
+It makes the page when you ask for one of the outputs above. It offers one in a single line when an answer would run past about 40 lines or hold a table wider than 3 columns. It skips short answers, code edits, and requests for another file type. `SKILL.md` has the full list.
 
 ## Install
 
-```bash
+In Claude Code, type this in the chat:
+
+```text
 /agentic-library use html-artifacts
-# or link it manually
+```
+
+To install it by hand instead, run this in a terminal. It creates a symlink, which is a shortcut that makes the skill appear in `~/.claude/skills/` without copying it. The path assumes you cloned this repo to `~/Projects/skills`.
+
+```bash
 ln -s ~/Projects/skills/docs/html-artifacts ~/.claude/skills/html-artifacts
 ```
 
 ## Requirements
 
-- Chromium or Chrome (`chromium`, `chromium-browser`, or `google-chrome`) for the verify step. Without it the skill reports that the render could not be verified.
+- Chromium or Chrome, a web browser. The verify step uses it to take screenshots. The skill looks for a command named `chromium`, `chromium-browser` or `google-chrome`. Without one, the skill reports that it could not verify how the page looks.
 
 ## What you get
 
-- One `.html` file with inline CSS and JS, no external dependencies, and full content with JS off.
-- Dark-first teal on slate, Inter and JetBrains Mono system stacks, a 4px spacing scale, and an OS-following theme with a toggle.
-- Layout patterns for report, comparison table, timeline, diagram, dashboard, and walkthrough.
-- Saved to `~/artifacts/<YYYY-MM-DD>-<slug>.html` (or `./artifacts/` for project-specific work); the path is always printed.
+- One `.html` file. It holds its own styles (CSS) and scripts (JavaScript) inside the file, so it loads nothing from elsewhere. All of its content shows even when JavaScript is turned off.
+- A dark-first look: teal on slate. The fonts are Inter and JetBrains Mono. If a computer lacks them, the page uses fonts that it does have. Spacing uses steps of 4 pixels. The theme follows your computer's light or dark setting, and a toggle lets you switch it.
+- Layout patterns for a report, a comparison table, a timeline, a diagram, a dashboard and a walkthrough.
+- A file saved to `~/artifacts/<YYYY-MM-DD>-<slug>.html`. The slug is a short name made of words joined by dashes. For project-specific work, the file goes to `./artifacts/` instead. The skill always prints the path.
 
 ## Usage
+
+Run this in a terminal to check a page:
 
 ```bash
 scripts/verify.sh ~/artifacts/2026-10-24-my-report.html [out-dir]
 ```
 
-`verify.sh` takes full-height screenshots at 1280 and 390 px in the default and a forced-dark theme, and fails on console errors or any external URL. Screenshots go to a `.shots/` folder beside the file. The skill requires reading them before it declares the artifact done.
+The script takes a full-height screenshot, a picture of the whole page, at 1280 and 390 pixels wide. It takes them in the normal theme and in a forced dark theme. It fails if the page logs console errors, which are messages the browser prints when something breaks. It also fails if the page loads any external URL.
+
+The screenshots go in a `.shots/` folder beside the file. Claude reads them before it says the page is done.
+
+If `verify.sh` fails, fix the file and run the script again.
 
 ## Contents
 
 | Path | Purpose |
 |------|---------|
-| `SKILL.md` | Agent instructions: triggers, hard rules, house style tokens, layout patterns, verify rule |
-| `references/template.html` | Starter page with the tokens, components, theme toggle, print styles, and each layout pattern |
-| `scripts/verify.sh` | Headless Chromium screenshots and console/offline checks |
+| `SKILL.md` | The instructions: when to use the skill, hard rules, house style values, layout patterns, and the verify rule |
+| `references/template.html` | A starter page with the style values, components, theme toggle, print styles and each layout pattern |
+| `scripts/verify.sh` | Takes the headless Chromium screenshots and checks for console errors and offline problems. Headless means the browser runs with no window. |

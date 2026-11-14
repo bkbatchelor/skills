@@ -2,7 +2,7 @@
 name: mermaid-to-image
 description: Renders Mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, and more) to validated SVG, PNG, or PDF files with mermaid-cli, from .mmd files, mermaid blocks in Markdown, or pasted source. Use whenever the user asks to convert, render, export, or save a Mermaid diagram as SVG, PNG, or PDF, to turn a README's mermaid blocks into images, or to get a diagram that opens in Figma, Inkscape, Word, PowerPoint, or LaTeX. Also use when another skill needs Mermaid turned into an image file. Not for designing a diagram from a description with no Mermaid involved (use archify), charts of numeric data, or raster art (use image-gateway).
 metadata:
-  version: 1.2.0
+  version: 1.2.1
 ---
 
 # Mermaid to SVG
