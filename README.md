@@ -79,6 +79,12 @@ skills/
 │   │       ├── basic-level-template.md
 │   │       ├── standard-level-template.md
 │   │       └── advance-level-template.md
+│   ├── plain-english-docs/       # Plain-English writing skill
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install and coverage
+│   │   ├── banned-words.md       # Agent-English ban list
+│   │   └── scripts/
+│   │       └── check.py          # Em dash count and ban-list scan
 │   ├── code-graph/               # Code knowledge graph skill (codegraph) and code-to-docs change check
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Overview, applies_to links, files
@@ -232,6 +238,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | testing-runbook-creator | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
 | page-testing-memory | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
 | browser-qa | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
+| plain-english-docs | Writes human-facing documentation in plain English: one documentation mode per section, terms defined where they first appear, steps as commands, failure coverage, a growing agent-English ban list, and a self-check with a script for em dashes and ban-list hits | `SKILL.md`, `README.md`, `banned-words.md`, `scripts/check.py` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -665,6 +672,36 @@ Tool layer for web page QA. Drives a real browser through Chrome DevTools MCP an
 **Usage:**
 ```bash
 ln -s "$PWD/testing/browser-qa" ~/.claude/skills/browser-qa
+```
+
+#### plain-english-docs
+
+---
+
+Writes anything a person reads to get something done in plain English a non-technical reader can follow. Skips code comments, commit messages, and agent-facing files.
+
+**Key Components:**
+- `SKILL.md`: Trigger conditions, the four modes (tutorial, how-to, reference, explanation), sentence rules, failure coverage, and the self-check
+- `banned-words.md`: Agent-English ban list with plain replacements; grows when you catch a new word
+- `scripts/check.py`: Counts em dashes and lists ban-list hits in a file
+- `README.md`: Install and coverage
+
+**Requirements:**
+- Python 3 for `scripts/check.py`
+- Works with `generate-readme` and `html-artifacts`, which decide structure and format
+
+**Features:**
+- Picks one mode per section and never mixes them; a how-to's background goes in a skippable block
+- Defines each term in the sentence where it first appears
+- Steps are commands: one action each, place before action, labels instead of screen directions
+- Reasons stay out of steps; no em dashes; plain words; no "simply", "just", "easy", or "please" in instructions
+- Every step that can fail says what failure looks like and what to do
+- Self-check before delivery: em dash count, undefined terms, doing versus why, weakest sentence read aloud
+
+**Usage:**
+```bash
+ln -s "$PWD/docs/plain-english-docs" ~/.claude/skills/plain-english-docs
+python3 docs/plain-english-docs/scripts/check.py path/to/draft.md   # exit 0 when clean
 ```
 
 #### visible-delegation
