@@ -2,7 +2,7 @@
 name: page-testing-memory
 description: Teaches the general process for QA of any web page or UI, and keeps every page-specific fact in the repo's testing runbook instead of in the skill. Use whenever you QA, verify, smoke-test, or screenshot a web page, route, form, or UI component, even if the user does not say "QA". Covers page states (empty, loaded, error, loading), form testing with valid, invalid and edge input, auth boundaries, responsive breakpoints, and screenshot evidence. Pairs with testing-runbook-creator, which owns the runbook file. Skip for API-only, CLI, or unit-test work with no rendered page.
 metadata:
-  version: 1.1.0
+  version: 1.1.1
 ---
 
 # Page Testing Memory

@@ -2,7 +2,7 @@
 name: browser-qa
 description: Drives a real browser through Chrome DevTools MCP to verify web changes with evidence - screenshots at desktop/tablet/mobile breakpoints, Core Web Vitals traces (LCP, INP, CLS) against thresholds, and console-error and failed-request checks during a scripted walkthrough - then reports in a fixed short format. Use whenever the user asks to verify a web change, check page performance, audit a page, test responsive behavior, or confirm a UI change works in a real browser, even if they do not name the tool. Builds on page-testing-memory (QA process) and testing-runbook-creator (runbook). Skip for API-only, CLI, or unit-test work with no rendered page.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Browser QA

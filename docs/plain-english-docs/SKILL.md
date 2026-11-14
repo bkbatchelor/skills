@@ -2,7 +2,7 @@
 name: plain-english-docs
 description: Writes documentation in plain English that a non-technical reader can follow, and removes agent English. Use whenever you write or rewrite anything a person will read to get something done - READMEs, setup guides, how-to steps, instructions, user-facing messages, or explanations in chat - even if the user does not say "plain English". Picks one documentation mode per section, defines terms where they first appear, writes steps as commands, covers failures, bans a growing list of filler words, and ends with a self-check. Skip for code comments, commit messages, and files written for agents such as SKILL.md, CLAUDE.md, and prompts.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Plain English Docs

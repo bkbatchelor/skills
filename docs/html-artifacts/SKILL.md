@@ -2,7 +2,7 @@
 name: html-artifacts
 description: "Renders dense or visual output (plans, reports, research explainers, review summaries, comparisons, timelines, diagrams, walkthroughs, dashboards) as one self-contained, offline HTML file in the user's house style, then screenshots it to verify it renders. Use whenever the user asks for a plan, report, comparison, review summary, explainer, diagram, walkthrough, or dashboard, or when a chat answer would run past roughly 40 lines or hold a table wider than 3 columns: produce on explicit request, offer in one line otherwise. Also use when the result is worth keeping or sharing. Not for short answers, code edits, numeric charts that need a charting library, or Mermaid diagram file conversion (use mermaid-to-image)."
 metadata:
-  version: 1.1.2
+  version: 1.1.3
 ---
 
 # HTML Artifacts

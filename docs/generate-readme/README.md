@@ -1,33 +1,41 @@
 # generate-readme
 
-Generates and updates README files at a chosen fidelity level, with Mermaid diagrams where they help.
+Writes and updates README files. A README is the front page of a project. It explains what the project is and how to use it. You choose how much detail the README has. The skill also adds Mermaid diagrams where they help. Mermaid is a text format for drawing diagrams.
 
 ## Fidelity levels
 
-| Level | Section guide |
+Fidelity means how much detail the README includes. Pick one of three levels:
+
+| Level | Section template |
 |-------|----------|
 | BASIC | `references/basic-level-template.md` |
 | STANDARD | `references/standard-level-template.md` |
 | ADVANCE | `references/advance-level-template.md` |
 
-## Behavior
+## How it behaves
 
-- Infers the fidelity level from the request and asks only when unclear.
-- On update, keeps accurate human-written content instead of rewriting everything.
-- Backs up the old README only when git cannot recover it.
-- Respects `.gitignore` through git's file listing.
-- Verifies commands, paths and Mermaid blocks before writing.
-- Draws only diagrams the codebase supports.
+- It works out the fidelity level from your request. It asks only when the request is unclear.
+- When it updates a README, it keeps accurate content that a person wrote. It does not rewrite everything.
+- It makes a backup of the old README only when git cannot recover the old version. Git is the tool that tracks file history.
+- It skips files that `.gitignore` lists. That file tells git which files to leave out.
+- It checks commands, file paths and Mermaid blocks before it writes them down.
+- It draws only the diagrams that the code supports.
 
-## Triggers
+## When it starts
 
-Asks to write, generate, refresh, or update a README, or says a repo needs one. See `SKILL.md` for the full list, including when to skip it.
+Ask it to write, generate, refresh or update a README, or tell it that a repo needs one. `SKILL.md` lists every trigger phrase and when to skip the skill.
 
 ## Install
 
-```bash
+In Claude Code, type this in the chat:
+
+```text
 /agentic-library use generate-readme
-# or link it manually
+```
+
+To install it by hand instead, run this in a terminal. It creates a symlink, which is a shortcut that makes the skill appear in `~/.claude/skills/` without copying it. The path assumes you cloned this repo to `~/Projects/skills`.
+
+```bash
 ln -s ~/Projects/skills/docs/generate-readme ~/.claude/skills/generate-readme
 ```
 
@@ -35,5 +43,5 @@ ln -s ~/Projects/skills/docs/generate-readme ~/.claude/skills/generate-readme
 
 | Path | Purpose |
 |------|---------|
-| `SKILL.md` | Agent instructions: workflow, diagram guidelines, `.gitignore` handling and constraints |
-| `references/` | One section guide per fidelity level |
+| `SKILL.md` | The instructions: the workflow, diagram rules, `.gitignore` handling and limits |
+| `references/` | One section template for each fidelity level |
