@@ -181,9 +181,12 @@ skills/
 │   ├── testing-runbook-creator/  # Repo-local testing runbook skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   └── README.md             # Install, runbook location, entry fields, rules
-│   └── page-testing-memory/      # General web page QA process; page facts stay in repo runbooks
+│   ├── page-testing-memory/      # General web page QA process; page facts stay in repo runbooks
+│   │   ├── SKILL.md              # Skill definition
+│   │   └── README.md             # Install, usage, knowledge split
+│   └── browser-qa/               # Chrome DevTools MCP browser QA with evidence rule
 │       ├── SKILL.md              # Skill definition
-│       └── README.md             # Install, usage, knowledge split
+│       └── README.md             # Install and coverage
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -228,6 +231,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | token-saver | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | testing-runbook-creator | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
 | page-testing-memory | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
+| browser-qa | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 | visible-delegation | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
@@ -635,6 +639,32 @@ Global process for QA of any web page or UI, with a hard split: the process live
 **Usage:**
 ```bash
 ln -s "$PWD/testing/page-testing-memory" ~/.claude/skills/page-testing-memory
+```
+
+#### browser-qa
+
+---
+
+Tool layer for web page QA. Drives a real browser through Chrome DevTools MCP and requires a screenshot, metric or log excerpt for every finding.
+
+**Key Components:**
+- `SKILL.md`: Trigger conditions, setup and connection check, rules (evidence, read-only, credentials, evidence folder), recipes by change type, the report format, and runbook integration
+- `README.md`: Install and coverage
+
+**Requirements:**
+- Chrome DevTools MCP (`npx chrome-devtools-mcp@latest`) and Chrome or Chromium
+- `page-testing-memory` (QA process) and `testing-runbook-creator` (runbook)
+
+**Features:**
+- Layout recipe: full-page screenshots at 1440x900, 768x1024 and 390x844 with a horizontal-overflow check
+- Performance recipe: throttled mobile trace; LCP <= 2.5 s, INP <= 200 ms, CLS <= 0.1; INP via a scripted interaction, otherwise "not measured"
+- New-feature recipe: scripted walkthrough with console-error and failed-request checks
+- Read-only audits, no credentials typed or stored, tokens redacted; evidence saved to `.browser-qa/<date>-<slug>/` (globally gitignored)
+- Thresholds and breakpoints can be overridden in the repo runbook
+
+**Usage:**
+```bash
+ln -s "$PWD/testing/browser-qa" ~/.claude/skills/browser-qa
 ```
 
 #### visible-delegation
