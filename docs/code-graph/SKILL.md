@@ -2,7 +2,7 @@
 name: code-graph
 description: Answers questions about source code (symbols, callers, dependencies, architecture, blast radius) with codegraph, a code knowledge graph, and checks a code change against the documents that constrain it, such as ADRs, by reading the docs graph that docs-curator and graphify built. Use for "how does X work in the code", "what calls Y", "what breaks if I change Z", "does this change conflict with an ADR or design doc", and to set up or refresh a repository's code index. Checks that codegraph is installed, runs `codegraph init` only after the user approves, and never installs anything. Skip for questions about PDFs, slides, or Markdown content (use graphify, after docs-curator), for curating documents (use docs-curator), and for editing code with no need to understand it first.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Code Graph

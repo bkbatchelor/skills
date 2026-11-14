@@ -2,7 +2,7 @@
 name: testing-runbook-creator
 description: Keeps a repo-local testing runbook so future sessions never rediscover how to test something. Read it before, and update it during, ANY testing, verification, smoke-testing, QA, or debugging activity in a repo - running a test suite, checking a UI page or API endpoint, reproducing a bug, validating a change, trying a CLI or script - whether or not the user mentions a runbook. Records per-workflow steps, safe vs destructive actions, seed/setup, cleanup, and exact verification commands with expected output, and fixes the runbook the moment reality differs. Skip only for pure code reading or editing where nothing is run or observed.
 metadata:
-  version: 1.1.0
+  version: 1.1.1
 ---
 
 # Testing Runbook Creator
