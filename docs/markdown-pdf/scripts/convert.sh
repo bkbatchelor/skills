@@ -6,7 +6,8 @@
 # Exit codes: 0 ok · 1 conversion failed · 2 usage or missing Node
 set -euo pipefail
 
-SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# pwd -P resolves symlinks: the skill is usually linked into ~/.claude/skills, and npm ci fails when run through a link.
+SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 command -v node >/dev/null 2>&1 || { echo "convert.sh: node is not installed. Install Node.js 20 or newer and run again." >&2; exit 2; }
 node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)' \
