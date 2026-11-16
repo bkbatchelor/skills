@@ -129,6 +129,21 @@ skills/
 │   │   │   └── canvases.json
 │   │   └── scripts/              # Helper scripts
 │   │       └── render.sh
+│   ├── markdown-pdf/             # Markdown to PDF, HTML, PNG, JPEG skill
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install, requirements, usage, settings
+│   │   ├── package.json          # Pinned npm packages
+│   │   ├── package-lock.json
+│   │   ├── .gitignore            # Ignores node_modules
+│   │   ├── scripts/              # Helper scripts
+│   │   │   ├── convert.sh        # Entry point: checks Node, installs packages once
+│   │   │   └── convert.mjs       # Converter and command line
+│   │   ├── styles/
+│   │   │   └── default.css       # Default page styles
+│   │   └── tests/                # node --test suite and sample Markdown
+│   │       ├── convert.test.mjs
+│   │       ├── sample.md
+│   │       └── included.md
 │   └── html-artifacts/           # HTML artifact skill
 │       ├── SKILL.md              # Skill definition
 │       ├── README.md             # Install, usage, house style summary
@@ -221,6 +236,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | docs-curator | 1.10.0 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
 | knowledge-graph | 1.4.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
 | mermaid-to-image | 1.2.0 | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
+| markdown-pdf | 1.0.0 | Converts Markdown to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension Markdown PDF: highlighting, emoji, task lists, containers, includes, KaTeX math, locally drawn Mermaid, front matter, custom CSS, page size, margins, header and footer templates, clip and quality, raw-HTML sanitizing | `SKILL.md`, `README.md`, `package.json`, `package-lock.json`, `scripts/convert.sh`, `scripts/convert.mjs`, `styles/default.css`, `tests/convert.test.mjs` |
 | token-saver | 1.0.1 | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
 | testing-runbook-creator | 1.1.0 | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
 | page-testing-memory | 1.1.0 | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
@@ -420,6 +436,34 @@ Converts Mermaid diagrams to SVG, PNG, or PDF, optionally in a modern Archify-in
 - `--png` writes a PNG beside each SVG (`<stem>-N.png` for Markdown blocks), with `--scale N` (default 2) and `--size N`; PNGs are transparent unless `-b` is given
 - PDF output by naming a `.pdf` path, plus a preview step for checking the result visually
 - Never rewrites the source Markdown in place
+
+#### markdown-pdf
+
+---
+
+Converts Markdown files to PDF, HTML, PNG or JPEG, reproducing the features of the VS Code extension [Markdown PDF](https://github.com/yzane/vscode-markdown-pdf) as a command line tool with the extension's setting names and defaults.
+
+**Key Components:**
+- `SKILL.md`: Skill definition with triggers, the run and verify workflow, the settings table, supported syntax and the security rules
+- `README.md`: Install, requirements, usage examples and what is left out
+- `scripts/convert.sh`: Checks for Node 20 or newer, runs `npm ci` once into the skill folder, then runs `convert.mjs`
+- `scripts/convert.mjs`: markdown-it pipeline, settings loading (`--set`, `.markdown-pdf.json`), sanitizing, Chrome detection and puppeteer-core output
+- `styles/default.css`: Default page and container styles
+- `package.json`, `package-lock.json`: Pinned dependencies (markdown-it, highlight.js, KaTeX, mermaid, puppeteer-core, sanitize-html and others)
+- `tests/`: `node --test` suite and sample Markdown
+
+**Requirements:**
+- Node.js 20 or newer, and network access on the first run to install packages
+- Chrome, Chromium or Edge for PDF, PNG and JPEG (HTML needs none; no browser is downloaded)
+
+**Features:**
+- Formats: PDF, HTML with embedded images, PNG, JPEG, several per run, many input files
+- Markdown: highlight.js code, emoji, task checkboxes, GitHub-style heading ids, `::: name` containers, `:[label](file.md)` includes, KaTeX math, front matter, `<div class="page"/>` breaks
+- Diagrams: Mermaid, drawn locally from a bundled copy (inlined in HTML). PlantUML is deliberately unsupported because it needs a remote server; it stays a code block with a warning
+- PDF: paper size, custom width and height, orientation, margins, scale, page ranges, header and footer templates with the extension's placeholders
+- PNG and JPEG: clip region, JPEG quality, transparent background
+- Raw HTML is sanitized by default (`gfm`, `gfm-allow-style`, `none`)
+- Left out: convert on save, VS Code commands, PlantUML, `mermaidServer`, automatic Chromium download
 
 #### docs-curator
 
