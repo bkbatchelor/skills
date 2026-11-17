@@ -1,6 +1,6 @@
 # docs-curator
 
-docs-curator is a Claude Code skill, a set of instructions that Claude follows for one kind of task. This one cleans up a large folder of documents before you build a knowledge graph from them. A knowledge graph is a map of your documents that shows how they connect, and you can ask it questions. The skill works with the file types `.pptx .pdf .md .xlsx .txt .docx .xml .json .csv .yaml .yml`. You build the graph with [Graphify](https://pypi.org/project/graphifyy/), a tool that builds knowledge graphs.
+docs-curator is a Claude Code skill, a set of instructions that Claude follows for one kind of task. This one cleans up a large folder of documents before you build a knowledge graph from them. A knowledge graph is a map of your documents that shows how they connect, and you can ask it questions. The skill works with the file types `.pptx .pdf .md .xlsx .txt .docx .xml .json .jsonl .jsonc .csv .yaml .yml`. You build the graph with [Graphify](https://pypi.org/project/graphifyy/), a tool that builds knowledge graphs.
 
 The skill finds duplicates and outdated revisions. It flags documents that contradict each other. It writes the documents worth keeping into a separate, tidy folder. Your original folder is never changed. At the end, the skill offers to build the knowledge graphs. It runs Graphify only if you say yes.
 
