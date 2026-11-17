@@ -441,3 +441,24 @@ def test_linked_code_lines_flags_missing_paths(tmp_path):
         "- `adr.md` -> `src/gone.py` **[path not found in source]**",
         "- `adr.md` -> `OrderService.retry`",
     ]
+
+
+def test_extract_jsonl_is_fenced_raw_and_checks_every_line(tmp_path):
+    f = tmp_path / "a.jsonl"
+    f.write_text('{"a": 1}\n\n{"b": [2]}\n', encoding="utf-8")
+    assert curate.extract_text(f, "jsonl") == '```jsonl\n{"a": 1}\n\n{"b": [2]}\n```'
+    bad = tmp_path / "b.jsonl"
+    bad.write_text('{"a": 1}\n{oops\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="line 2"):
+        curate.extract_text(bad, "jsonl")
+
+
+def test_extract_jsonc_allows_comments_and_trailing_commas(tmp_path):
+    f = tmp_path / "a.jsonc"
+    f.write_text('{\n  // note\n  "url": "http://x/*y*/", /* c */\n  "a": [1, 2,],\n}\n', encoding="utf-8")
+    out = curate.extract_text(f, "jsonc")
+    assert out.startswith("```jsonc\n") and '"http://x/*y*/"' in out and "// note" in out
+    bad = tmp_path / "b.jsonc"
+    bad.write_text('{"a": }', encoding="utf-8")
+    with pytest.raises(ValueError):
+        curate.extract_text(bad, "jsonc")

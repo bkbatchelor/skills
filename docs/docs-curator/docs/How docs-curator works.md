@@ -98,13 +98,15 @@ The OUT folder holds these files and folders:
 - A file with an extension the script does not handle gets the status `not_ingestible`.
 - Text extraction is cached by fingerprint, in `text/v{EXTRACT_VERSION}/<sha>.md`. If extraction fails, the failure is cached as `<sha>.err`. A bad file is then not tried again on every run.
 - Plain text files (`.md` and `.txt`) are read with three text encodings, tried in this order: utf-8-sig, cp1252, then latin-1. An encoding is a rule for turning bytes into letters. The first one that works is used.
-- Structured data files keep their structure. These are `.xml`, `.json`, `.csv`, `.yaml`, and `.yml`.
+- Structured data files keep their structure. These are `.xml`, `.json`, `.jsonl`, `.jsonc`, `.csv`, `.yaml`, and `.yml`.
   - XML must be well-formed, which means every tag is opened and closed correctly.
   - JSON must parse.
+  - JSON Lines (`.jsonl`) holds one JSON value per line. Blank lines are skipped. Every other line must parse, and the error names the first bad line.
+  - JSONC (`.jsonc`) is JSON that allows `//` and `/* */` comments and trailing commas. The script ignores these while it checks that the file parses. The staged text keeps them.
   - YAML must load. A file with several YAML documents is fine.
   - A CSV that contains NUL bytes (zero-value bytes that text files should not have) is also invalid.
   - A file that fails these checks gets the status `unreadable`.
-  - Each valid file is staged as its raw text inside a fenced code block, labeled `xml`, `json`, `csv`, or `yaml`. `.yml` files use the `yaml` label. The fence gets longer if the content has backticks in it.
+  - Each valid file is staged as its raw text inside a fenced code block, labeled `xml`, `json`, `jsonl`, `jsonc`, `csv`, or `yaml`. `.yml` files use the `yaml` label. The fence gets longer if the content has backticks in it.
   - The description is the filename without its extension.
 - PDF, Word, Excel, and PowerPoint files are converted to text by the `heavy-file-ingestion` skill (`ingest.py`). The converted chunks are joined in INDEX order.
   - Before conversion, the script checks that each Office file is a real zip archive. Office files (.docx, .xlsx, .pptx) are zip archives inside. The script checks that each PDF starts with the bytes `%PDF`.
