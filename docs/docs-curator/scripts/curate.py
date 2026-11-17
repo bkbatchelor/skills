@@ -28,8 +28,8 @@ from pathlib import Path
 
 EXTRACT_VERSION = 2
 WORKDIR = ".docs-curator"
-SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml", ".json", ".csv", ".yaml", ".yml"}
-FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6, "json": 7, "csv": 8, "yaml": 9, "yml": 9}
+SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml", ".json", ".jsonl", ".jsonc", ".csv", ".yaml", ".yml"}
+FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6, "json": 7, "jsonl": 7, "jsonc": 7, "csv": 8, "yaml": 9, "yml": 9}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out", ".docs-curator"}
 IDENTICAL_TEXT_SIMILARITY = 0.999
 MIN_TOKENS = 5
@@ -189,7 +189,32 @@ def write_json(path, data):
 
 
 
-RAW_FENCED = ("xml", "json", "csv", "yaml", "yml")
+RAW_FENCED = ("xml", "json", "jsonl", "jsonc", "csv", "yaml", "yml")
+
+
+def strip_jsonc(text):
+    """Drop // and /* */ comments and trailing commas from JSONC, leaving string contents alone."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            if end < 0:
+                raise ValueError("unterminated /* comment")
+            i = end + 2
+        else:
+            out.append(c)
+            i += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
 
 
 def _decode_text(raw):
@@ -247,6 +272,15 @@ def extract_text(full, fmt):
             body = _decode_text(raw)
             if fmt == "json":
                 json.loads(body)
+            elif fmt == "jsonc":
+                json.loads(strip_jsonc(body.lstrip("\ufeff")))
+            elif fmt == "jsonl":
+                for n, line in enumerate(body.lstrip("\ufeff").splitlines(), 1):
+                    if line.strip():
+                        try:
+                            json.loads(line)
+                        except ValueError as e:
+                            raise ValueError(f"line {n} is not valid JSON: {e}") from e
             elif fmt in ("yaml", "yml"):
                 import yaml
 
