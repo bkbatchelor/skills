@@ -182,6 +182,26 @@ Use this when the primary repo's goals need facts that only another repo holds. 
 9. **Answer.** Query the scoped graph and cite it as "scoped graph, partial coverage". A missing fact is not proof it is absent from the repo. Record each answer with `kg needs set qN --status answered-externally --answer ... --source <path>`.
 10. **Still unanswered?** Propose added files for that question only, then repeat steps 6 to 8. Each question gets at most two widening rounds, and `kg external scope --approve` refuses a third. After that, run `kg needs set qN --status unanswered` and report it.
 
+### Where the external repo is defined
+
+The external repo is not defined in `kg.yaml`, and `needs.yaml` does not depend on it.
+
+- **`needs.yaml`** is created by `kg needs init`. That command needs only the primary repo's `kg.yaml` to exist, because every `kg` command loads it. It writes empty goals and questions and never looks at an external repo.
+- **The external repo** is registered later, at step 4, with `kg external add`. That writes `~/curated/<repo>/external/<name>/external.yaml`, not `kg.yaml`. The only external-related keys in `kg.yaml` are the shared caps `external.max_files` (default 50) and `external.cost_cap_tokens` (default 1,500,000).
+- **Questions do not name a repo.** `kg needs add-question` takes the text, a goal and the kind of fact expected. A question is tied to specific files only when you write the external repo's `scope.yaml`, where each file lists the questions it serves.
+- **`related_repos`** in `kg.yaml` is a different thing. It lists read-only graphs of repos that already have one (see [Related repos](#5-related-repos)) and plays no part in external curation.
+
+The order is: `kg needs init`, goals, questions, gate the questions against the primary graphs, then `kg external add`. The external repo is only needed once a question is marked `external-only`.
+
+### When the primary graphs already answer everything
+
+Registering an external repo does not cause it to be curated. If every question is `answered-internally`, or there are no questions, `kg` ignores the external repo even when it holds useful data.
+
+- **Questions are the gate.** `kg external scope` rejects any scoped file unless it serves an `external-only` question. That status is accepted only with evidence that the primary graphs came up empty, and only after the goals are approved. With no `external-only` questions, no valid scope can exist, so `kg external scope --approve` and `kg external build` cannot go forward.
+- **No cost and no changes.** Graphify never runs on the external repo, so no tokens are spent. `kg` never writes to, fetches into or clones it. `kg all` and `kg status` do not touch it, and the registration is a dormant `external.yaml`.
+- **Inventory still works.** `kg external inventory` needs only the registration. It lists candidate paths, sizes and first headings, which is cheap, but it does not put anything in scope.
+- **Useful data you notice anyway.** Write a new question for it and gate it against the primary graphs first. If they cannot answer it, it becomes `external-only`, and the normal flow follows.
+
 Later maintenance:
 
 - `kg external status <name>` reports drift only in scoped files.
