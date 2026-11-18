@@ -115,6 +115,7 @@ graph:
   cost_cap_tokens: 1500000   # an estimate above this needs a separate explicit yes
   agent_overhead_tokens: 60000  # fixed cost per extraction agent, added to the estimate
   citation_ids: [ADR]        # "ADR-005 ..." cited in one chunk is linked to the ADR-005 file's node (kg graph fixups)
+  parsed_content_multiplier: 0.5 # big/long files parsed with a script cost far less per content token
   content_token_multiplier: 1.7  # input tokens per token of file content (agents re-read it as they work);
                              # `kg graph finish` learns the real value from each run and prepare uses that
   big_file_bytes: 400000     # changed files above either limit get their own extraction chunk
@@ -1153,20 +1154,30 @@ def content_tokens(paths):
     return total // 4
 
 
+PARSED_CONTENT_MULTIPLIER = 0.5  # big/long files are parsed with a script, so little of their text enters context
+LEARN_MIN_READ_TOKENS = 5_000     # learn only from runs that read at least this much content the normal way
+LEARN_WINDOW = 3                  # average the multiplier over the last few measured runs
+
+
 def learned_multiplier(ctx):
-    """The content multiplier the last measured graph run showed (see cmd_graph_finish), or None."""
+    """Mean content multiplier of the last LEARN_WINDOW measured graph runs (see cmd_graph_finish), or None.
+
+    Only records with `multiplier_basis: "read"` count: older records also priced script-parsed big files at
+    the read rate, and one such run could drag the estimate down to a quarter of the real cost.
+    """
     path = ctx.kgdir / "runs.jsonl"
     if not path.exists():
         return None
-    last = None
+    seen = []
     for line in path.read_text(encoding="utf-8").splitlines():
         try:
             rec = json.loads(line)
         except ValueError:
             continue
-        if rec.get("step") == "graph finish" and rec.get("content_multiplier"):
-            last = float(rec["content_multiplier"])
-    return last
+        if rec.get("step") == "graph finish" and rec.get("content_multiplier") and rec.get("multiplier_basis") == "read":
+            seen.append(float(rec["content_multiplier"]))
+    recent = seen[-LEARN_WINDOW:]
+    return round(sum(recent) / len(recent), 2) if recent else None
 
 
 def avg_tokens_per_file(cost):
@@ -1361,10 +1372,16 @@ def cmd_graph_prepare(args):
                   if rel_to_staging(ctx, f) not in big_set and line_count(f) > 2000]
     rest = len(changed) - len(big) - len(long_files)
     chunks = (-(-rest // 22) if rest else 0) + len(big) + len(long_files)  # one agent per big or long file
-    content = content_tokens(changed)
+    # Files read with the Read tool are carried through every later turn (content x multiplier). Big and
+    # long files are parsed with a script instead, so most of their text never enters context.
+    parsed_rel = big_set | set(long_files)
+    parsed = content_tokens([f for f in changed if rel_to_staging(ctx, f) in parsed_rel])
+    read = content_tokens(changed) - parsed
+    content = read + parsed
     learned = learned_multiplier(ctx)
     multiplier = learned or float(ctx.get("graph", "content_token_multiplier", default=DEFAULT_CONTENT_MULTIPLIER))
-    estimate = int(content * multiplier + overhead * chunks)  # 0 for a prune-only run: no agents
+    parsed_mult = float(ctx.get("graph", "parsed_content_multiplier", default=PARSED_CONTENT_MULTIPLIER))
+    estimate = int(read * multiplier + parsed * parsed_mult + overhead * chunks)  # 0 for a prune-only run
     cap = int(ctx.get("graph", "cost_cap_tokens", default=1_500_000))
     has_graph = (ctx.out / "graphify-out/graph.json").exists()
     plan = {
@@ -1374,7 +1391,8 @@ def cmd_graph_prepare(args):
         "phi_pruned": [rel_to_staging(ctx, f) for f in phi_in_graph],
         "prune_sources": [str(staging / f) for f in rel_deleted + rel_excluded],
         "total_files": det["total_files"], "tokens_per_file": round(per_file) if per_file else None,
-        "content_tokens": content, "content_multiplier": round(multiplier, 2),
+        "content_tokens": content, "read_content_tokens": read, "parsed_content_tokens": parsed,
+        "content_multiplier": round(multiplier, 2), "parsed_content_multiplier": parsed_mult,
         "multiplier_source": "learned from the last run" if learned else "kg.yaml / default",
         "agent_overhead_tokens": overhead, "cost_runs_before": len((cost or {}).get("runs", [])),
         "estimated_input_tokens": estimate, "estimated_chunks": chunks, "cost_cap_tokens": cap,
@@ -1399,8 +1417,9 @@ def cmd_graph_prepare(args):
     if not changed and not rel_deleted and not rel_excluded:
         print("graph: nothing changed since the last build; no graphify run needed")
         return 0
-    est = (f"~{estimate:,} input tokens ({len(changed)} files, ~{content:,} content tokens x {multiplier:.2f} "
-           f"({plan['multiplier_source']}) + {chunks} agent(s) x {overhead:,} overhead, "
+    est = (f"~{estimate:,} input tokens ({len(changed)} files: ~{read:,} read content tokens x {multiplier:.2f} "
+           f"({plan['multiplier_source']})" + (f" + ~{parsed:,} script-parsed x {parsed_mult:.2f}" if parsed else "")
+           + f" + {chunks} agent(s) x {overhead:,} overhead, "
            f"{len(big) + len(long_files)} of them for big or 2000+-line files)") if changed else \
         "no extraction agents (prune only), ~0 input tokens"
     print(f"cost: {est}; cap {cap:,}" + ("  ** OVER CAP: needs a separate explicit yes **" if plan["over_cap"] else ""))
@@ -1706,16 +1725,22 @@ def cmd_graph_labels(args):
 def measured_multiplier(ctx, plan):
     """What this run's extraction really cost per content token, from the runs graphify appended to
     cost.json since `kg graph prepare`. None when there was nothing to extract or nothing was recorded."""
-    content = plan.get("content_tokens") or 0
-    if not content or "cost_runs_before" not in plan:
+    if not plan.get("content_tokens") or "cost_runs_before" not in plan:
         return None
     runs = ((read_json(ctx.out / "graphify-out/cost.json") or {}).get("runs") or [])[plan["cost_runs_before"]:]
     used = sum(r.get("input_tokens", 0) for r in runs)
     if not used:
         return None
+    out = {"input_tokens": used}
+    # Learn only from the normally read part. A run with little read content, or more script-parsed than
+    # read content, says nothing reliable about it: parsed files cost anywhere from ~0 to ~1.4x content.
+    read = plan.get("read_content_tokens")
+    if read is None or read < LEARN_MIN_READ_TOKENS or (plan.get("parsed_content_tokens") or 0) > read:
+        return out
     agents = (plan.get("estimated_chunks") or 0) * (plan.get("agent_overhead_tokens") or 0)
-    mult = (used - agents) / content
-    return {"input_tokens": used, "multiplier": round(min(max(mult, 0.5), 5.0), 2)}
+    parsed = (plan.get("parsed_content_tokens") or 0) * (plan.get("parsed_content_multiplier") or PARSED_CONTENT_MULTIPLIER)
+    out["multiplier"] = round(min(max((used - agents - parsed) / read, 0.5), 5.0), 2)
+    return out
 
 
 def cmd_graph_finish(args):
@@ -1747,11 +1772,14 @@ def cmd_graph_finish(args):
     prune_snapshots(ctx)
     measured = measured_multiplier(ctx, plan)
     if measured:
+        learned = f"; read-content multiplier {measured['multiplier']:.2f} (averaged into the next estimates)" \
+            if "multiplier" in measured else "; too little normally read content to learn a multiplier from"
         print(f"cost: this run took {measured['input_tokens']:,} input tokens against an estimate of "
-              f"{plan.get('estimated_input_tokens') or 0:,}; content multiplier {measured['multiplier']:.2f} "
-              "(the next `kg graph prepare` uses it)")
+              f"{plan.get('estimated_input_tokens') or 0:,}{learned}")
     ctx.log("graph finish", nodes=len(g.get("nodes", [])), edges=len(g.get("links", [])),
-            **({"input_tokens": measured["input_tokens"], "content_multiplier": measured["multiplier"]} if measured else {}))
+            **({"input_tokens": measured["input_tokens"]} if measured else {}),
+            **({"content_multiplier": measured["multiplier"], "multiplier_basis": "read"}
+               if measured and "multiplier" in measured else {}))
     print(f"graph: {len(g.get('nodes', []))} nodes, {len(g.get('links', []))} edges; "
           f"query with: graphify query \"<q>\" --graph {home_form(ctx.out / 'graphify-out/graph.json')}")
     return 0
