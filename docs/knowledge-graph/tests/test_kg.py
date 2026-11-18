@@ -887,3 +887,93 @@ def test_external_prune_drops_files_of_retired_questions(ext):
     xcmd(ext, "prune", yes=True)
     assert not (d / "scope.approved.json").exists()
     assert "contract.md" not in (d / "scope.yaml").read_text()
+
+
+# ----------------------------------------------------------------------------- 2026-11-18 rebuild findings
+
+
+def prepare_with(env, monkeypatch, files, deleted=(), cost=None, content=b"x\n"):
+    ctx = env.ctx()
+    st = ctx.out / "staging/docs"
+    st.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for name in files:
+        (st / name).write_bytes(content)
+        paths.append(str(st / name))
+    g = ctx.out / "graphify-out"
+    kg.write_json(g / "graph.json", graph([("a", "docs/keep.md", None)]))
+    if cost is not None:
+        kg.write_json(g / "cost.json", cost)
+    if not (ctx.repo / "graphify-out").is_symlink():
+        (ctx.repo / "graphify-out").symlink_to(g, target_is_directory=True)
+    monkeypatch.setattr(kg, "run", lambda cmd, **kw: argparse.Namespace(stdout=json.dumps(
+        {"new_files": {"document": paths} if paths else {}, "deleted": list(deleted), "files": paths,
+         "total_files": len(paths), "new_total": len(paths)})))
+    monkeypatch.setattr(kg, "graphify_python", lambda ctx: "python")
+    kg.cmd_graph_prepare(argparse.Namespace(repo=str(env.repo), allow_any_branch=True))
+    return ctx, kg.read_json(ctx.kgdir / "graph-plan.json")
+
+
+def test_estimate_without_cost_history_counts_file_content(env, monkeypatch):
+    # bug 1: after a wipe there is no cost.json; the estimate must still price the files themselves
+    ctx, plan = prepare_with(env, monkeypatch, ["big.md"], content=b"word " * 40_000)  # 200 KB -> 50k tokens
+    assert plan["content_tokens"] == 50_000
+    assert plan["estimated_input_tokens"] == int(50_000 * kg.DEFAULT_CONTENT_MULTIPLIER) + 60_000
+
+
+def test_prune_only_estimate_is_zero_not_unknown(env, monkeypatch, capsys):
+    ctx, plan = prepare_with(env, monkeypatch, [], deleted=["/x/staging/docs/gone.md"])
+    assert plan["estimated_input_tokens"] == 0 and plan["over_cap"] is False
+    assert "prune only" in capsys.readouterr().out
+
+
+def test_finish_learns_the_content_multiplier(env, monkeypatch, capsys):
+    ctx, plan = prepare_with(env, monkeypatch, ["a.md"], content=b"word " * 8_000,  # 10k content tokens
+                             cost={"runs": [{"input_tokens": 5, "files": 1}]})
+    assert plan["cost_runs_before"] == 1 and plan["multiplier_source"] == "kg.yaml / default"
+    cost = kg.read_json(ctx.out / "graphify-out/cost.json")
+    cost["runs"].append({"input_tokens": 60_000 + 25_000, "files": 1})  # 1 agent overhead + 2.5 x content
+    kg.write_json(ctx.out / "graphify-out/cost.json", cost)
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": kg.git(ctx.repo, "rev-parse", "HEAD")})
+    kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
+    assert "content multiplier 2.50" in capsys.readouterr().out
+    assert kg.learned_multiplier(ctx) == 2.5
+    _, plan2 = prepare_with(env, monkeypatch, ["b.md"], content=b"word " * 8_000)
+    assert plan2["content_multiplier"] == 2.5 and plan2["multiplier_source"] == "learned from the last run"
+
+
+def test_deferred_clusters_block_apply_and_point_to_curate(env):
+    # bug 2: clusters held back by max_llm_clusters_per_run must not be silently skipped
+    ctx = env.ctx()
+    ctx.work.mkdir(parents=True, exist_ok=True)
+    (ctx.work / "work/queue").mkdir(parents=True, exist_ok=True)
+    kg.write_json(ctx.work / "analysis.json", {"files": [], "clusters": [
+        {"id": "c1", "members": ["docs/a.md", "docs/b.md"], "queued": False, "reviewed": False, "deferred": True}]})
+    rs = kg.review_state(ctx)
+    assert rs["deferred"] == ["c1"] and not rs["needs_verdict"]
+    head = kg.git(ctx.repo, "rev-parse", "HEAD")
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": head})
+    who, what = kg.next_step(ctx)
+    assert who == "kg" and what.startswith("curate") and "1 cluster(s) deferred" in what
+    args = argparse.Namespace(repo=ctx.repo, allow_any_branch=False, allow_unreviewed=False, skip_related=True)
+    with pytest.raises(SystemExit) as e:
+        kg.cmd_apply(args, ctx)
+    assert e.value.code == kg.EXIT_REVIEW
+
+
+def test_link_state_reports_missing_target(env):
+    # bug 5: a correct symlink whose folder was deleted is not "ok"
+    ctx = env.ctx()
+    (ctx.out / "graphify-out").mkdir(exist_ok=True)
+    kg.place_link(ctx.repo / "graphify-out", ctx.out / "graphify-out")
+    assert dict((n, s) for n, s, _ in kg.link_state(ctx))["graphify-out"] == "ok"
+    (ctx.out / "graphify-out").rmdir()
+    assert dict((n, s) for n, s, _ in kg.link_state(ctx))["graphify-out"] == "target missing"
+
+
+def test_preflight_prints_the_failing_state(env, capsys):
+    # bug 5: a failed check says what is wrong, not what would be right
+    ctx = env.ctx()
+    kg.cmd_preflight(argparse.Namespace(repo=str(env.repo), fix=False, install_shim=False))
+    out = capsys.readouterr().out
+    assert "codegraph index missing" in out and "[warn] codegraph index present" not in out

@@ -16,7 +16,7 @@ kg turns a repository's documents and code into two searchable knowledge graphs.
 - **Only reviewed content goes in.** The docs steps run only on the branches `main`, `develop` and `develop-*`, which means any branch whose name starts with `develop-`. They run only when the working tree is clean. A clean working tree has no unsaved changes. So the graph never shows unfinished or unmerged work. The `--allow-any-branch` option overrides this. kg logs every override.
 - **Sensitive data stays out.** Paths listed in `phi_globs` are always excluded. PHI means protected health information, such as patient records. kg deletes their extracted text after every analyze step. If any trace of those paths appears in the text cache, the staging folder or the graph, the run stops with exit code 4. An exit code is the number a script returns when it ends. This is a hard stop, not a warning. The text cache is a stored copy of extracted text.
 - **A bad run can be undone.** Before each curate step and each graph run, kg saves a snapshot. A snapshot is a saved copy of the graph, graphify's cache, the docs-curator state, the per-file decisions and the verdicts. kg keeps the last 3 snapshots. Run `kg restore` to put one back. A retry cannot remove the last good graph.
-- **Spend is visible before it happens.** Before each graph run, kg shows a token-cost estimate, read from `cost.json`. If the estimate passes the cap, kg stops and asks for a separate, explicit yes. Lost nodes, which are graph nodes that disappeared, are sorted into "from changed files" and "unexplained". This happens before anything is forced through.
+- **Spend is visible before it happens.** Before each graph run, kg shows a token-cost estimate built from the size of the files to extract plus a fixed cost per extraction agent. After each run kg compares the estimate with what the run really used and adjusts the next one. If the estimate passes the cap, kg stops and asks for a separate, explicit yes. Lost nodes, which are graph nodes that disappeared, are sorted into "from changed files" and "unexplained". This happens before anything is forced through.
 
 ### Cost and effort
 
@@ -101,6 +101,7 @@ carry_forward:
 graph:
   cost_cap_tokens: 1500000           # an estimate above this needs a separate, explicit yes
   agent_overhead_tokens: 60000       # fixed cost per extraction agent, added to the estimate
+  content_token_multiplier: 1.7      # input tokens per token of file content; kg learns the real value per run
   big_file_bytes: 400000             # changed files over either limit get their own chunk
   big_file_line_chars: 20000
   excludes:                          # which staged files reach the graph; last match wins

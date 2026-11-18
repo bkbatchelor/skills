@@ -111,6 +111,8 @@ skills/
 │   │       ├── test_scope.py
 │   │       ├── test_requirement_adr.py
 │   │       ├── test_routing.py
+│   │       ├── test_no_extract.py
+│   │       ├── test_exports_and_queue.py
 │   │       └── fixtures/verdicts/    # Hand-written verdicts, one per cluster
 │   ├── knowledge-graph/          # Repeatable docs + code graph pipeline (kg script)
 │   │   ├── SKILL.md              # Skill definition: workflow, gates, exit codes, hard rules
@@ -234,8 +236,8 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | 1.2.0 | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
 | html-artifacts | 1.1.2 | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
 | code-graph | 1.0.0 | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
-| docs-curator | 1.10.0 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile`, `tests/test_scope.py` |
-| knowledge-graph | 1.4.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate, plus goal-scoped curation of an external repo (`kg needs`, `kg external`) | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
+| docs-curator | 1.13.0 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile`, `tests/test_scope.py`, `tests/test_exports_and_queue.py` |
+| knowledge-graph | 1.6.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate, plus goal-scoped curation of an external repo (`kg needs`, `kg external`) | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
 | mermaid-to-image | 1.2.0 | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | markdown-pdf | 1.0.1 | Converts Markdown to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension Markdown PDF: highlighting, emoji, task lists, containers, includes, KaTeX math, locally drawn Mermaid, front matter, custom CSS, page size, margins, header and footer templates, clip and quality, raw-HTML sanitizing | `SKILL.md`, `README.md`, `package.json`, `package-lock.json`, `scripts/convert.sh`, `scripts/convert.mjs`, `styles/default.css`, `tests/convert.test.mjs` |
 | token-saver | 1.0.1 | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
@@ -492,7 +494,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 
 **Features:**
 - Three phases: `analyze`, a per-cluster LLM review that writes verdict files, then `apply`; an approval-gated docs-graph step follows
-- Exact, cross-format (for example a deck and its PDF export), and near-duplicate detection with MinHash and rapidfuzz; near duplicates are flagged and kept unless `near_duplicate_action: exclude`
+- Exact, cross-format (for example a deck and its PDF export, caught at a lower similarity when the PDF sits beside its source under the same name), and near-duplicate detection with MinHash and rapidfuzz; near duplicates are flagged and kept unless `near_duplicate_action: exclude`
 - Revision chains from filename markers, in-text versions and dates, document properties, and mtime; a file is excluded as superseded only with two agreeing signals or a confident verdict
 - Every kept document except `.pptx` is staged as Markdown with front matter (`source_path`, `source_format`, `sha256`, `status`, `description`); decks become a PDF plus a speaker-notes sidecar
 - `_curated/CONFLICTS.md` for contradictions (quotes are checked against the text) and `_curated/historical/` for superseded files with unique content
@@ -568,7 +570,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Clusters where fewer than two members can reach staging are auto-closed (`kg_auto`) and reopened if an override change gives them a second
 - Keeper-chain check for documents that silently left staging
 - Snapshots before each curate and each graph run (keeps 3) and `kg restore`
-- Token-cost estimate with a cap, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
+- Token-cost estimate from the files to extract (it learns its multiplier from each run) with a cap, clusters deferred by the review cap kept visible until queued, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
 - Re-keys graphify manifests written by older versions, so `--update` re-extracts only the files that changed
 - Graph exclude rules in `kg.yaml` (`graph.excludes`, gitignore-style) written into graphify's exclude file on every run, with nodes of newly excluded files pruned
 - `graph-fixups.yaml` per repo: hand-reviewed links and duplicate-node merges re-applied after every graph run (`kg graph fixups`); self-loops always dropped
