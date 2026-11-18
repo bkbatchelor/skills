@@ -977,3 +977,22 @@ def test_preflight_prints_the_failing_state(env, capsys):
     kg.cmd_preflight(argparse.Namespace(repo=str(env.repo), fix=False, install_shim=False))
     out = capsys.readouterr().out
     assert "codegraph index missing" in out and "[warn] codegraph index present" not in out
+
+
+def test_link_citations_across_chunks(tmp_path):
+    # bug 6: a citation extracted in one chunk is linked to the cited file's node from another chunk
+    st = tmp_path / "staging"
+    (st / "specs/adrs").mkdir(parents=True)
+    (st / "specs/adrs/ADR-005-pdf-overlay.md").write_text("# ADR-005 PDF overlay\nFlat forms get a coordinate overlay.\n")
+    g = {"nodes": [
+        {"id": "adr5", "label": "ADR-005: PDF overlay", "source_file": "specs/adrs/ADR-005-pdf-overlay.md", "file_type": "document"},
+        {"id": "cite_ok", "label": "ADR-005 (coordinate overlay)", "source_file": "docs/plan.md"},
+        {"id": "cite_bare", "label": "ADR-5", "source_file": "docs/other.md"},
+        {"id": "cite_other_scheme", "label": "ADR-005 — DB-per-tenant (code/ccm)", "source_file": "docs/legacy.md"},
+        {"id": "mention", "label": "Overlay work (see ADR-005)", "source_file": "docs/x.md"}],
+        "links": []}
+    assert kg.link_citations(g, st) == 2
+    linked = {(e["source"], e["target"]) for e in g["links"]}
+    assert linked == {("cite_ok", "adr5"), ("cite_bare", "adr5")}  # other numbering scheme and mid-label mentions left alone
+    assert kg.link_citations(g, st) == 0  # idempotent
+    assert kg.link_citations(g, st, prefixes=()) == 0

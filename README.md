@@ -570,7 +570,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Clusters where fewer than two members can reach staging are auto-closed (`kg_auto`) and reopened if an override change gives them a second
 - Keeper-chain check for documents that silently left staging
 - Snapshots before each curate and each graph run (keeps 3) and `kg restore`
-- Token-cost estimate from the files to extract (it learns its multiplier from each run) with a cap, clusters deferred by the review cap kept visible until queued, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
+- Token-cost estimate from the files to extract (it learns its multiplier from each run) with a cap, clusters deferred by the review cap kept visible until queued, citations (such as `ADR-005`) linked across extraction chunks, a list of oversized files, lost nodes sorted into explained and unexplained before `force=True`, and community labels carried forward at 50% agreement
 - Re-keys graphify manifests written by older versions, so `--update` re-extracts only the files that changed
 - Graph exclude rules in `kg.yaml` (`graph.excludes`, gitignore-style) written into graphify's exclude file on every run, with nodes of newly excluded files pruned
 - `graph-fixups.yaml` per repo: hand-reviewed links and duplicate-node merges re-applied after every graph run (`kg graph fixups`); self-loops always dropped

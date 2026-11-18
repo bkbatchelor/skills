@@ -102,6 +102,7 @@ graph:
   cost_cap_tokens: 1500000           # an estimate above this needs a separate, explicit yes
   agent_overhead_tokens: 60000       # fixed cost per extraction agent, added to the estimate
   content_token_multiplier: 1.7      # input tokens per token of file content; kg learns the real value per run
+  citation_ids: [ADR]                # "ADR-005 ..." cited in one extraction chunk is linked to the ADR-005 file's node
   big_file_bytes: 400000             # changed files over either limit get their own chunk
   big_file_line_chars: 20000
   excludes:                          # which staged files reach the graph; last match wins

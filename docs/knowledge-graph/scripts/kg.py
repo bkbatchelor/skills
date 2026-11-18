@@ -114,6 +114,7 @@ carry_forward:
 graph:
   cost_cap_tokens: 1500000   # an estimate above this needs a separate explicit yes
   agent_overhead_tokens: 60000  # fixed cost per extraction agent, added to the estimate
+  citation_ids: [ADR]        # "ADR-005 ..." cited in one chunk is linked to the ADR-005 file's node (kg graph fixups)
   content_token_multiplier: 1.7  # input tokens per token of file content (agents re-read it as they work);
                              # `kg graph finish` learns the real value from each run and prepare uses that
   big_file_bytes: 400000     # changed files above either limit get their own extraction chunk
@@ -301,6 +302,9 @@ def validate_config(cfg, path):
     gx = (cfg.get("graph") or {}).get("excludes")
     if gx is not None and (not isinstance(gx, list) or not all(isinstance(x, str) and x.strip() for x in gx)):
         die(f"{path}: graph.excludes must be a list of gitignore-style patterns (relative to staging/)")
+    ci = (cfg.get("graph") or {}).get("citation_ids")
+    if ci is not None and (not isinstance(ci, list) or not all(isinstance(x, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", x) for x in ci)):
+        die(f"{path}: graph.citation_ids must be a list of identifier prefixes such as ADR or NCCM")
     for k in ("max_files", "cost_cap_tokens"):
         v = (cfg.get("external") or {}).get(k)
         if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v < 1):
@@ -1500,6 +1504,81 @@ def apply_fixups(graph, fixups):
     return stats
 
 
+CITATION_STOPWORDS = set("the and for with from that this into over under about amended proposed accepted "
+                         "superseded section".split())
+
+
+def link_citations(graph, staging, prefixes=("ADR",), min_overlap=0.5):
+    """Link nodes that cite a document by identifier to that document's own node, across extraction chunks.
+
+    Extraction agents only see their own chunk, so "ADR-005 ..." cited from one chunk ends up as a local
+    node with no edge to specs/adrs/ADR-005-*.md, extracted by another. A node whose label *starts* with
+    an identifier is linked to the home node of the one source file whose name carries that identifier,
+    but only when the rest of its label reads like that file (at least min_overlap of its words occur in
+    the file's staged text). That guard keeps a second numbering scheme (e.g. an older code/ccm ADR-008)
+    from being tied to the wrong document. Adds `references` edges only. Idempotent. Returns the count.
+    """
+    if not prefixes:
+        return 0
+    pat = re.compile(r"\b(" + "|".join(re.escape(x) for x in prefixes) + r")-0*(\d{1,6})\b", re.I)
+    ekey = "links" if "links" in graph else "edges"
+    nodes = graph.get("nodes", [])
+    key = lambda m: f"{m.group(1).upper()}-{int(m.group(2))}"
+
+    def staged(sf):
+        p = Path(sf)
+        return p if p.is_absolute() else Path(staging) / sf
+
+    files = {}
+    for n in nodes:
+        sf = n.get("source_file") or ""
+        m = pat.search(Path(sf).name)
+        if m:
+            files.setdefault(key(m), set()).add(sf)
+    home, words_in = {}, {}
+    for k, sfs in files.items():
+        if len(sfs) != 1:
+            continue  # two files claim the identifier: no safe target
+        sf = next(iter(sfs))
+        own = [n for n in nodes if n.get("source_file") == sf]
+        named = [n for n in own if (m := pat.match((n.get("label") or "").strip())) and key(m) == k]
+        home[k] = (named or [n for n in own if n.get("file_type") == "document"] or own)[0]["id"]
+        try:
+            words_in[k] = set(re.findall(r"[a-z0-9]+", staged(sf).read_text(encoding="utf-8", errors="replace").lower()))
+        except OSError:
+            words_in[k] = None
+    directed = bool(graph.get("directed"))
+    pair = (lambda a, b: (a, b)) if directed else (lambda a, b: tuple(sorted((a, b))))
+    linked = {pair(e["source"], e["target"]) for e in graph.get(ekey, [])}
+    added = 0
+    for n in nodes:
+        label = (n.get("label") or "").strip()
+        m = pat.match(label)
+        if not m or key(m) not in home:
+            continue
+        k, h = key(m), home[key(m)]
+        if h == n["id"] or n.get("source_file") in files[k] or pair(n["id"], h) in linked:
+            continue
+        rest = [w for w in re.findall(r"[a-z0-9]+", label[m.end():].lower())
+                if len(w) >= 4 and not w.isdigit() and w not in CITATION_STOPWORDS]
+        if rest:
+            if words_in[k] is None or sum(w in words_in[k] for w in rest) / len(rest) < min_overlap:
+                continue
+        graph.setdefault(ekey, []).append({
+            "source": n["id"], "target": h, "relation": "references", "confidence": "INFERRED",
+            "confidence_score": 0.95, "weight": 1.0, "source_file": n.get("source_file"),
+            "source_location": None, "_origin": "kg_citation", "note": f"cites {k}"})
+        linked.add(pair(n["id"], h))
+        added += 1
+    return added
+
+
+def citations(ctx, graph):
+    return link_citations(graph, ctx.out / "staging",
+                          prefixes=tuple(ctx.get("graph", "citation_ids", default=["ADR"]) or ()),
+                          min_overlap=float(ctx.get("graph", "citation_min_overlap", default=0.5)))
+
+
 def fixups_summary(stats):
     return (f"merged {stats['merged']}, linked {stats['linked']}, dropped {stats['self_loops']} self-loop(s) "
             f"and {stats['dup_edges']} duplicate edge(s)"
@@ -1516,9 +1595,11 @@ def cmd_graph_fixups(args):
     if data is None:
         die(f"{target} not found")
     stats = apply_fixups(data, load_fixups(ctx))
+    cited = citations(ctx, data)
     target.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    ctx.log("graph fixups", file=target.name, **{k: (len(v) if isinstance(v, list) else v) for k, v in stats.items()})
-    print(f"fixups ({target.name}): {fixups_summary(stats)}")
+    ctx.log("graph fixups", file=target.name, cited=cited,
+            **{k: (len(v) if isinstance(v, list) else v) for k, v in stats.items()})
+    print(f"fixups ({target.name}): {fixups_summary(stats)}; linked {cited} cross-chunk citation(s)")
     for x in stats["merge_skipped"] + stats["link_skipped"]:
         print(f"  skipped: {x}")
     return 0
@@ -1643,9 +1724,11 @@ def cmd_graph_finish(args):
     gpath = ctx.out / "graphify-out/graph.json"
     g = read_json(gpath) or {}
     stats = apply_fixups(g, load_fixups(ctx))  # no-op when `kg graph fixups` already ran
-    if stats["merged"] or stats["linked"] or stats["self_loops"] or stats["dup_edges"]:
+    stats["cited"] = citations(ctx, g)
+    if stats["merged"] or stats["linked"] or stats["self_loops"] or stats["dup_edges"] or stats["cited"]:
         gpath.write_text(json.dumps(g, ensure_ascii=False, indent=2), encoding="utf-8")
-        warn(f"graph fixups were not applied before the build; applied to graph.json now ({fixups_summary(stats)}). "
+        warn(f"graph fixups were not applied before the build; applied to graph.json now ({fixups_summary(stats)}; "
+             f"{stats['cited']} citation link(s)). "
              "Run `kg graph fixups` before graphify's Step 4 next time so communities reflect them.")
     plan = read_json(ctx.kgdir / "graph-plan.json") or {}
     # A prune-only pass (or a run that skipped files) leaves planned files unextracted; remember them
