@@ -2,7 +2,7 @@
 name: docs-curator
 description: Curates a large, read-only folder of documents (.pptx .pdf .md .xlsx .txt .docx .xml .json .jsonl .jsonc .csv .yaml .yml) into a deduplicated staging tree for Graphify. Removes byte-identical, cross-format and near duplicates, excludes superseded revisions, and flags contradictions and conflicting names, then writes every kept document as Markdown with front matter. Use whenever the user wants to dedupe, clean up, curate, or prepare a document repository or folder for Graphify or a knowledge graph. Never modifies the source, and runs Graphify on the docs only after the user approves. Requires the heavy-file-ingestion skill to convert PDF, Word, Excel and PowerPoint files to Markdown. Skip for a single file (use heavy-file-ingestion), for source-code structure or call graphs (use code-graph), for building or querying a graph with no curation step (use graphify), and for any request to modify or delete the source documents.
 metadata:
-  version: 1.11.0
+  version: 1.12.0
 ---
 
 # Docs Curator
@@ -57,6 +57,21 @@ The output folder defaults to `~/curated/<project-name>/`, where `<project-name>
 For a repository whose docs and code graphs are refreshed regularly, the `knowledge-graph` skill wraps this workflow in a repeatable `kg` script (gating, PHI checks, snapshots, verdict carry-forward). Use it when it is installed and the user is refreshing a repo's graphs.
 
 If the queue was capped (`max_llm_clusters_per_run`, default 25, largest clusters first), the rest are listed in the report. Tell the user, and run analyze, review, and apply again to pick them up; existing verdicts are kept.
+
+## Scoped curation (`--scope`)
+
+For a repo that is only needed for a few questions, curate just those files. `analyze` and `update` take `--scope <scope.yaml>`:
+
+```yaml
+repo_sha: <commit the scope was chosen at>   # optional, recorded only
+files:
+  - path: docs/contract.md
+    questions: [q1]
+  - glob: "docs/api/*.md"
+    questions: [q2]
+```
+
+Files outside the list are never hashed, opened, converted or staged. `--no-extract` still applies inside the scope. `<out>/.docs-curator/scope.json` records each file with its question ids, and any entry that matched nothing. When the list changes, `update` reports the new files as added and dropped ones as removed. Do not run `link` for a scoped run on a repo you do not own: it writes symlinks under `--source`. Run graphify from `<out>` instead. The `knowledge-graph` skill builds the scope from questions (`kg external`); use it when the files are chosen to answer a primary repo's questions.
 
 ## Updating after the source changed
 
