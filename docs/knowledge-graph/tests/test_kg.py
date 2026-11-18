@@ -916,7 +916,7 @@ def prepare_with(env, monkeypatch, files, deleted=(), cost=None, content=b"x\n")
 
 def test_estimate_without_cost_history_counts_file_content(env, monkeypatch):
     # bug 1: after a wipe there is no cost.json; the estimate must still price the files themselves
-    ctx, plan = prepare_with(env, monkeypatch, ["big.md"], content=b"word " * 40_000)  # 200 KB -> 50k tokens
+    ctx, plan = prepare_with(env, monkeypatch, ["big.md"], content=(b"word " * 19 + b"word\n") * 2_000)  # 2,000 lines of 100 bytes: not big, not long  # 200 KB -> 50k tokens
     assert plan["content_tokens"] == 50_000
     assert plan["estimated_input_tokens"] == int(50_000 * kg.DEFAULT_CONTENT_MULTIPLIER) + 60_000
 
@@ -928,17 +928,18 @@ def test_prune_only_estimate_is_zero_not_unknown(env, monkeypatch, capsys):
 
 
 def test_finish_learns_the_content_multiplier(env, monkeypatch, capsys):
-    ctx, plan = prepare_with(env, monkeypatch, ["a.md"], content=b"word " * 8_000,  # 10k content tokens
+    ctx, plan = prepare_with(env, monkeypatch, ["a.md"], content=b"word word word word word word word\n" * 1_000 + b"word " * 1_000,  # 10k content tokens, short lines
                              cost={"runs": [{"input_tokens": 5, "files": 1}]})
     assert plan["cost_runs_before"] == 1 and plan["multiplier_source"] == "kg.yaml / default"
+    assert plan["read_content_tokens"] == 10_000 and plan["parsed_content_tokens"] == 0
     cost = kg.read_json(ctx.out / "graphify-out/cost.json")
     cost["runs"].append({"input_tokens": 60_000 + 25_000, "files": 1})  # 1 agent overhead + 2.5 x content
     kg.write_json(ctx.out / "graphify-out/cost.json", cost)
     kg.write_json(ctx.kgdir / "state.json", {"curated_head": kg.git(ctx.repo, "rev-parse", "HEAD")})
     kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
-    assert "content multiplier 2.50" in capsys.readouterr().out
+    assert "read-content multiplier 2.50" in capsys.readouterr().out
     assert kg.learned_multiplier(ctx) == 2.5
-    _, plan2 = prepare_with(env, monkeypatch, ["b.md"], content=b"word " * 8_000)
+    _, plan2 = prepare_with(env, monkeypatch, ["b.md"], content=b"word word word word word word word\n" * 1_000 + b"word " * 1_000)
     assert plan2["content_multiplier"] == 2.5 and plan2["multiplier_source"] == "learned from the last run"
 
 
@@ -996,3 +997,45 @@ def test_link_citations_across_chunks(tmp_path):
     assert linked == {("cite_ok", "adr5"), ("cite_bare", "adr5")}  # other numbering scheme and mid-label mentions left alone
     assert kg.link_citations(g, st) == 0  # idempotent
     assert kg.link_citations(g, st, prefixes=()) == 0
+
+
+
+def test_script_parsed_big_files_are_priced_apart_and_not_learned_from(env, monkeypatch, capsys):
+    # a run that only re-extracts a big, script-parsed file must not drag the read-content multiplier down
+    ctx, plan = prepare_with(env, monkeypatch, ["big.md"], content=b"word " * 100_000,  # 500 KB -> big file
+                             cost={"runs": []})
+    assert plan["parsed_content_tokens"] == 125_000 and plan["read_content_tokens"] == 0
+    assert plan["estimated_input_tokens"] == int(125_000 * kg.PARSED_CONTENT_MULTIPLIER) + 60_000
+    cost = kg.read_json(ctx.out / "graphify-out/cost.json")
+    cost["runs"].append({"input_tokens": 61_000, "files": 1})  # nearly all overhead: the text was parsed, not read
+    kg.write_json(ctx.out / "graphify-out/cost.json", cost)
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": kg.git(ctx.repo, "rev-parse", "HEAD")})
+    kg.cmd_graph_finish(argparse.Namespace(repo=str(env.repo)))
+    assert "too little normally read content" in capsys.readouterr().out
+    assert kg.learned_multiplier(ctx) is None
+
+
+def test_learned_multiplier_averages_recent_read_runs_and_ignores_old_records(env):
+    ctx = env.ctx()
+    ctx.kgdir.mkdir(parents=True, exist_ok=True)
+    rows = [{"step": "graph finish", "content_multiplier": 0.5},  # pre-fix record: no basis, ignored
+            {"step": "graph finish", "content_multiplier": 1.0, "multiplier_basis": "read"},
+            {"step": "graph finish", "content_multiplier": 2.0, "multiplier_basis": "read"},
+            {"step": "graph finish", "content_multiplier": 1.8, "multiplier_basis": "read"},
+            {"step": "graph finish", "content_multiplier": 2.2, "multiplier_basis": "read"}]
+    (ctx.kgdir / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    assert kg.learned_multiplier(ctx) == 2.0  # mean of the last three read runs
+
+
+
+def test_mostly_parsed_run_is_not_learned_from(env):
+    # a little read content next to a big script-parsed file says nothing reliable about the read rate
+    ctx = env.ctx()
+    kg.write_json(ctx.out / "graphify-out/cost.json", {"runs": [{"input_tokens": 184_325, "files": 3}]})
+    plan = {"content_tokens": 168_000, "read_content_tokens": 36_000, "parsed_content_tokens": 132_000,
+            "parsed_content_multiplier": 0.5, "estimated_chunks": 2, "agent_overhead_tokens": 60_000,
+            "cost_runs_before": 0}
+    assert kg.measured_multiplier(ctx, plan) == {"input_tokens": 184_325}  # cost recorded, nothing learned
+    plan.update(read_content_tokens=44_532, parsed_content_tokens=0, estimated_chunks=1)
+    kg.write_json(ctx.out / "graphify-out/cost.json", {"runs": [{"input_tokens": 145_450, "files": 3}]})
+    assert kg.measured_multiplier(ctx, plan)["multiplier"] == 1.92

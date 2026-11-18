@@ -1,4 +1,5 @@
 """PDF exports beside their source, override-excluded files kept out of clusters, and clusters deferred by the cap."""
+import hashlib
 import json
 from pathlib import Path
 
@@ -91,3 +92,22 @@ def test_clusters_past_the_cap_are_marked_deferred(tmp_path, capsys):
     assert "deferred:" in capsys.readouterr().out
     state = json.loads((out / ".docs-curator/state.json").read_text(encoding="utf-8"))
     assert state["analyze"]["deferred"] == len(clusters) - 1
+
+
+def test_pdf_export_already_found_as_near_duplicate_gets_one_edge(tmp_path):
+    # an export the near-duplicate pass already caught must not get a second "pdf_export" edge
+    src, out = setup(tmp_path)
+    (src / "docs").mkdir()
+    body = lines(3)
+    make_pdf(src, "docs/deck.pdf", body)
+    pdf_sha = hashlib.sha256((src / "docs/deck.pdf").read_bytes()).hexdigest()
+    # The near-duplicate pass orders a pair by content hash; the bug only shows when that order is the
+    # reverse of the path order (deck.md < deck.pdf), so pick a footer that makes the .md hash sort last.
+    for i in range(200):
+        text = "\n".join(body) + f"\nfooter {i}\n"
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() > pdf_sha:
+            break
+    (src / "docs/deck.md").write_text(text, encoding="utf-8")
+    run("analyze", "--source", str(src), "--out", str(out))
+    pair = [e for e in analysis(out)["edges"] if {e["a"], e["b"]} == {"docs/deck.md", "docs/deck.pdf"}]
+    assert len(pair) == 1 and pair[0]["sim"] >= 0.9 and "rule" not in pair[0]
