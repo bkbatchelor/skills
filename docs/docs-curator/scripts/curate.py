@@ -585,6 +585,34 @@ def _glob_match(path, globs):
     return any(fnmatch.fnmatch(path, g) or (g.startswith("**/") and fnmatch.fnmatch(path, g[3:])) for g in globs)
 
 
+def load_scope(path):
+    """Read a --scope file: {repo_sha, files: [path | {path|glob, questions}]}. Returns (repo_sha, entries)."""
+    sp = Path(path).expanduser()
+    if not sp.is_file():
+        die(f"scope file not found: {sp}")
+    data = load_yaml(sp)
+    raw = data.get("files") if isinstance(data, dict) else None
+    if not raw or not isinstance(raw, list):
+        die("scope file needs a non-empty 'files' list")
+    entries = []
+    for item in raw:
+        if isinstance(item, str):
+            item = {"path": item}
+        pat = item.get("path") or item.get("glob") if isinstance(item, dict) else None
+        if not pat:
+            die(f"scope entry needs 'path' or 'glob': {item!r}")
+        entries.append({"pattern": str(pat), "questions": _as_list(item.get("questions"))})
+    return (str(data["repo_sha"]) if data.get("repo_sha") else None), entries
+
+
+def scope_questions(rel, entries):
+    """Question ids that pull `rel` into scope, or None when no entry matches."""
+    hit = [e for e in entries if rel == e["pattern"] or _glob_match(rel, [e["pattern"]])]
+    if not hit:
+        return None
+    return sorted({q for e in hit for q in e["questions"]})
+
+
 def classify_doc(path, text, fmt, cfg):
     """Business requirement or ADR? Front matter `type` wins, then the path globs; otherwise type is None.
 
@@ -930,8 +958,16 @@ def cmd_analyze(args):
 
     files, texts, new_or_changed = [], {}, 0
     no_extract = list(getattr(args, "no_extract", None) or [])
+    scope_path = getattr(args, "scope", None)
+    scope_sha, scope_entries = load_scope(scope_path) if scope_path else (None, [])
+    in_scope = {}
     for full in walk(source):
         rel = full.relative_to(source).as_posix()
+        if scope_path:
+            qs = scope_questions(rel, scope_entries)
+            if qs is None:
+                continue  # out of scope: never hashed, opened or converted
+            in_scope[rel] = qs
         ext = full.suffix.lower()
         st = full.stat()
         rec = {
@@ -968,6 +1004,14 @@ def cmd_analyze(args):
             rec["core_modified"] = core_modified(full)
         files.append(rec)
 
+    if scope_path:
+        write_json(work / "scope.json", {
+            "repo_sha": scope_sha,
+            "files": {p: {"questions": q} for p, q in sorted(in_scope.items())},
+            "unmatched_entries": sorted(e["pattern"] for e in scope_entries
+                                        if not any(rel == e["pattern"] or _glob_match(rel, [e["pattern"]]) for rel in in_scope)),
+        })
+        print(f"scope: {len(in_scope)} file(s) in scope of {len(scope_entries)} entr(ies); everything else was not read")
     byp = {f["path"]: f for f in files}
     tokens = {}
     for p, t in texts.items():
@@ -1858,6 +1902,8 @@ def build_parser():
         p.add_argument("--config", help="config.yaml (default: <out>/config.yaml)")
         p.add_argument("--overrides", help="overrides.yaml (default: <out>/overrides.yaml)")
         if name in ("analyze", "update"):
+            p.add_argument("--scope", metavar="FILE",
+                           help="scope.yaml listing the only files to curate ({repo_sha, files: [path|{path|glob, questions}]}); other files are never hashed, opened or staged")
             p.add_argument("--no-extract", action="append", metavar="GLOB",
                            help="source-relative glob (repeatable); matching files are hashed but never opened or staged, e.g. PHI folders")
         if name == "link":

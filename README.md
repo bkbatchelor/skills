@@ -108,6 +108,7 @@ skills/
 │   │       ├── conftest.py
 │   │       ├── test_units.py
 │   │       ├── test_pipeline.py
+│   │       ├── test_scope.py
 │   │       ├── test_requirement_adr.py
 │   │       ├── test_routing.py
 │   │       └── fixtures/verdicts/    # Hand-written verdicts, one per cluster
@@ -233,8 +234,8 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | heavy-file-ingestion | 1.2.0 | Converts PDFs, Office files, and large CSV/text into chunked Markdown plus an INDEX.md before analysis | `SKILL.md`, `README.md`, `scripts/ingest.py` |
 | html-artifacts | 1.1.2 | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
 | code-graph | 1.0.0 | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
-| docs-curator | 1.10.0 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile` |
-| knowledge-graph | 1.4.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
+| docs-curator | 1.10.0 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile`, `tests/test_scope.py` |
+| knowledge-graph | 1.4.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate, plus goal-scoped curation of an external repo (`kg needs`, `kg external`) | `SKILL.md`, `README.md`, `scripts/kg.py`, `tests/test_kg.py` |
 | mermaid-to-image | 1.2.0 | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | markdown-pdf | 1.0.1 | Converts Markdown to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension Markdown PDF: highlighting, emoji, task lists, containers, includes, KaTeX math, locally drawn Mermaid, front matter, custom CSS, page size, margins, header and footer templates, clip and quality, raw-HTML sanitizing | `SKILL.md`, `README.md`, `package.json`, `package-lock.json`, `scripts/convert.sh`, `scripts/convert.mjs`, `styles/default.css`, `tests/convert.test.mjs` |
 | token-saver | 1.0.1 | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
@@ -475,7 +476,7 @@ Curates a large, read-only folder of documents (`.pptx .pdf .md .xlsx .txt .docx
 - `SKILL.md`: Skill definition with triggers, the analyze, review, apply workflow, and hard rules
 - `README.md`: User-facing guide to invoking the skill, what Claude does at each phase, the output layout (where `.docs-curator/` and `staging/` are written), and how to adjust results
 - `docs/How docs-curator works.md`: Technical walkthrough of `curate.py` (analyze, update, decide, apply, link), with a Mermaid architecture diagram
-- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `update` (re-analyze after files were added, modified or removed, report the changes, queue only affected clusters), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `link` (symlinks `<source>/graphify-out` and `<source>/.docs-curator` into `<out>`; `--gitignore project|global` adds `.docs-curator` to a gitignore)
+- `scripts/curate.py`: `analyze` (deterministic inventory, extraction, grouping, clustering, queue), `update` (re-analyze after files were added, modified or removed, report the changes, queue only affected clusters), `apply` (verdicts and overrides to `staging/`, `REPORT.md`, `decisions.jsonl`), and `--scope scope.yaml` on `analyze`/`update` (curate only listed files and write `scope.json`), and `link` (symlinks `<source>/graphify-out` and `<source>/.docs-curator` into `<out>`; `--gitignore project|global` adds `.docs-curator` to a gitignore)
 - `references/verdict-schema.md`: JSON schema for the per-cluster verdict files the assistant writes between the two phases
 - `scripts/check_env.sh`: Exits 0 when provisioned, otherwise names what is missing
 - `requirements.txt`: Pinned Python dependencies (`graphifyy==0.9.103` is installed only to check its accepted extensions in tests)
@@ -551,8 +552,8 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 **Key Components:**
 - `SKILL.md`: The run sequence (curate, review, apply, graph prepare, ask, Graphify with check and labels, finish, code), gating, restore, exit codes, and hard rules
 - `README.md`: What kg automates, the `~/curated/<repo>/` layout, and usage
-- `scripts/kg.py`: Subcommands `init`, `preflight`, `overrides`, `curate`, `review`, `apply`, `graph prepare|check|fixups|labels|finish`, `code`, `status`, `restore`, `all` and `install-shim`
-- `tests/test_kg.py`: pytest suite (gating, overrides, PHI, carry-forward, classifier batches and escalation, node-loss check, labels, snapshots, links, manifest re-keying)
+- `scripts/kg.py`: Subcommands `init`, `preflight`, `overrides`, `curate`, `review`, `apply`, `graph prepare|check|fixups|labels|finish`, `code`, `status`, `restore`, `all`, `install-shim`, `needs init|add-goal|approve-goals|add-question|set|list` and `external add|inventory|scope|build|apply|finish|status|prune`
+- `tests/test_kg.py`: pytest suite (gating, overrides, PHI, needs gate, external scope caps and widening, read-only external build, carry-forward, classifier batches and escalation, node-loss check, labels, snapshots, links, manifest re-keying)
 
 **Requirements:**
 - `uv` (Python 3.12 is fetched), the `graphify` CLI 0.9.103 or later with its skill, `codegraph`, and the docs-curator, heavy-file-ingestion and code-graph skills. kg installs none of them
@@ -572,6 +573,7 @@ Packages the docs-graph and code-graph process for a repository into one repeata
 - Graph exclude rules in `kg.yaml` (`graph.excludes`, gitignore-style) written into graphify's exclude file on every run, with nodes of newly excluded files pruned
 - `graph-fixups.yaml` per repo: hand-reviewed links and duplicate-node merges re-applied after every graph run (`kg graph fixups`); self-loops always dropped
 - Repo symlinks written in `$HOME` form; codegraph telemetry kept off
+- Goal-scoped external curation: goals and questions in `needs.yaml`, a question is external-only only after the primary graphs fail it, then a user-approved file list (default cap 50 files) of a local clone is curated and graphed as partial coverage, with its own PHI globs, at most two widening rounds per question, and nothing written to the clone
 
 **Usage:**
 ```bash
