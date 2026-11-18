@@ -34,6 +34,7 @@ The script stops and says so whenever a person is needed. The agent never works 
 | [Restore](#3-restore-a-snapshot) | A run failed or lost data | `kg restore` |
 | [External repo curation](#4-curate-an-external-repo-for-your-goals) | A goal needs facts that only another repo holds | `kg needs ...`, `kg external ...` |
 | [Related repos](#5-read-a-related-repos-graph) | You want to read another repo's finished graph | `graphify query --graph` |
+| [Query priority](#6-query-priority) | You answer a question after the graphs are built | `codegraph explore`, `graphify query` |
 
 ## 1. Set up a repo (once)
 
@@ -288,6 +289,30 @@ Registering an external repo does not cause it to be curated. If every question 
 Never rebuild that graph, run `--update` on it, or write to it from this repo.
 
 **Background (skip if you only need the steps).** An entry can have an optional `mapper` script in the curated folder. The mapper gets `KG_SOURCE`, `KG_RELATED_PATH`, `KG_RELATED_NAME` and `KG_OUT` in its environment. `kg apply` runs it.
+
+## 6. Query priority
+
+**Mode: how-to.** Use this order when you answer a question after the graphs are built. A query means a search of a graph with `graphify query` (docs graph) or `codegraph explore` (code graph).
+
+1. **Query the primary repo's graphs first.**
+   - For a question about code, run `codegraph explore "<symbol names or question>"`. Do this before grep, find or reading files. Skip this if the repo has no `.codegraph/` folder.
+   - For a question about documents, architecture or project content, run `graphify query "<question>"`. Do this when `graphify-out/` exists.
+   - For a question that spans both, query both.
+2. **Check the source file.** Open the file that the graph points to and confirm the fact. Do this for any answer the user will act on.
+3. **Query a related repo's graph.** Run `graphify query "<question>" --graph <graph>`. Do this only if the primary repo does not hold the answer. Cite which graph each fact came from.
+4. **Use the scoped external graph.** Do this only for a question marked `external-only`. Cite the answer as "scoped graph, partial coverage".
+
+If the two primary graphs disagree, trust the source file and say that the graphs disagree.
+
+If the graph may be out of date, run `kg status`. It shows changes since the last curate and graph. If it shows drift, read the source file instead, or ask the user to refresh the graphs.
+
+If the graph has no answer, do not conclude that the repo has none. Curation leaves out duplicates, old revisions, excluded groups and PHI folders. Search the source files before you say a fact is absent.
+
+**Background (skip if you only need the steps).**
+
+- Steps 1, 3 and 4 follow rules that exist today. Step 1 comes from your global `CLAUDE.md` (CodeGraph before grep) and from the graphify skill (query first when `graphify-out/` exists). Steps 3 and 4 come from `SKILL.md`: related repos are read-only and cited, and external answers are cited as partial coverage.
+- Step 2, the tiebreak rule and the staleness rule are choices made for this document. No existing rule covers them. Change them here if you want a different order.
+- The graphs are built from the source files, so the source files stay the record. The graphs are the fast way to find what to read.
 
 ## Reference: exit codes
 
