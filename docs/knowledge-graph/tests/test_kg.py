@@ -744,3 +744,146 @@ def test_escalation_blocks_until_the_deep_verdict_is_written(env):
     assert rs["needs_escalation"] == [{"cluster": "c1", "reason": "conflict_found"}] and rs["needs_verdict"] == []
     kg.write_json(ctx.work / "work/verdicts/c1.json", {"cluster_id": "c1", "reviewed": True, "review_tier": "deep"})
     assert kg.review_state(ctx)["needs_escalation"] == []
+
+
+# ----------------------------------------------------------------------------- needs and external repos
+
+
+def ns(**kw):
+    return argparse.Namespace(repo=kw.pop("repo", None), **kw)
+
+
+def needs(env, ncmd, **kw):
+    return kg.cmd_needs(ns(repo=str(env.repo), ncmd=ncmd, **kw))
+
+
+@pytest.fixture
+def ext(env, tmp_path):
+    clone = tmp_path / "other"
+    clone.mkdir()
+    sh(clone, "git", "init", "-q", "-b", "main")
+    sh(clone, "git", "config", "user.email", "t@example.com")
+    sh(clone, "git", "config", "user.name", "t")
+    (clone / "docs").mkdir()
+    (clone / "docs/contract.md").write_text("# Payment contract\n\nSettlement within two days.\n")
+    (clone / "docs/party.md").write_text("# Party\n\nOffice party notes.\n")
+    (clone / "phi").mkdir()
+    (clone / "phi/p.md").write_text("# Patient\n\nsecret\n")
+    sh(clone, "git", "add", ".")
+    sh(clone, "git", "commit", "-qm", "init")
+    env.clone = clone
+    needs(env, "init")
+    needs(env, "add-goal", text="Settle payments correctly")
+    needs(env, "approve-goals")
+    needs(env, "add-question", text="What settlement window does the partner promise?", goal="g1", expects="contract")
+    return env
+
+
+def xcmd(env, xcmd, name="other", **kw):
+    return kg.cmd_external(ns(repo=str(env.repo), xcmd=xcmd, name=name, **kw))
+
+
+def test_needs_gate_requires_approved_goals_and_evidence(env):
+    needs(env, "init")
+    needs(env, "add-goal", text="g")
+    with pytest.raises(SystemExit):  # goals not approved yet
+        needs(env, "add-question", text="q?", goal="g1", expects=None)
+    needs(env, "approve-goals")
+    needs(env, "add-question", text="q?", goal="g1", expects=None)
+    with pytest.raises(SystemExit):  # no evidence from the primary graph
+        needs(env, "set", qid="q1", status="external-only", evidence=None, answer=None, source=None)
+    with pytest.raises(SystemExit):  # cannot be answered externally before it is external-only
+        needs(env, "set", qid="q1", status="answered-externally", evidence=None, answer="a", source="s")
+    needs(env, "set", qid="q1", status="external-only", evidence="graphify query returned nothing", answer=None, source=None)
+    needs(env, "set", qid="q1", status="answered-externally", evidence=None, answer="two days", source="docs/contract.md")
+    q = kg.load_needs(env.ctx())["questions"][0]
+    assert q["status"] == "answered-externally" and q["source"] == "docs/contract.md"
+
+
+def test_external_add_requires_phi_decision_and_a_clone(ext, tmp_path):
+    with pytest.raises(SystemExit):
+        xcmd(ext, "add", path=str(ext.clone), phi_glob=None, no_phi=False)
+    with pytest.raises(SystemExit):
+        xcmd(ext, "add", path=str(tmp_path), phi_glob=["x"], no_phi=False)  # not a git clone
+    xcmd(ext, "add", path=str(ext.clone), phi_glob=["phi/*"], no_phi=False)
+    assert (ext.out / "external/other/external.yaml").exists()
+
+
+def test_external_scope_phi_caps_and_widening(ext):
+    needs(ext, "set", qid="q1", status="external-only", evidence="nothing found", answer=None, source=None)
+    xcmd(ext, "add", path=str(ext.clone), phi_glob=["phi/*"], no_phi=False)
+    xcmd(ext, "inventory")
+    inv = json.loads((ext.out / "external/other/inventory.json").read_text())
+    assert {f["path"] for f in inv["files"]} == {"docs/contract.md", "docs/party.md"}  # PHI never listed
+    scope = ext.out / "external/other/scope.yaml"
+
+    def do_scope(text, **kw):
+        scope.write_text(text)
+        return xcmd(ext, "scope", approve=kw.get("approve", False), accept_over_cap=kw.get("over", False))
+
+    with pytest.raises(SystemExit) as e:  # PHI path named in scope
+        do_scope("files:\n  - path: phi/p.md\n    questions: [q1]\n")
+    assert e.value.code == kg.EXIT_PHI
+    with pytest.raises(SystemExit):  # a file with no question
+        do_scope("files:\n  - docs/contract.md\n")
+    with pytest.raises(SystemExit):  # unknown question
+        do_scope("files:\n  - path: docs/contract.md\n    questions: [q9]\n")
+
+    cfg = (ext.out / "kg.yaml").read_text().replace("max_files: 50", "max_files: 1")
+    (ext.out / "kg.yaml").write_text(cfg)
+    with pytest.raises(SystemExit) as e:  # two files over a one-file cap needs a separate yes
+        do_scope("files:\n  - path: docs/*.md\n    questions: [q1]\n", approve=True)
+    assert e.value.code == kg.EXIT_REVIEW
+    do_scope("files:\n  - path: docs/contract.md\n    questions: [q1]\n", approve=True)  # first approval: not a widening
+
+    for x in "abc":
+        (ext.clone / f"docs/{x}.md").write_text(f"# {x}\n")
+    xcmd(ext, "inventory")
+
+    def widened(letters):
+        body = "files:\n  - path: docs/contract.md\n    questions: [q1]\n" + "".join(
+            f"  - path: docs/{x}.md\n    questions: [q1]\n" for x in letters)
+        do_scope(body, approve=True, over=True)
+
+    widened("a")
+    widened("ab")
+    assert kg.load_needs(ext.ctx())["questions"][0]["widen_rounds"] == 2
+    with pytest.raises(SystemExit) as e:  # a third widening is refused
+        widened("abc")
+    assert e.value.code == kg.EXIT_REVIEW
+
+
+def test_external_build_is_scoped_and_read_only(ext):
+    needs(ext, "set", qid="q1", status="external-only", evidence="nothing found", answer=None, source=None)
+    xcmd(ext, "add", path=str(ext.clone), phi_glob=["phi/*"], no_phi=False)
+    xcmd(ext, "inventory")
+    d = ext.out / "external/other"
+    (d / "config.yaml").write_text("embedding_backend: tfidf\n")
+    (d / "scope.yaml").write_text("files:\n  - path: docs/contract.md\n    questions: [q1]\n")
+    with pytest.raises(SystemExit):  # not approved yet
+        xcmd(ext, "build")
+    xcmd(ext, "scope", approve=True, accept_over_cap=False)
+    before = {p: p.read_bytes() for p in ext.clone.rglob("*") if p.is_file() and ".git" not in p.parts}
+    xcmd(ext, "build")
+    xcmd(ext, "apply")
+    after = {p: p.read_bytes() for p in ext.clone.rglob("*") if p.is_file() and ".git" not in p.parts}
+    assert before == after  # nothing written to the external clone, no symlinks either
+    staged = {p.name for p in (d / "staging").rglob("*.md") if "_curated" not in p.parts}
+    assert any("contract" in n for n in staged) and not any("party" in n for n in staged)
+    assert not (ext.clone / "graphify-out").exists() and not (ext.clone / ".docs-curator").exists()
+    (ext.clone / "docs/party.md").write_text("# Party\n\nchanged\n")
+    sh(ext.clone, "git", "commit", "-qam", "party")
+    xcmd(ext, "status")  # drift only outside scope: reported, no crash
+
+
+def test_external_prune_drops_files_of_retired_questions(ext):
+    needs(ext, "set", qid="q1", status="external-only", evidence="nothing", answer=None, source=None)
+    xcmd(ext, "add", path=str(ext.clone), phi_glob=None, no_phi=True)
+    xcmd(ext, "inventory")
+    d = ext.out / "external/other"
+    (d / "scope.yaml").write_text("files:\n  - path: docs/contract.md\n    questions: [q1]\n")
+    xcmd(ext, "scope", approve=True, accept_over_cap=False)
+    needs(ext, "set", qid="q1", status="retired", evidence=None, answer=None, source=None)
+    xcmd(ext, "prune", yes=True)
+    assert not (d / "scope.approved.json").exists()
+    assert "contract.md" not in (d / "scope.yaml").read_text()

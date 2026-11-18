@@ -167,6 +167,10 @@ applies_to:
 
 The report lists each link under "Linked code (applies_to)". It flags any path that does not exist in the source. The `code-graph` skill uses these links to check a code change against the ADRs that limit it.
 
+## Curating only some files
+
+Pass `--scope scope.yaml` to `analyze` or `update` to curate a short list of files and leave the rest of the folder unread. The file lists `files:`, each a `path` or a `glob`, with the `questions` it serves. Files outside the list are not hashed, opened or staged. The run writes `.docs-curator/scope.json`, which records why each file is in. Use this when you need a few documents from a repo you do not own. The knowledge-graph skill writes the scope for you from a list of questions.
+
 ## Adjusting the result
 
 Both files below are optional. They go in the output folder. Ask Claude to create them, or write them yourself. Then ask Claude to run apply again. Apply is the step that builds the curated folder from the reviews.
