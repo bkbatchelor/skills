@@ -16,6 +16,7 @@ import collections
 import datetime as dt
 import fnmatch
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -29,6 +30,7 @@ from pathlib import Path
 EXTRACT_VERSION = 2
 WORKDIR = ".docs-curator"
 SUPPORTED = {".pptx", ".pdf", ".md", ".xlsx", ".txt", ".docx", ".xml", ".json", ".jsonl", ".jsonc", ".csv", ".yaml", ".yml"}
+EXPORT_SOURCE_FORMATS = {"md", "docx", "pptx"}  # formats people export to PDF
 FORMAT_RANK = {"md": 0, "docx": 1, "pptx": 2, "xlsx": 3, "pdf": 4, "txt": 5, "xml": 6, "json": 7, "jsonl": 7, "jsonc": 7, "csv": 8, "yaml": 9, "yml": 9}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", "graphify-out", ".docs-curator"}
 IDENTICAL_TEXT_SIMILARITY = 0.999
@@ -41,6 +43,7 @@ DEFAULTS = {
     "embedding_batch_size": 32,  # documents per fastembed batch; 256 (its default) OOMs a 16 GB container
     "near_duplicate_threshold": 0.90,
     "near_duplicate_action": "flag",  # flag | exclude
+    "export_duplicate_threshold": 0.60,  # same-folder, same-name .pdf beside a .md/.pptx/.docx; None turns it off
     "keeper_prefers_descriptive_name": True,
     "similarity_max_tokens": 50000,
     "subsumed_containment": 0.95,
@@ -1043,6 +1046,24 @@ def cmd_analyze(args):
         if sim >= cfg["near_duplicate_threshold"]:
             kind = "cross" if byp[pa]["format"] != byp[pb]["format"] else "near"
             edges.append({"a": pa, "b": pb, "sim": round(sim, 4), "kind": kind})
+    # A PDF exported from a .md/.pptx/.docx beside it, under the same name, is the same document even
+    # when extraction mangles its tables enough to fall below near_duplicate_threshold (0.67-0.90 on a
+    # real corpus, against <= 0.27 for unrelated same-name files). Same folder and stem only.
+    seen_pairs = {(e["a"], e["b"]) for e in edges}
+    export_threshold = cfg["export_duplicate_threshold"]
+    by_stem = collections.defaultdict(list)
+    for p in comparable.values():
+        by_stem[(str(Path(p).parent), Path(p).stem)].append(p)
+    for ps in by_stem.values():
+        for pa, pb in itertools.combinations(sorted(ps), 2):
+            fa, fb = byp[pa]["format"], byp[pb]["format"]
+            if fa == fb or "pdf" not in (fa, fb) or not ({fa, fb} - {"pdf"}) <= EXPORT_SOURCE_FORMATS:
+                continue
+            if (pa, pb) in seen_pairs or export_threshold is None:
+                continue
+            sim = similarity(tokens[pa], tokens[pb], cfg["similarity_max_tokens"])
+            if sim >= export_threshold:
+                edges.append({"a": pa, "b": pb, "sim": round(sim, 4), "kind": "cross", "rule": "pdf_export"})
     edges.sort(key=lambda e: (e["a"], e["b"]))
 
     parent = {p: p for p in comparable.values()}
@@ -1089,10 +1110,14 @@ def cmd_analyze(args):
     labelled = apply_labels(alive, byp, doctypes, labels, cfg) if cfg["classify_untyped"] else 0
     overridden = {p for p, o in load_overrides(out, getattr(args, "overrides", None)).items() if o["action"] == "exclude"}
     classify_queued, classify_deferred = write_classify_queue(work, alive, byp, texts, doctypes, labels, cfg, overridden)
-    if len(alive) >= 2:
-        snippets = [" ".join(re.findall(r"\S+", _COMMENT.sub(" ", texts[p]))[:400]) for p in alive]
-        groups, cut = cluster_documents(alive, snippets, cfg)
-        groups = merge_cross_type(groups, alive, snippets, doctypes, cfg)
+    # A file an override excludes (gitignored build output, PHI, ...) can never reach staging, so it
+    # only pads review clusters. It still takes part in the exact and cross-format checks above,
+    # where it can be the keeper of a tracked copy.
+    clusterable = [p for p in alive if p not in overridden]
+    if len(clusterable) >= 2:
+        snippets = [" ".join(re.findall(r"\S+", _COMMENT.sub(" ", texts[p]))[:400]) for p in clusterable]
+        groups, cut = cluster_documents(clusterable, snippets, cfg)
+        groups = merge_cross_type(groups, clusterable, snippets, doctypes, cfg)
         for members in groups:
             clusters.append({"id": cluster_id([byp[m]["sha256"] for m in members]), "members": members})
     cluster_of = {m: c["id"] for c in clusters for m in c["members"]}
@@ -1163,9 +1188,11 @@ def cmd_analyze(args):
     for c in ranked:
         c["reviewed"] = c["id"] in reviewed
         c["queued"] = False
+        c["deferred"] = False
         if c["reviewed"] and c["id"] not in escalate:
             continue
         if slots <= 0:
+            c["deferred"] = True  # needs a review, but the cap is used up: queued by a later run
             continue
         slots -= 1
         c["queued"] = True
@@ -1222,9 +1249,14 @@ def cmd_analyze(args):
         "model": cfg["embedding_model"] if cfg["embedding_backend"] == "fastembed" else None,
     }
     write_json(work / "analysis.json", analysis)
-    write_state(work, cfg, {"analyze": {"files": len(files), "new_or_changed": new_or_changed, "clusters": len(clusters), "queued": sum(c["queued"] for c in ranked)}})
     queued = sum(c["queued"] for c in ranked)
+    deferred = sum(c.get("deferred", False) for c in ranked)
+    write_state(work, cfg, {"analyze": {"files": len(files), "new_or_changed": new_or_changed, "clusters": len(clusters),
+                                        "queued": queued, "deferred": deferred}})
     print(f"analyzed {len(files)} files ({new_or_changed} new or changed); {len(clusters)} clusters, {queued} queued for review")
+    if deferred:
+        print(f"deferred: {deferred} cluster(s) also need a review but max_llm_clusters_per_run ({cfg['max_llm_clusters_per_run']}) "
+              "is used up; review the queue, then run analyze/update again to queue them (or raise the cap)")
     print(f"queue: {queue_dir}")
     if cfg["classify_untyped"]:
         print(f"classify: {classify_queued} document(s) to label with {cfg['classify_model']} ({classify_deferred} deferred); {labelled} typed by earlier labels")

@@ -114,6 +114,8 @@ carry_forward:
 graph:
   cost_cap_tokens: 1500000   # an estimate above this needs a separate explicit yes
   agent_overhead_tokens: 60000  # fixed cost per extraction agent, added to the estimate
+  content_token_multiplier: 1.7  # input tokens per token of file content (agents re-read it as they work);
+                             # `kg graph finish` learns the real value from each run and prepare uses that
   big_file_bytes: 400000     # changed files above either limit get their own extraction chunk
   big_file_line_chars: 20000
   # excludes:                # gitignore-style patterns relative to staging/, written to graphify's
@@ -896,8 +898,13 @@ def review_state(ctx):
         if cf and not cf.get("review_done"):
             recheck.append({"cluster": f.stem, "from": cf["from"], "overlap": cf["overlap"],
                             "new_members": cf["new_members"]})
+    # Clusters docs-curator held back because max_llm_clusters_per_run was used up. They need a review
+    # too, but only the next `kg curate` queues them.
+    analysis = read_json(ctx.work / "analysis.json", {}) or {}
+    deferred = sorted(c["id"] for c in analysis.get("clusters", []) if c.get("deferred"))
     return {"queued": len(queued), "needs_labels": needs_labels, "labels_unapplied": labels_unapplied,
-            "needs_verdict": missing, "needs_escalation": escalate, "needs_recheck": recheck}
+            "needs_verdict": missing, "needs_escalation": escalate, "needs_recheck": recheck,
+            "deferred": deferred}
 
 
 def cmd_review(args):
@@ -908,6 +915,9 @@ def cmd_review(args):
           f"{len(st['needs_verdict'])} cluster(s) need a verdict, "
           f"{len(st['needs_escalation'])} need a deeper re-review, "
           f"{len(st['needs_recheck'])} carried verdict(s) need their new members checked")
+    if st["deferred"]:
+        print(f"  deferred: {len(st['deferred'])} more cluster(s) need a review but max_llm_clusters_per_run is used up; "
+              "after the reviews above, `kg curate` queues them (or raise the cap in config.yaml)")
     for b in st["needs_labels"]:
         item = read_json(ctx.work / f"work/classify/queue/{b}.json", {})
         print(f"  label: work/classify/queue/{b}.json ({len(item.get('docs', []))} document(s), model {item.get('model')})")
@@ -966,7 +976,11 @@ def cmd_curate(args, ctx=None):
             restored=len(cf["restored"]), auto_closed=len(closed), stale_archived=len(stale))
     rs = cmd_review(args)
     if rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"]:
-        print("next: review the clusters above (knowledge-graph skill), then `kg apply`")
+        then = "`kg curate` again to queue the deferred clusters" if rs["deferred"] else "`kg apply`"
+        print(f"next: review the clusters above (knowledge-graph skill), then {then}")
+        return EXIT_REVIEW
+    if rs["deferred"]:
+        print("next: `kg curate` again to queue the deferred clusters")
         return EXIT_REVIEW
     print("next: `kg apply`")
     return 0
@@ -997,8 +1011,11 @@ def link_state(ctx):
             out.append((name, "missing" if not link.exists() else "not a symlink", None))
         else:
             cur = os.readlink(link)
-            out.append((name, "ok" if cur == str(target) else
-                        ("non-$HOME form" if Path(cur).resolve() == target.resolve() else "wrong target"), cur))
+            state = "ok" if cur == str(target) else \
+                ("non-$HOME form" if Path(cur).resolve() == target.resolve() else "wrong target")
+            if state != "wrong target" and not link.exists():
+                state = "target missing"  # right link, but the folder it points at is gone (`kg apply` recreates it)
+            out.append((name, state, cur))
     return out
 
 
@@ -1040,10 +1057,11 @@ def cmd_apply(args, ctx=None):
         die(f"apply refused: {len(rs['needs_labels'])} classifier batch(es) without labels and "
             f"{len(rs['labels_unapplied'])} labelled but not applied (`kg review`, then `kg curate`). "
             "Pass --allow-unreviewed to apply anyway (untyped documents skip the requirement-vs-ADR check).", EXIT_REVIEW)
-    if (rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"]) and not args.allow_unreviewed:
+    if (rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"] or rs["deferred"]) and not args.allow_unreviewed:
         die(f"apply refused: {len(rs['needs_verdict'])} cluster(s) without a verdict, "
-            f"{len(rs['needs_escalation'])} awaiting a deeper re-review and "
-            f"{len(rs['needs_recheck'])} carried verdict(s) not re-checked (`kg review`). "
+            f"{len(rs['needs_escalation'])} awaiting a deeper re-review, "
+            f"{len(rs['needs_recheck'])} carried verdict(s) not re-checked and "
+            f"{len(rs['deferred'])} deferred past max_llm_clusters_per_run (`kg review`, then `kg curate`). "
             "Pass --allow-unreviewed to apply anyway (unreviewed clusters keep every member).", EXIT_REVIEW)
     archive_stale(ctx)
     run_curate(ctx, "apply")
@@ -1115,6 +1133,36 @@ print(json.dumps({"new_files": r.get("new_files", {}), "deleted": list(r.get("de
                   "files": sorted({f for fl in r.get("files", {}).values() for f in fl}),
                   "total_files": r.get("total_files"), "new_total": r.get("new_total", 0)}))
 """
+
+
+DEFAULT_CONTENT_MULTIPLIER = 1.7  # 2026-11-18 full build: 318 files, 15 agents, 2.61M tokens -> 1.72
+
+
+def content_tokens(paths):
+    """Rough token count of the files themselves (4 bytes per token)."""
+    total = 0
+    for f in paths:
+        try:
+            total += os.path.getsize(f)
+        except OSError:
+            pass
+    return total // 4
+
+
+def learned_multiplier(ctx):
+    """The content multiplier the last measured graph run showed (see cmd_graph_finish), or None."""
+    path = ctx.kgdir / "runs.jsonl"
+    if not path.exists():
+        return None
+    last = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if rec.get("step") == "graph finish" and rec.get("content_multiplier"):
+            last = float(rec["content_multiplier"])
+    return last
 
 
 def avg_tokens_per_file(cost):
@@ -1295,9 +1343,11 @@ def cmd_graph_prepare(args):
     rel_excluded = [f for f in newly_excluded_sources(ctx, [rel_to_staging(ctx, f) for f in det.get("files", [])])
                     if f not in set(rel_deleted)]  # graphify already prunes what it sees as deleted
     cost = read_json(ctx.out / "graphify-out/cost.json")
-    per_file = avg_tokens_per_file(cost)
+    per_file = avg_tokens_per_file(cost)  # history only; the estimate below is built from the files themselves
     # Each extraction agent costs a fixed ~60k (spec + reading graph.json to reuse IDs) however few
-    # files it gets; the per-file average hides that on small runs. Chunks follow graphify's ~22 files.
+    # files it gets, plus the file content, which agents read and then carry through every later turn
+    # (content x multiplier). An average from cost.json cannot do this: it is empty after a wipe and
+    # blind to how big this run's files are. Chunks follow graphify's ~22 files.
     overhead = int(ctx.get("graph", "agent_overhead_tokens", default=60_000))
     mb, ml = int(ctx.get("graph", "big_file_bytes", default=400_000)), int(ctx.get("graph", "big_file_line_chars", default=20_000))
     big = [{"path": rel_to_staging(ctx, f), "why": w} for f in changed if (w := big_file(f, mb, ml))]
@@ -1307,7 +1357,10 @@ def cmd_graph_prepare(args):
                   if rel_to_staging(ctx, f) not in big_set and line_count(f) > 2000]
     rest = len(changed) - len(big) - len(long_files)
     chunks = (-(-rest // 22) if rest else 0) + len(big) + len(long_files)  # one agent per big or long file
-    estimate = int((per_file or 0) * len(changed) + overhead * chunks) if (per_file or chunks) else None
+    content = content_tokens(changed)
+    learned = learned_multiplier(ctx)
+    multiplier = learned or float(ctx.get("graph", "content_token_multiplier", default=DEFAULT_CONTENT_MULTIPLIER))
+    estimate = int(content * multiplier + overhead * chunks)  # 0 for a prune-only run: no agents
     cap = int(ctx.get("graph", "cost_cap_tokens", default=1_500_000))
     has_graph = (ctx.out / "graphify-out/graph.json").exists()
     plan = {
@@ -1317,6 +1370,9 @@ def cmd_graph_prepare(args):
         "phi_pruned": [rel_to_staging(ctx, f) for f in phi_in_graph],
         "prune_sources": [str(staging / f) for f in rel_deleted + rel_excluded],
         "total_files": det["total_files"], "tokens_per_file": round(per_file) if per_file else None,
+        "content_tokens": content, "content_multiplier": round(multiplier, 2),
+        "multiplier_source": "learned from the last run" if learned else "kg.yaml / default",
+        "agent_overhead_tokens": overhead, "cost_runs_before": len((cost or {}).get("runs", [])),
         "estimated_input_tokens": estimate, "estimated_chunks": chunks, "cost_cap_tokens": cap,
         "over_cap": bool(estimate and estimate > cap), "big_files": big, "long_files": long_files,
         "graphify_command": f"cd {home_form(ctx.repo)} && /graphify {home_form(staging)}" + (" --update" if has_graph else ""),
@@ -1339,8 +1395,10 @@ def cmd_graph_prepare(args):
     if not changed and not rel_deleted and not rel_excluded:
         print("graph: nothing changed since the last build; no graphify run needed")
         return 0
-    est = (f"~{estimate:,} input tokens ({len(changed)} files x {plan['tokens_per_file'] or 0:,} avg from cost.json "
-           f"+ {chunks} agent(s) x {overhead:,} overhead, {len(big) + len(long_files)} of them for big or 2000+-line files)") if estimate else "unknown"
+    est = (f"~{estimate:,} input tokens ({len(changed)} files, ~{content:,} content tokens x {multiplier:.2f} "
+           f"({plan['multiplier_source']}) + {chunks} agent(s) x {overhead:,} overhead, "
+           f"{len(big) + len(long_files)} of them for big or 2000+-line files)") if changed else \
+        "no extraction agents (prune only), ~0 input tokens"
     print(f"cost: {est}; cap {cap:,}" + ("  ** OVER CAP: needs a separate explicit yes **" if plan["over_cap"] else ""))
     for b in big:
         print(f"big file (own chunk, parse with python3 -I, not Read): {b['path']} ({b['why']})")
@@ -1564,6 +1622,21 @@ def cmd_graph_labels(args):
     return 0
 
 
+def measured_multiplier(ctx, plan):
+    """What this run's extraction really cost per content token, from the runs graphify appended to
+    cost.json since `kg graph prepare`. None when there was nothing to extract or nothing was recorded."""
+    content = plan.get("content_tokens") or 0
+    if not content or "cost_runs_before" not in plan:
+        return None
+    runs = ((read_json(ctx.out / "graphify-out/cost.json") or {}).get("runs") or [])[plan["cost_runs_before"]:]
+    used = sum(r.get("input_tokens", 0) for r in runs)
+    if not used:
+        return None
+    agents = (plan.get("estimated_chunks") or 0) * (plan.get("agent_overhead_tokens") or 0)
+    mult = (used - agents) / content
+    return {"input_tokens": used, "multiplier": round(min(max(mult, 0.5), 5.0), 2)}
+
+
 def cmd_graph_finish(args):
     ctx = Ctx(args.repo)
     phi_gate(ctx, ("graph",), "graph finish")
@@ -1589,7 +1662,13 @@ def cmd_graph_finish(args):
         if p.exists():
             p.rename(ctx.kgdir / f"last-{name}")
     prune_snapshots(ctx)
-    ctx.log("graph finish", nodes=len(g.get("nodes", [])), edges=len(g.get("links", [])))
+    measured = measured_multiplier(ctx, plan)
+    if measured:
+        print(f"cost: this run took {measured['input_tokens']:,} input tokens against an estimate of "
+              f"{plan.get('estimated_input_tokens') or 0:,}; content multiplier {measured['multiplier']:.2f} "
+              "(the next `kg graph prepare` uses it)")
+    ctx.log("graph finish", nodes=len(g.get("nodes", [])), edges=len(g.get("links", [])),
+            **({"input_tokens": measured["input_tokens"], "content_multiplier": measured["multiplier"]} if measured else {}))
     print(f"graph: {len(g.get('nodes', []))} nodes, {len(g.get('links', []))} edges; "
           f"query with: graphify query \"<q>\" --graph {home_form(ctx.out / 'graphify-out/graph.json')}")
     return 0
@@ -2075,10 +2154,12 @@ def cmd_preflight(args):
     ctx = Ctx(args.repo, need_config=False)
     problems, notes = [], []
 
-    def check(ok, label, fix=None, blocking=True):
-        print(f"  [{'ok' if ok else ('FAIL' if blocking else 'warn')}] {label}")
+    def check(ok, label, fix=None, blocking=True, bad=None):
+        """label describes the passing state; bad (if given) is printed instead when the check fails."""
+        shown = label if ok or not bad else bad
+        print(f"  [{'ok' if ok else ('FAIL' if blocking else 'warn')}] {shown}")
         if not ok:
-            (problems if blocking else notes).append(f"{label}" + (f": {fix}" if fix else ""))
+            (problems if blocking else notes).append(f"{shown}" + (f": {fix}" if fix else ""))
 
     print("tools:")
     check(bool(shutil.which("uv")), "uv on PATH", "install uv")
@@ -2123,15 +2204,17 @@ def cmd_preflight(args):
         check((ctx.out / ".git").exists(), "curated folder is a git repo", f"git init {ctx.out}", blocking=False)
         if (ctx.out / ".git").exists():
             dirty = git(ctx.out, "status", "--porcelain")
-            check(not dirty, "curated folder's hand-made files are committed", f"commit in {ctx.out}", blocking=False)
+            check(not dirty, "curated folder's hand-made files are committed", f"commit in {ctx.out}", blocking=False,
+                  bad="curated folder has uncommitted changes")
         check(bool(ctx.phi_globs), "phi_globs set", "list the repo's PHI folders in kg.yaml (or confirm there are none)",
-              blocking=False)
+              blocking=False, bad="phi_globs not set")
         print("repo:")
         for name, state, cur in link_state(ctx):
             check(state == "ok", f"{name} symlink {state}" + (f" ({cur})" if cur and state != "ok" else ""),
-                  "`kg apply` rewrites it in $HOME form", blocking=state not in ("ok", "non-$HOME form", "missing"))
+                  "`kg apply` rewrites it in $HOME form" if state != "target missing" else "`kg apply` recreates the folder",
+                  blocking=state not in ("ok", "non-$HOME form", "missing", "target missing"))
         check((ctx.repo / ".codegraph").is_dir(), "codegraph index present", f"ask, then kg init {ctx.repo} --codegraph",
-              blocking=False)
+              blocking=False, bad="codegraph index missing")
         st = gate_state(ctx)
         check(st["ok"], f"docs gate: branch '{st['branch']}'" + (", dirty tree" if st["dirty"] else ", clean tree"),
               "docs steps will refuse to run", blocking=False)
@@ -2191,6 +2274,8 @@ def next_step(ctx):
         return ("kg", "curate")  # apply the labels; this re-clusters
     if rs["needs_verdict"] or rs["needs_escalation"] or rs["needs_recheck"]:
         return ("skill", "review clusters (kg review)")
+    if rs["deferred"]:
+        return ("kg", f"curate ({len(rs['deferred'])} cluster(s) deferred past max_llm_clusters_per_run)")
     an_m = (ctx.work / "analysis.json").stat().st_mtime
     staged = (ctx.out / "staging").exists() and (ctx.work / "decisions.jsonl").exists() \
         and (ctx.work / "decisions.jsonl").stat().st_mtime >= an_m
@@ -2223,7 +2308,8 @@ def cmd_status(args):
     if rs["needs_labels"] or rs["labels_unapplied"]:
         print(f"classify {len(rs['needs_labels'])} batch(es) need labels, {len(rs['labels_unapplied'])} labelled and not yet applied")
     print(f"review   {len(rs['needs_verdict'])} need a verdict, {len(rs['needs_escalation'])} need a deeper re-review, "
-          f"{len(rs['needs_recheck'])} carried need a re-check")
+          f"{len(rs['needs_recheck'])} carried need a re-check"
+          + (f", {len(rs['deferred'])} deferred past max_llm_clusters_per_run" if rs["deferred"] else ""))
     for name, state, cur in link_state(ctx):
         print(f"link     {name}: {state}")
     print(f"codegraph {'indexed' if (ctx.repo / '.codegraph').is_dir() else 'not indexed'}; telemetry {codegraph_telemetry()}")
