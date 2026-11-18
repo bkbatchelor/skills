@@ -1049,7 +1049,7 @@ def cmd_analyze(args):
     # A PDF exported from a .md/.pptx/.docx beside it, under the same name, is the same document even
     # when extraction mangles its tables enough to fall below near_duplicate_threshold (0.67-0.90 on a
     # real corpus, against <= 0.27 for unrelated same-name files). Same folder and stem only.
-    seen_pairs = {(e["a"], e["b"]) for e in edges}
+    seen_pairs = {frozenset((e["a"], e["b"])) for e in edges}  # LSH pairs come in either order
     export_threshold = cfg["export_duplicate_threshold"]
     by_stem = collections.defaultdict(list)
     for p in comparable.values():
@@ -1059,7 +1059,7 @@ def cmd_analyze(args):
             fa, fb = byp[pa]["format"], byp[pb]["format"]
             if fa == fb or "pdf" not in (fa, fb) or not ({fa, fb} - {"pdf"}) <= EXPORT_SOURCE_FORMATS:
                 continue
-            if (pa, pb) in seen_pairs or export_threshold is None:
+            if frozenset((pa, pb)) in seen_pairs or export_threshold is None:
                 continue
             sim = similarity(tokens[pa], tokens[pb], cfg["similarity_max_tokens"])
             if sim >= export_threshold:
