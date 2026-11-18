@@ -1,8 +1,8 @@
 ---
 name: knowledge-graph
-description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
+description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Also curates another repo selectively, only as far as the primary repo's unanswered goal questions need (`kg needs`, `kg external`). Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.4.2
+  version: 1.5.0
 ---
 
 # Knowledge Graph
@@ -92,6 +92,25 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
 
 When a folder is newly added to `phi_globs`, the existing graph may still hold its nodes. `kg curate` and `kg apply` remove it from the cache and staging, and `kg graph prepare` then lists those graph sources under `phi_pruned` and adds them to `prune_sources`. Run that graph update promptly; `kg graph finish` exits 4 if any PHI node remains.
 
+## Goal-scoped curation of an external repo
+
+Use this when the primary repo's goals need facts that only another repo holds. Curating that whole repo is the cost to avoid, so curate the primary first and the external repo only as far as its questions require. The steps go in order, and each one waits for the user where it says so.
+
+1. **Know the goals.** With the primary curated and graphed, run `kg needs init`. Propose goals from the curated docs and the graph (README, ADRs, requirements, and the gap and "can't tell" findings in docs-curator's report) with `kg needs add-goal "<text>"`. Show them to the user, and run `kg needs approve-goals` only after their yes. Changing a goal clears the approval.
+2. **Write questions.** `kg needs add-question "<text>" --goal gN --expects <kind of fact>` (a contract, an API, a policy). Questions must serve a goal and ask for something that would live in another repo.
+3. **Gate each question against the primary graphs.** Query the docs graph (`graphify query`) and the code graph (`codegraph explore`). If the primary answers it, run `kg needs set qN --status answered-internally --answer ... --source ...`. If not, run `kg needs set qN --status external-only --evidence "<the queries that came back empty>"`. `kg` refuses `external-only` without evidence. No `external-only` questions means no external curation.
+4. **Register the clone.** `kg external add <name> --path <local clone> --phi-glob <glob>...`, or `--no-phi` after the user confirms the external repo has no PHI paths. Ask them; do not reuse the primary's globs. The clone must already exist. `kg` never clones, fetches or writes into it, and warns if its tree is dirty.
+5. **Inventory, then pick.** `kg external inventory <name>` lists candidate files with sizes and first headings only, never PHI paths. Choose the files each `external-only` question needs and write `~/curated/<repo>/external/<name>/scope.yaml` (`repo_sha`, `files: [{path|glob, questions: [qN]}]`). Every file must serve a question.
+6. **Approve the scope.** `kg external scope <name>` validates it and prints the file count and token estimate. Ask the user one yes/no with those numbers. Over `external.max_files` (default 50) or `external.cost_cap_tokens`, say so and get a separate yes. Then run `kg external scope <name> --approve` (adding `--accept-over-cap` for an overage). Approval for an earlier scope does not carry over.
+7. **Build and review.** `kg external build <name>` runs docs-curator with `--scope` and the external PHI globs as `--no-extract`, and pins the clone's commit. Review queued clusters as in the main run (the work dir is `external/<name>/.docs-curator/`), then `kg external apply <name>`. There is no `link` step: the clone is never touched.
+8. **Graph it.** Ask the user to approve the graphify run with its cost, as in the main run. Run graphify from `external/<name>/` on its `staging/`, then `kg external finish <name>`, which checks for PHI and records the graph as **partial coverage**.
+9. **Answer.** Query the scoped graph and cite it as "scoped graph, partial coverage": a missing fact is not proof it is absent from the repo. Record each answer with `kg needs set qN --status answered-externally --answer ... --source <path>`.
+10. **Still unanswered?** You may propose added files for that question only, then repeat steps 6 to 8 for them. Each question gets at most two widening rounds; `kg external scope --approve` refuses a third. After that, run `kg needs set qN --status unanswered` and report it.
+
+Later: `kg external status <name>` reports drift only in scoped files. A refresh is `kg external build <name>`, which re-curates only the changed ones. After retiring a question, `kg external prune <name>` lists files that served only retired questions; rewrite the scope with `--yes` only after the user agrees.
+
+The primary's gates, snapshots and PHI hard stop still apply. External builds take their own snapshot in `external/<name>/backups/`.
+
 ## Related repos
 
 A `related_repos` entry names another repo whose graph is read-only from here. Query it with `graphify query "<q>" --graph <graph>` and cite which graph each fact came from. Never rebuild it, run `--update` on it, or write to it from this repo. Its optional `mapper` script lives in the curated folder and gets `KG_SOURCE`, `KG_RELATED_PATH`, `KG_RELATED_NAME` and `KG_OUT` in its environment.
@@ -103,4 +122,5 @@ A `related_repos` entry names another repo whose graph is read-only from here. Q
 - Exit 4 (PHI) stops the run. Never stage, extract or graph a path that matches `phi_globs`, and never add an include override for one.
 - Never commit to the user's repos, including the curated folder's git repo.
 - Never edit `overrides.yaml` by hand; it is regenerated. Hand decisions go in `overrides.manual.yaml`.
+- Never write to, fetch into, clone, link into or run `codegraph init` on an external repo. Never curate an external file that no `external-only` question asked for.
 - Never install tools or skills; `kg preflight` names what is missing.

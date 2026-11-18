@@ -24,6 +24,10 @@ knowledge-graph skill, which calls these subcommands around them.
   kg graph finish                PHI check on the new graph, prune backups, log the run
   kg code                        codegraph sync (any branch)
   kg status                      where the pipeline stands and what to do next
+  kg needs <sub>                 goals and questions file (needs.yaml): init, add-goal, approve-goals,
+                                 add-question, set, list
+  kg external <sub> <name>       goal-scoped curation of another repo: add, inventory, scope, build,
+                                 apply, finish, status, prune
   kg restore [<timestamp>]       put a snapshot back (latest by default)
   kg all                         run every scripted step up to the next one that needs a person
   kg install-shim                write ~/.local/bin/kg
@@ -118,6 +122,10 @@ graph:
 
 backups:
   keep: 3
+
+external:                    # goal-scoped curation of other repos (`kg needs`, `kg external`)
+  max_files: 50              # files across all questions; more needs a separate explicit yes
+  cost_cap_tokens: 1500000   # estimated input tokens; more needs a separate explicit yes
 
 related_repos: []
 #  - name: corebridge
@@ -268,7 +276,7 @@ class Ctx:
 
 
 CONFIG_KEYS = {"source", "gating", "phi_globs", "overrides", "known_excluded_keepers",
-               "carry_forward", "graph", "backups", "related_repos"}
+               "carry_forward", "graph", "backups", "related_repos", "external"}
 
 
 def validate_config(cfg, path):
@@ -291,6 +299,10 @@ def validate_config(cfg, path):
     gx = (cfg.get("graph") or {}).get("excludes")
     if gx is not None and (not isinstance(gx, list) or not all(isinstance(x, str) and x.strip() for x in gx)):
         die(f"{path}: graph.excludes must be a list of gitignore-style patterns (relative to staging/)")
+    for k in ("max_files", "cost_cap_tokens"):
+        v = (cfg.get("external") or {}).get(k)
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v < 1):
+            die(f"{path}: external.{k} must be a whole number of at least 1")
     smax = (cfg.get("carry_forward") or {}).get("subset_max_members")
     if smax is not None and (not isinstance(smax, int) or isinstance(smax, bool) or smax < 1):
         die(f"{path}: carry_forward.subset_max_members must be a whole number of at least 1")
@@ -1614,6 +1626,410 @@ def cmd_code(args):
 # ----------------------------------------------------------------------------- init / preflight / status
 
 
+# ----------------------------------------------------------------------------- needs (goals and questions)
+
+NEEDS_STATUSES = ["proposed", "answered-internally", "external-only", "answered-externally",
+                  "unanswered", "retired"]
+MAX_WIDEN_ROUNDS = 2
+
+
+def needs_path(ctx):
+    return ctx.out / "needs.yaml"
+
+
+def load_needs(ctx):
+    p = needs_path(ctx)
+    if not p.exists():
+        die(f"{p} not found; run `kg needs init` first")
+    d = load_yaml(p)
+    d.setdefault("goals", [])
+    d.setdefault("questions", [])
+    d.setdefault("goals_approved", False)
+    return d
+
+
+def save_needs(ctx, d):
+    import yaml
+
+    needs_path(ctx).write_text(yaml.safe_dump(d, sort_keys=False, allow_unicode=True, width=100), encoding="utf-8")
+
+
+def find_question(d, qid):
+    for q in d["questions"]:
+        if q["id"] == qid:
+            return q
+    die(f"no question {qid} in needs.yaml")
+
+
+def cmd_needs(args):
+    ctx = Ctx(args.repo)
+    sub = args.ncmd
+    if sub == "init":
+        if needs_path(ctx).exists():
+            print(f"needs: {needs_path(ctx)} already exists; nothing overwritten")
+            return 0
+        save_needs(ctx, {"goals": [], "goals_approved": False, "questions": []})
+        print(f"needs: created {needs_path(ctx)}\nnext: propose goals with `kg needs add-goal \"<text>\"`, then ask the user to approve them")
+        return 0
+    d = load_needs(ctx)
+    if sub == "add-goal":
+        if d["goals_approved"]:
+            d["goals_approved"] = False
+            warn("goals changed; they need the user's approval again")
+        gid = f"g{len(d['goals']) + 1}"
+        d["goals"].append({"id": gid, "text": args.text})
+        save_needs(ctx, d)
+        print(f"needs: added goal {gid}")
+    elif sub == "approve-goals":
+        if not d["goals"]:
+            die("no goals to approve")
+        d["goals_approved"] = True
+        save_needs(ctx, d)
+        ctx.log("needs-approve-goals", goals=len(d["goals"]))
+        print(f"needs: {len(d['goals'])} goal(s) approved")
+    elif sub == "add-question":
+        if not d["goals_approved"]:
+            die("approve the goals first (the user's yes, then `kg needs approve-goals`)", EXIT_REVIEW)
+        if args.goal not in {g["id"] for g in d["goals"]}:
+            die(f"unknown goal {args.goal}")
+        qid = f"q{len(d['questions']) + 1}"
+        d["questions"].append({"id": qid, "goal": args.goal, "text": args.text, "expects": args.expects or "",
+                               "status": "proposed", "widen_rounds": 0})
+        save_needs(ctx, d)
+        print(f"needs: added {qid}; next: query the primary docs and code graphs, then `kg needs set {qid} --status ...`")
+    elif sub == "set":
+        q = find_question(d, args.qid)
+        st = args.status
+        if st == "external-only":
+            if not d["goals_approved"]:
+                die("goals are not approved yet", EXIT_REVIEW)
+            if not args.evidence:
+                die("--evidence is required: say which primary graph queries (docs and code) failed to answer it")
+        if st in ("answered-internally", "answered-externally"):
+            if not (args.answer and args.source):
+                die(f"{st} needs --answer and --source (a path or graph node to cite)")
+        if st == "answered-externally" and q["status"] != "external-only":
+            die("only an external-only question can be answered externally")
+        q["status"] = st
+        for key in ("evidence", "answer", "source"):
+            if getattr(args, key, None):
+                q[key] = getattr(args, key)
+        save_needs(ctx, d)
+        print(f"needs: {q['id']} -> {st}")
+    elif sub == "list":
+        counts = {}
+        for q in d["questions"]:
+            counts[q["status"]] = counts.get(q["status"], 0) + 1
+        print(f"goals: {len(d['goals'])} ({'approved' if d['goals_approved'] else 'NOT approved'})")
+        for g in d["goals"]:
+            print(f"  {g['id']}: {g['text']}")
+        for q in d["questions"]:
+            print(f"  {q['id']} [{q['status']}] ({q['goal']}) {q['text']}")
+        print("totals: " + (", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no questions"))
+    return 0
+
+
+# ----------------------------------------------------------------------------- external repos (scoped, read-only)
+
+
+def ext_dir(ctx, name):
+    if not name or "/" in name or name.startswith("."):
+        die(f"bad external repo name: {name!r}")
+    return ctx.out / "external" / name
+
+
+def load_ext(ctx, name):
+    d = ext_dir(ctx, name)
+    meta = d / "external.yaml"
+    if not meta.exists():
+        die(f"{name} is not registered; run `kg external add {name} --path <clone> ...`")
+    m = load_yaml(meta)
+    return d, m
+
+
+def save_ext(d, m):
+    import yaml
+
+    (d / "external.yaml").write_text(yaml.safe_dump(m, sort_keys=False), encoding="utf-8")
+
+
+def ext_curate(ctx, d, m, *args):
+    dc = skill_dir("docs-curator")
+    extra = []
+    if args[0] in ("analyze", "update"):
+        extra += ["--scope", d / "scope.yaml"]
+        for g in m.get("phi_globs") or []:
+            extra += ["--no-extract", g]
+    cmd = ["uv", "run", "--no-project", "--python", "3.12", "--with-requirements", dc / "requirements.txt",
+           "python", dc / "scripts/curate.py", *args, "--source", expand(m["path"]), "--out", d, *extra]
+    print(f"kg: docs-curator {' '.join(args)} (external {m['name']}, scoped)", flush=True)
+    run(cmd, cwd=d)
+
+
+def ext_phi_hits(m, rels):
+    return sorted(r for r in rels if matches(r, m.get("phi_globs") or []))
+
+
+def ext_snapshot(ctx, d, reason):
+    ts = now_ts()
+    dest = d / "backups" / ts
+    n = 0
+    for rel in ("scope.yaml", "scope.approved.json", "graphify-out/graph.json", ".docs-curator/work/verdicts",
+                ".docs-curator/analysis.json"):
+        src = d / rel
+        if not src.exists():
+            continue
+        tgt = dest / rel
+        tgt.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, tgt, symlinks=True) if src.is_dir() else shutil.copy2(src, tgt)
+        n += 1
+    if n:
+        write_json(dest / "SNAPSHOT.json", {"reason": reason, "at": ts, "items": n})
+        old = sorted(p for p in (d / "backups").iterdir() if p.is_dir())
+        for p in old[:-ctx.get("backups", "keep", default=3)]:
+            shutil.rmtree(p)
+        print(f"snapshot: {dest} ({n} item(s), reason: {reason})")
+
+
+def ext_title(path):
+    if path.suffix.lower() not in (".md", ".txt"):
+        return ""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip().lstrip("#").strip()
+                if line and line != "---":
+                    return line[:120]
+    except OSError:
+        pass
+    return ""
+
+
+def cmd_external(args):
+    ctx = Ctx(args.repo)
+    sub, name = args.xcmd, args.name
+    if sub == "add":
+        path = expand(args.path)
+        if not path.is_dir() or not git(path, "rev-parse", "--show-toplevel"):
+            die(f"{path} must be an existing local git clone (kg never clones or fetches)")
+        if path.resolve() == ctx.repo.resolve():
+            die("the external repo is the primary repo")
+        if not args.phi_glob and not args.no_phi:
+            die("say which paths are PHI: --phi-glob <glob> (repeatable), or --no-phi once the user confirms there are none", EXIT_REVIEW)
+        d = ext_dir(ctx, name)
+        if (d / "external.yaml").exists():
+            die(f"{name} is already registered ({d / 'external.yaml'}); edit it by hand to change it")
+        d.mkdir(parents=True, exist_ok=True)
+        save_ext(d, {"name": name, "path": home_form(path).as_posix(), "phi_globs": args.phi_glob or [],
+                     "phi_confirmed": True})
+        print(f"external: registered {name} at {path}\nnext: `kg external inventory {name}`")
+        return 0
+    d, m = load_ext(ctx, name)
+    repo = expand(m["path"])
+    if not repo.is_dir():
+        die(f"{repo} not found")
+    if sub == "inventory":
+        cm = curate_module()
+        rows = []
+        for full in cm.walk(repo):
+            rel = full.relative_to(repo).as_posix()
+            if full.suffix.lower() not in cm.SUPPORTED or matches(rel, m["phi_globs"]):
+                continue  # PHI paths are not even opened for a title
+            rows.append({"path": rel, "size": full.stat().st_size, "title": ext_title(full)})
+        write_json(d / "inventory.json", {"files": rows, "repo_sha": git(repo, "rev-parse", "HEAD")})
+        print(f"external: inventory of {name}: {len(rows)} candidate file(s) (paths, sizes, first heading only)\n"
+              f"next: pick files per external-only question and write {d / 'scope.yaml'}, then `kg external scope {name}`")
+        return 0
+    if sub == "scope":
+        return ext_scope(ctx, d, m, repo, args)
+    if sub == "build":
+        return ext_build(ctx, d, m, repo)
+    if sub == "apply":
+        ext_curate(ctx, d, m, "apply")
+        hits = ext_phi_hits(m, (p.relative_to(d / "staging").as_posix() for p in (d / "staging").rglob("*") if p.is_file()))
+        if hits:
+            die("PHI paths in staging: " + ", ".join(hits[:10]), EXIT_PHI)
+        print(f"external: staged. next: ask the user to approve the graph run, then run graphify from {d} on staging/")
+        return 0
+    if sub == "finish":
+        return ext_finish(ctx, d, m)
+    if sub == "status":
+        return ext_status(ctx, d, m, repo)
+    if sub == "prune":
+        return ext_prune(ctx, d, m, args)
+    return 0
+
+
+def ext_scope(ctx, d, m, repo, args):
+    cm = curate_module()
+    if not hasattr(cm, "load_scope"):
+        die("installed docs-curator has no --scope; update it")
+    inv = read_json(d / "inventory.json")
+    if not inv:
+        die(f"run `kg external inventory {m['name']}` first")
+    if not (d / "scope.yaml").exists():
+        die(f"write {d / 'scope.yaml'} first")
+    sha, entries = cm.load_scope(d / "scope.yaml")
+    needs = load_needs(ctx)
+    qstatus = {q["id"]: q for q in needs["questions"]}
+    sizes = {r["path"]: r["size"] for r in inv["files"]}
+    by_q, files, unmatched = {}, {}, []
+    for e in entries:
+        hit = [p for p in sizes if p == e["pattern"] or cm._glob_match(p, [e["pattern"]])]
+        if not hit:
+            unmatched.append(e["pattern"])
+        for p in hit:
+            files[p] = sorted(set(files.get(p, [])) | set(e["questions"]))
+    phi = ext_phi_hits(m, [e["pattern"] for e in entries])
+    if phi:
+        die("scope entries name PHI paths: " + ", ".join(phi), EXIT_PHI)
+    for p, qs in files.items():
+        if not qs:
+            die(f"{p} has no question; every scoped file must serve an external-only question", EXIT_REVIEW)
+        for q in qs:
+            if q not in qstatus or qstatus[q]["status"] != "external-only":
+                die(f"{p}: question {q} is not an external-only question in needs.yaml", EXIT_REVIEW)
+            by_q.setdefault(q, set()).add(p)
+    nbytes = sum(sizes[p] for p in files)
+    est = nbytes // 4
+    max_files = ctx.get("external", "max_files", default=50)
+    cap = ctx.get("external", "cost_cap_tokens", default=ctx.get("graph", "cost_cap_tokens", default=1500000))
+    over = len(files) > max_files or est > cap
+    plan = {"files": len(files), "estimated_input_tokens": est, "max_files": max_files, "cost_cap_tokens": cap,
+            "over_cap": over, "by_question": {q: sorted(v) for q, v in sorted(by_q.items())},
+            "unmatched_entries": unmatched}
+    write_json(d / "scope.plan.json", plan)
+    print(f"scope: {len(files)} file(s), about {est} input tokens, for {len(by_q)} question(s)")
+    for u in unmatched:
+        warn(f"scope entry matches nothing in the inventory: {u}")
+    if over:
+        print(f"scope: OVER the cap (max {max_files} files, {cap} tokens): needs a separate, explicit yes")
+    if not args.approve:
+        print("next: ask the user to approve this scope (one yes/no, with the file count and token estimate), "
+              f"then rerun with --approve{' --accept-over-cap' if over else ''}")
+        return 0
+    if over and not args.accept_over_cap:
+        die("over the cap; get the user's separate yes, then pass --accept-over-cap", EXIT_REVIEW)
+    prev = read_json(d / "scope.approved.json")
+    if prev:
+        for q, paths in by_q.items():
+            added = set(paths) - set(prev["by_question"].get(q, []))
+            if added:
+                if qstatus[q].get("widen_rounds", 0) + 1 > MAX_WIDEN_ROUNDS:
+                    die(f"{q} was already widened {MAX_WIDEN_ROUNDS} times; mark it unanswered "
+                        f"(`kg needs set {q} --status unanswered`) instead of widening again", EXIT_REVIEW)
+                qstatus[q]["widen_rounds"] = qstatus[q].get("widen_rounds", 0) + 1
+        save_needs(ctx, needs)
+    import hashlib
+
+    digest = hashlib.sha256((d / "scope.yaml").read_bytes()).hexdigest()
+    write_json(d / "scope.approved.json", {"scope_sha256": digest, "files": sorted(files),
+                                           "by_question": {q: sorted(v) for q, v in by_q.items()},
+                                           "repo_sha": git(repo, "rev-parse", "HEAD"), "over_cap_accepted": over,
+                                           "approved_at": now_ts()})
+    ctx.log("external-scope-approve", external=m["name"], files=len(files), estimated_tokens=est, over_cap=over)
+    print(f"scope: approved. next: `kg external build {m['name']}`")
+    return 0
+
+
+def ext_build(ctx, d, m, repo):
+    ap = read_json(d / "scope.approved.json")
+    if not ap:
+        die("no approved scope; run `kg external scope --approve` after the user's yes", EXIT_REVIEW)
+    import hashlib
+
+    if hashlib.sha256((d / "scope.yaml").read_bytes()).hexdigest() != ap["scope_sha256"]:
+        die("scope.yaml changed since it was approved; run `kg external scope` again", EXIT_REVIEW)
+    if git(repo, "status", "--porcelain"):
+        warn(f"{repo} has uncommitted changes (not ours to clean); in-scope files are read as they are")
+    head = git(repo, "rev-parse", "HEAD")
+    if head != ap["repo_sha"]:
+        warn(f"external repo moved from {ap['repo_sha'][:8]} to {head[:8]} since the scope was approved")
+    ext_snapshot(ctx, d, "before external build")
+    first = not (d / ".docs-curator/analysis.json").exists()
+    ext_curate(ctx, d, m, "analyze" if first else "update")
+    m["pinned_sha"] = head
+    m["built_at"] = now_ts()
+    save_ext(d, m)
+    ctx.log("external-build", external=m["name"], sha=head, files=len(ap["files"]))
+    queued = len(list((d / ".docs-curator/work/queue").glob("*.json"))) if (d / ".docs-curator/work/queue").exists() else 0
+    print(f"external: built {m['name']} at {head[:8]}; {queued} cluster(s) queued\n"
+          f"next: review them as docs-curator step 2 describes (work dir {d / '.docs-curator'}), then `kg external apply {m['name']}`")
+    return 0
+
+
+def ext_finish(ctx, d, m):
+    gpath = d / "graphify-out/graph.json"
+    if not gpath.exists():
+        die(f"{gpath} not found; run graphify from {d} on staging/ first")
+    g = read_json(gpath, {})
+    srcs = {n.get("source_file") for n in g.get("nodes", []) if n.get("source_file")}
+    bad = ext_phi_hits(m, (str(s).split("staging/", 1)[-1] for s in srcs))
+    if bad:
+        die("PHI sources in the external graph: " + ", ".join(bad[:10]), EXIT_PHI)
+    ap = read_json(d / "scope.approved.json", {})
+    write_json(d / "graph-meta.json", {"coverage": "partial", "repo_sha": m.get("pinned_sha"),
+                                       "scoped_files": len(ap.get("files", [])), "graph": str(gpath),
+                                       "questions": sorted(ap.get("by_question", {}))})
+    ctx.log("external-finish", external=m["name"], nodes=len(g.get("nodes", [])))
+    print(f"external: {m['name']} graph has {len(g.get('nodes', []))} node(s), PARTIAL coverage ({len(ap.get('files', []))} scoped files)\n"
+          f"query: graphify query \"<q>\" --graph {gpath}   (cite as: scoped graph, partial coverage)\n"
+          "then record each answer: kg needs set <qid> --status answered-externally --answer ... --source <path>")
+    return 0
+
+
+def ext_status(ctx, d, m, repo):
+    ap = read_json(d / "scope.approved.json", {})
+    pinned, head = m.get("pinned_sha"), git(repo, "rev-parse", "HEAD")
+    print(f"external {m['name']}: {len(ap.get('files', []))} scoped file(s), pinned {str(pinned)[:8]}, now {str(head)[:8]}")
+    if not pinned:
+        print("  not built yet")
+        return 0
+    if pinned == head:
+        print("  no drift")
+        return 0
+    changed = (git(repo, "diff", "--name-only", pinned, head) or "").splitlines()
+    mine = sorted(set(changed) & set(ap.get("files", [])))
+    print(f"  {len(changed)} file(s) changed upstream, {len(mine)} in scope" + (" (out-of-scope drift is ignored)" if not mine else ""))
+    for f in mine:
+        print(f"  changed in scope: {f}")
+    if mine:
+        print(f"next: `kg external build {m['name']}` re-curates only the changed in-scope files")
+    return 0
+
+
+def ext_prune(ctx, d, m, args):
+    needs = load_needs(ctx)
+    live = {q["id"] for q in needs["questions"] if q["status"] not in ("retired",)}
+    ap = read_json(d / "scope.approved.json")
+    if not ap:
+        die("no approved scope")
+    keep, drop = {}, []
+    by_file = {}
+    for q, paths in ap["by_question"].items():
+        for p in paths:
+            by_file.setdefault(p, []).append(q)
+    for p, qs in sorted(by_file.items()):
+        alive = [q for q in qs if q in live]
+        (keep.__setitem__(p, alive) if alive else drop.append(p))
+    print(f"prune: {len(drop)} scoped file(s) serve only retired questions")
+    for p in drop:
+        print(f"  {p}")
+    if not drop or not args.yes:
+        if drop:
+            print("rerun with --yes after the user agrees")
+        return 0
+    import yaml
+
+    ext_snapshot(ctx, d, "before external prune")
+    (d / "scope.yaml").write_text(yaml.safe_dump({"repo_sha": ap.get("repo_sha"),
+                                                  "files": [{"path": p, "questions": q} for p, q in keep.items()]},
+                                                 sort_keys=False), encoding="utf-8")
+    (d / "scope.approved.json").unlink()
+    print(f"prune: scope.yaml rewritten; run `kg external scope {m['name']} --approve` then build to drop them from staging")
+    return 0
+
+
 def cmd_init(args):
     repo = Path(args.path).expanduser()
     top = git(repo, "rev-parse", "--show-toplevel")
@@ -1887,6 +2303,45 @@ def build_parser():
         if name == "fixups":
             p.add_argument("--file", help="graph file to fix (default .graphify_extract.json, else graph.json)")
         p.set_defaults(fn=fn)
+    nd = sub.add_parser("needs", help="goals and questions file (needs.yaml)").add_subparsers(dest="ncmd", required=True)
+    for name, help_ in (("init", "create needs.yaml"), ("add-goal", "add a proposed goal"),
+                        ("approve-goals", "record the user's approval of the goals"),
+                        ("add-question", "add a goal-oriented question"), ("set", "set a question's status"),
+                        ("list", "show goals and questions")):
+        p = nd.add_parser(name, help=help_, description=help_)
+        p.add_argument("--repo")
+        if name == "add-goal":
+            p.add_argument("text")
+        if name == "add-question":
+            p.add_argument("text")
+            p.add_argument("--goal", required=True)
+            p.add_argument("--expects", help="the kind of external fact expected (contract, API, policy...)")
+        if name == "set":
+            p.add_argument("qid")
+            p.add_argument("--status", required=True, choices=NEEDS_STATUSES)
+            p.add_argument("--evidence", help="the primary-graph queries that failed (required for external-only)")
+            p.add_argument("--answer")
+            p.add_argument("--source", help="path or graph node cited for the answer")
+        p.set_defaults(fn=cmd_needs)
+    xd = sub.add_parser("external", help="goal-scoped curation of another repo").add_subparsers(dest="xcmd", required=True)
+    for name, help_ in (("add", "register a local clone"), ("inventory", "cheap listing of candidate files"),
+                        ("scope", "validate scope.yaml, estimate cost, record approval"),
+                        ("build", "docs-curator analyze/update, scoped"), ("apply", "docs-curator apply, scoped"),
+                        ("finish", "check the scoped graph and record its partial coverage"),
+                        ("status", "drift in scoped files only"), ("prune", "drop files serving only retired questions")):
+        p = xd.add_parser(name, help=help_, description=help_)
+        p.add_argument("name")
+        p.add_argument("--repo")
+        if name == "add":
+            p.add_argument("--path", required=True)
+            p.add_argument("--phi-glob", action="append")
+            p.add_argument("--no-phi", action="store_true", help="the user confirmed this repo has no PHI paths")
+        if name == "scope":
+            p.add_argument("--approve", action="store_true", help="only after the user's yes for this scope")
+            p.add_argument("--accept-over-cap", action="store_true", help="only after a separate yes for the overage")
+        if name == "prune":
+            p.add_argument("--yes", action="store_true")
+        p.set_defaults(fn=cmd_external)
     add("code", cmd_code, "codegraph sync (any branch)")
     add("status", cmd_status, "pipeline state and next step")
     p = add("restore", cmd_restore, "restore a snapshot (dry run unless --yes)")
