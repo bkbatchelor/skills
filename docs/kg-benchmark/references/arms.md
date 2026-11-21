@@ -24,7 +24,7 @@ An arm is one setup. Change one thing per arm, so each comparison isolates one c
 Eighteen questions about one repo, three runs each:
 
 - Curated text scored highest; most of the gain came from Office and PDF files that became searchable.
-- Graphs available scored between curated text and plain search, with the fewest false claims.
+- Graphs available scored between curated text and plain search, and tied with curated text plus code graph for the fewest false claims.
 - Graphs directed cost about a quarter more tokens than plain search and had the most false claims.
 - Curated text plus code graph scored the same as curated text alone; the code graph was used on caller questions only.
 - With every source available and the instructions pointing to the curated text, agents did not use the docs graph at all.
