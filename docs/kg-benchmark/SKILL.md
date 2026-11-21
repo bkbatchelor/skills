@@ -2,7 +2,7 @@
 name: kg-benchmark
 description: Benchmarks whether knowledge graphs (a graphify docs graph, a codegraph code graph), docs-curator curated text, or a change to the agent instructions file actually help an AI coding agent answer questions about a repository. Runs each question as a fresh headless Claude Code session in several isolated setups, grades every answer blind against a written key, rechecks flagged false claims with an independent audit, and reports correctness, tokens, cost and paired confidence intervals. Use when the user asks to benchmark, evaluate, measure or justify a knowledge graph, curated docs or graph rules, compare "graph vs no graph", decide whether a docs graph is worth rebuilding, or test a CLAUDE.md change. Skip for building or refreshing the graphs (use knowledge-graph), for one-off questions (use code-graph or graphify), and for benchmarking models or prompts unrelated to repository knowledge.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # KG Benchmark
