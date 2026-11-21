@@ -89,7 +89,7 @@ So:
 - Point agents at the staging folder for document questions, and at the code graph for callers and change impact. Never add a rule to query the graphs first.
 - Treat any graph result as a pointer: open the file it names and cite the line, not the graph. Never conclude something is absent because a graph lacks it; search for the exact identifier.
 - Consider `graph.refresh: on_request` once agents are pointed at the curated text. Keep curation and `kg code` running after merges.
-- A docs graph earns its cost when many questions are about links between documents (paths, citations, groups), or when the corpus is too large to search well. Before relying on it, test that on your own questions.
+- A docs graph earns its cost when many questions are about links between documents (paths, citations, groups), or when the corpus is too large to search well. Before relying on it, test that on your own questions with the `kg-benchmark` skill, which runs the same comparison (isolated setups, blind grading, audited false claims) on any repo.
 
 ## Gating
 

@@ -98,7 +98,7 @@ Build or rebuild it when one of these is true:
 
 - Many of your questions are about links between documents.
 - The corpus is too large to search well with text search.
-- A test on your own questions shows it beats the curated text by a clear margin.
+- A test on your own questions shows it beats the curated text by a clear margin. The [kg-benchmark](../kg-benchmark/README.md) skill runs that test.
 
 Otherwise, keep curating and keep the code graph synced, and skip the docs graph. Curation and `codegraph sync` cost little; a docs-graph build costs far more in tokens.
 
@@ -110,6 +110,8 @@ The advice above comes from a benchmark of 18 developer questions about one real
 - The docs graph built from that same text added no gain. Once the agent's instructions pointed to the curated text, agents stopped using the docs graph and lost no quality.
 - An instruction to query the graphs first cost the most tokens and produced the most false claims, because the agent queried the graph and then read the files anyway.
 - The code graph helped on questions about callers and change impact, and refreshing it costs no model tokens.
+
+To run the same benchmark on your own repo, use the [kg-benchmark](../kg-benchmark/README.md) skill.
 
 These results come from one repo of moderate size, where text search reaches everything quickly. A larger or less familiar repo, or questions that depend more on links between documents, could change them.
 
