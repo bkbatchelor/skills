@@ -34,7 +34,7 @@ The script stops and says so whenever a person is needed. The agent never works 
 | [Restore](#3-restore-a-snapshot) | A run failed or lost data | `kg restore` |
 | [External repo curation](#4-curate-an-external-repo-for-your-goals) | A goal needs facts that only another repo holds | `kg needs ...`, `kg external ...` |
 | [Related repos](#5-read-a-related-repos-graph) | You want to read another repo's finished graph | `graphify query --graph` |
-| [Query priority](#6-query-priority) | You answer a question after the graphs are built | `codegraph explore`, `graphify query` |
+| [Query priority](#6-query-priority) | You answer a question after the graphs are built | `rg` on the staging folder, `codegraph explore`, `graphify query` |
 
 ## 1. Set up a repo (once)
 
@@ -58,6 +58,8 @@ If `kg preflight` prints `FAIL` for a missing tool or skill, the cause is that t
 **Mode: how-to, with background blocks.** Start with `kg status`. It shows the branch check, changes since the last curate and graph, pending reviews, PHI findings, backups, and the next step.
 
 `kg all` runs the scripted steps in order. It stops before the first step that needs a person.
+
+If `kg.yaml` has `graph.refresh: on_request`, a routine refresh stops after `kg apply`, and `kg all` syncs the code graph instead of moving on to the docs graph. Run steps 4 to 7 only when someone asks for a docs-graph rebuild.
 
 ```mermaid
 flowchart TD
@@ -292,27 +294,26 @@ Never rebuild that graph, run `--update` on it, or write to it from this repo.
 
 ## 6. Query priority
 
-**Mode: how-to.** Use this order when you answer a question after the graphs are built. A query means a search of a graph with `graphify query` (docs graph) or `codegraph explore` (code graph).
+**Mode: how-to.** Use this order when you answer a question after the graphs are built. The staging folder is `~/curated/<repo>/staging/`, the curated text that docs-curator writes. A query means a search of a graph with `codegraph explore` (code graph) or `graphify query` (docs graph).
 
-1. **Query the primary repo's graphs first.**
-   - For a question about code, run `codegraph explore "<symbol names or question>"`. Do this before grep, find or reading files. Skip this if the repo has no `.codegraph/` folder.
-   - For a question about documents, architecture or project content, run `graphify query "<question>"`. Do this when `graphify-out/` exists.
-   - For a question that spans both, query both.
-2. **Check the source file.** Open the file that the graph points to and confirm the fact. Do this for any answer the user will act on.
-3. **Query a related repo's graph.** Run `graphify query "<question>" --graph <graph>`. Do this only if the primary repo does not hold the answer. Cite which graph each fact came from.
-4. **Use the scoped external graph.** Do this only for a question marked `external-only`. Cite the answer as "scoped graph, partial coverage".
+1. **For a question about documents** (requirements, decisions, forms, which version is current), search the staging folder and the repo files. Give the staging folder itself as the search path. Check for a "Superseded" banner and the document's status before relying on a page.
+2. **For a question about callers, dependencies or the effect of a change**, run `codegraph node <Symbol>` or `codegraph explore "<question>"`, then read the files it lists. Skip this if the repo has no `.codegraph/` folder.
+3. **Use the docs graph only for questions about links between documents**, such as paths, citations or groups. Run `graphify query "<question>"` when `graphify-out/` exists.
+4. **Check the source file.** Open the file that a graph result names, find the line that states the fact, and cite that line. If no line states it, drop the claim.
+5. **Query a related repo's graph** with `graphify query "<question>" --graph <graph>` only if the primary repo does not hold the answer. Cite which graph each fact came from.
+6. **Use the scoped external graph** only for a question marked `external-only`. Cite the answer as "scoped graph, partial coverage".
 
-If the two primary graphs disagree, trust the source file and say that the graphs disagree.
+If a source file and a graph disagree, trust the source file. If the staging copy and the repo disagree, trust the repo: the staging copy reflects the last curation run.
 
-If the graph may be out of date, run `kg status`. It shows changes since the last curate and graph. If it shows drift, read the source file instead, or ask the user to refresh the graphs.
+If a graph has no answer, do not conclude that the repo has none. Curation leaves out duplicates, old revisions, excluded groups and PHI folders, and a graph can miss documents. Search for the exact identifier before you say a fact is absent.
 
-If the graph has no answer, do not conclude that the repo has none. Curation leaves out duplicates, old revisions, excluded groups and PHI folders. Search the source files before you say a fact is absent.
+Do not query a graph before every question, and do not add a "query the graphs first" rule to agent instructions.
 
 **Background (skip if you only need the steps).**
 
-- Steps 1, 3 and 4 follow rules that exist today. Step 1 comes from your global `CLAUDE.md` (CodeGraph before grep) and from the graphify skill (query first when `graphify-out/` exists). Steps 3 and 4 come from `SKILL.md`: related repos are read-only and cited, and external answers are cited as partial coverage.
-- Step 2, the tiebreak rule and the staleness rule are choices made for this document. No existing rule covers them. Change them here if you want a different order.
-- The graphs are built from the source files, so the source files stay the record. The graphs are the fast way to find what to read.
+- This order comes from a benchmark on a real repository. Sessions that searched the curated text scored highest. The docs graph built on that text added nothing, and once the agent instructions pointed to the curated text, agents stopped using the docs graph without losing quality. An instruction to query the graphs first cost about a quarter more tokens than plain search and produced the most false claims, because the agent queried the graph and then read the files anyway.
+- The code graph helped on the questions it fits (callers and change impact), and refreshing it costs no model tokens.
+- Steps 5 and 6 come from `SKILL.md`: related repos are read-only and cited, and external answers are cited as partial coverage.
 
 ## Reference: exit codes
 

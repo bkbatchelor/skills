@@ -24,6 +24,7 @@ kg turns a repository's documents and code into two searchable knowledge graphs.
 - **Review effort is spent once.** When a cluster is renumbered because one of its members changed, its old verdict carries over. That happens if the old and new member sets overlap by at least 80%. Moved files are followed. Reviewers see only the new members, not the whole cluster again. A cluster with fewer than two members that can reach staging closes automatically (`kg_auto`). It reopens if an override gives it a second member.
 - **Incremental runs cost less.** Manifests written by older versions are updated to the current format. A manifest is the record of which files were processed. So `--update` reads again only the files that changed.
 - **Naming stays stable.** A community is a group of linked nodes in the graph. Its label carries forward wherever at least 50% of its labelled members agree. So the graph's vocabulary does not change from run to run.
+- **The docs graph can wait until it is asked for.** With `graph.refresh: on_request`, a routine refresh curates, applies and syncs the code graph, and stops. A benchmark found the curated text gave the gain and the docs graph built on it added nothing, so this skips its cost until someone wants it.
 - **Nothing is lost silently.** The keeper check catches documents that left staging. They left because the duplicate they were grouped with had its keeper excluded too. A keeper is the copy kept from a set of duplicates.
 
 ### Control and repeatability
@@ -99,6 +100,7 @@ carry_forward:
   subset_max_members: 25             # a cluster that only lost members keeps the verdict of an old one this small
 
 graph:
+  refresh: always                    # or on_request: routine runs stop after apply; docs graph only when asked
   cost_cap_tokens: 1500000           # an estimate above this needs a separate, explicit yes
   agent_overhead_tokens: 60000       # fixed cost per extraction agent, added to the estimate
   content_token_multiplier: 1.7      # input tokens per token of read file content; kg learns it from recent runs
