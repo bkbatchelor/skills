@@ -123,6 +123,14 @@ skills/
 │   │   │   └── kg.py             # Pipeline script (PEP 723, uv run --python 3.12 --script)
 │   │   └── tests/
 │   │       └── test_kg.py        # pytest suite
+│   ├── kg-benchmark/             # Benchmark graphs, curated text and instruction changes (bench script)
+│   │   ├── SKILL.md              # Skill definition: design, probe, run, grade, audit, report; hard rules
+│   │   ├── README.md             # What it measures and how to run one
+│   │   ├── references/           # Arm recipes, question and key guide, audit prompt, lessons
+│   │   ├── scripts/
+│   │   │   └── bench.py          # Benchmark script (PEP 723, uv run --python 3.12 --script)
+│   │   └── tests/
+│   │       └── test_bench.py     # pytest suite
 │   ├── mermaid-to-image/           # Mermaid diagram rendering skill
 │   │   ├── SKILL.md              # Skill definition
 │   │   ├── README.md             # Install, requirements, usage
@@ -239,7 +247,8 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | html-artifacts | 1.1.2 | Renders dense or visual output as one offline HTML file in a house style, verified by headless screenshots | `SKILL.md`, `README.md`, `references/template.html`, `scripts/verify.sh` |
 | code-graph | 1.0.0 | Answers code questions with codegraph (never installs it; `codegraph init` only after approval) and checks a code change against the ADRs and design docs that constrain it, reading the docs graph read-only | `SKILL.md`, `README.md`, `scripts/check_env.sh`, `scripts/diff_links.sh` |
 | docs-curator | 1.13.1 | Curates a read-only document folder into a deduplicated Markdown staging tree for Graphify, with an `update` command for added or modified files: removes duplicates and superseded revisions, flags contradictions and conflicting names, checks business requirements against ADRs, and routes classification and cluster review to different models by difficulty | `SKILL.md`, `README.md`, `docs/How docs-curator works.md`, `plan/PLAN.md`, `plan/DECISIONS.md`, `requirements.txt`, `references/verdict-schema.md`, `scripts/curate.py`, `scripts/check_env.sh`, `docker/Dockerfile`, `tests/test_scope.py`, `tests/test_exports_and_queue.py` |
-| knowledge-graph | 1.6.3 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate, plus goal-scoped curation of an external repo (`kg needs`, `kg external`) | `SKILL.md`, `README.md`, `docs/workflows.md`, `scripts/kg.py`, `tests/test_kg.py` |
+| knowledge-graph | 1.7.0 | Repeatable docs-graph and code-graph pipeline around docs-curator, Graphify and codegraph: one `kg` script with a branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, a stop for docs-curator's classifier labels and deep re-reviews before `apply`, node-loss check and token-cost estimate, plus goal-scoped curation of an external repo (`kg needs`, `kg external`), and an optional on-request docs graph (`graph.refresh: on_request`) | `SKILL.md`, `README.md`, `docs/workflows.md`, `scripts/kg.py`, `tests/test_kg.py` |
+| kg-benchmark | 1.0.0 | Measures whether a docs graph, code graph, curated text or an agent-instructions change helps an agent answer repository questions: isolated headless runs per setup, blind grading against written keys, an independent audit of flagged false claims, paired bootstrap intervals and a report | `SKILL.md`, `README.md`, `references/arms.md`, `references/questions.md`, `references/audit-prompt.md`, `references/lessons.md`, `scripts/bench.py`, `tests/test_bench.py` |
 | mermaid-to-image | 1.2.0 | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | markdown-pdf | 1.0.1 | Converts Markdown to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension Markdown PDF: highlighting, emoji, task lists, containers, includes, KaTeX math, locally drawn Mermaid, front matter, custom CSS, page size, margins, header and footer templates, clip and quality, raw-HTML sanitizing | `SKILL.md`, `README.md`, `package.json`, `package-lock.json`, `scripts/convert.sh`, `scripts/convert.mjs`, `styles/default.css`, `tests/convert.test.mjs` |
 | token-saver | 1.0.1 | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
@@ -587,6 +596,25 @@ $KG init ~/Projects/my-repo && $KG preflight --fix
 $KG status
 $KG all          # stops before the first step that needs a person
 ```
+
+#### kg-benchmark
+
+---
+
+Measures whether a knowledge graph, curated text or a change to the agent instructions file helps an AI coding agent answer questions about a repository. Each question runs as a fresh headless Claude Code session in several isolated setups (arms); a tool-less session grades every answer blind against a written key; an independent agent audits the false claims the grader flagged; and the script reports correctness, tokens, cost and paired per-question bootstrap intervals. The [knowledge-graph](#knowledge-graph) skill's best practice points to it as the test to run before relying on a docs graph.
+
+**Key Components:**
+- `SKILL.md`: Design with the user (decision, thresholds, arms, questions, budget), probe, interleaved run, extract and leak check, blind judge, audit, compare, metrics and report, plus hard rules (ask before spending, keys out of reach, fixed instruction copies, no result before the audit)
+- `README.md`: What it measures and how to run one, step by step
+- `references/arms.md`: Arm recipes (plain search, graphs available, graphs directed, curated text, curated text plus code graph, instruction variants) and what each isolates
+- `references/questions.md`: How to write questions and keys, including trap questions
+- `references/audit-prompt.md`: Prompt for the independent false-claim audit
+- `references/lessons.md`: Isolation and measurement mistakes from real runs and how the script avoids them
+- `scripts/bench.py`: Subcommands `init`, `check`, `probe`, `run`, `extract`, `leakcheck`, `judge`, `compare`, `metrics`, `audit-prep`, `audit-merge`, `report`
+- `tests/test_bench.py`: pytest suite (permission rules, own-copy loading, exclusion handling in graph-use counts, bootstrap determinism, redaction, blinded audit round trip)
+
+**Requirements:**
+- Claude Code logged in and `uv` (Python 3.12 is fetched). Graph arms need built graphs and curated-text arms a docs-curator staging folder; build them with knowledge-graph first. It installs nothing
 
 #### html-artifacts
 
