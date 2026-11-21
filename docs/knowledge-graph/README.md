@@ -36,6 +36,83 @@ kg turns a repository's documents and code into two searchable knowledge graphs.
 - **Code graph in one command.** `kg code` runs `codegraph sync` on any branch. It also turns off codegraph's telemetry, which is its usage reporting.
 - **Portable setup.** The repo's `graphify-out` and `.docs-curator` links are written with `$HOME` paths. A path that starts with `$HOME` points to your home folder. So the links work on other computers.
 
+## Best practice: docs-curator, the docs graph and the code graph
+
+This section says which of the three sources to use for which job, how to keep them current, and when the docs graph is worth building. It is based on a benchmark on a real repo, described at the end of the section.
+
+The three sources:
+
+- **The curated text** is the staging folder, `~/curated/<repo>/staging/`, that docs-curator writes. It holds every kept document as Markdown. Word, Excel, PDF and PowerPoint files become searchable text, duplicates are removed, and replaced versions are left out.
+- **The docs graph** is the Graphify graph built from the curated text.
+- **The code graph** is the codegraph index of the source code. It knows which functions call which, and how classes depend on each other.
+
+### Which source to use
+
+| Question | Use | Why |
+|---|---|---|
+| What does a requirement, decision record or form say? Which version is current? | The curated text and the repo files | A text search returns the exact line. It also finds text inside Office and PDF files, which a search of the repo alone cannot. |
+| What calls this function? What breaks if I change it? | The code graph, then the files it lists | It answers in one step what a text search needs many steps for. |
+| How do these documents connect? Which ones cite this one? | The docs graph, then the files it names | Links between documents are what a graph adds over text search. |
+| Does X exist? | A text search for the exact name, in the repo and the curated text | A graph leaves things out and never says what it left out. |
+
+### Keep them current (how-to)
+
+Do this after each merge to a branch the gate allows (`main`, `develop` or `develop-*`):
+
+1. Run `kg status` to see what changed.
+2. Run `kg curate`. If it stops with exit code 3, review the clusters it lists (the skill does this), then run `kg curate` again.
+3. Run `kg apply`. If it stops with exit code 3 and lists `keeper:` lines, decide for each one whether to include the file or to record it as known.
+4. Run `kg code`. If it says the repo is not indexed, run `kg init <repo> --codegraph` once.
+
+If a step stops with exit code 2, the branch or working tree failed the gate. Switch to an allowed branch with no uncommitted changes, then start again.
+
+Rebuild the docs graph only when you want one: run `kg graph prepare` and follow the skill. To make this the default, set `graph.refresh: on_request` in `kg.yaml`. A routine `kg all` then stops after `kg apply` and syncs the code graph.
+
+### Point your agent at the right source
+
+An agent uses what its instructions file names, such as `CLAUDE.md`. Name the sources and the order to use them in. An example to adapt:
+
+```markdown
+- For questions about documents, search ~/curated/<repo>/staging/ alongside the repo files.
+  Give the staging folder itself as the search path. When the staging copy and the repo
+  disagree, the repo file is current.
+- For questions about callers, dependencies or the effect of a change, run
+  `codegraph explore "<question>"` or `codegraph node <Symbol>` from the repo root,
+  then read the files it lists.
+- A graph result is a pointer, not evidence. Open the file it names and cite the line.
+  Never conclude something does not exist because a graph lacks it.
+- Do not query the graphs by default.
+```
+
+Do not tell the agent to query the graphs first. In the benchmark, that instruction cost about a quarter more tokens than plain search and produced the most false claims.
+
+### Reading results
+
+- Cite the file and line, never the graph. A graph summary can be linked to the wrong document.
+- Check a document's status (proposed, accepted or replaced) before relying on it.
+- When a graph and a file disagree, trust the file. When the curated text and the repo disagree, trust the repo: the curated text reflects the last curation run.
+
+### When the docs graph is worth building
+
+Build or rebuild it when one of these is true:
+
+- Many of your questions are about links between documents.
+- The corpus is too large to search well with text search.
+- A test on your own questions shows it beats the curated text by a clear margin.
+
+Otherwise, keep curating and keep the code graph synced, and skip the docs graph. Curation and `codegraph sync` cost little; a docs-graph build costs far more in tokens.
+
+### Background: the benchmark (skip if you only need the practice)
+
+The advice above comes from a benchmark of 18 developer questions about one real repo, asked in several setups with three runs each. A separate model graded every answer without knowing the setup, and a second agent rechecked every flagged false claim against the sources.
+
+- Sessions that could search the curated text scored highest. Most of the gain came from Office and PDF files that became searchable text.
+- The docs graph built from that same text added no gain. Once the agent's instructions pointed to the curated text, agents stopped using the docs graph and lost no quality.
+- An instruction to query the graphs first cost the most tokens and produced the most false claims, because the agent queried the graph and then read the files anyway.
+- The code graph helped on questions about callers and change impact, and refreshing it costs no model tokens.
+
+These results come from one repo of moderate size, where text search reaches everything quickly. A larger or less familiar repo, or questions that depend more on links between documents, could change them.
+
 ## Curating another repo only as far as you need
 
 Sometimes your repo can only answer a question with facts from another repo. Curating all of that repo costs a lot, so kg does it in a narrow way:
