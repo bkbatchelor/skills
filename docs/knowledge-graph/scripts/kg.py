@@ -30,6 +30,7 @@ knowledge-graph skill, which calls these subcommands around them.
                                  apply, finish, status, prune
   kg restore [<timestamp>]       put a snapshot back (latest by default)
   kg all                         run every scripted step up to the next one that needs a person
+                                 (with graph.refresh: on_request, stop after apply and sync the code graph)
   kg install-shim                write ~/.local/bin/kg
 
 The repo is the git toplevel of the current directory unless --repo is given. Docs steps
@@ -112,6 +113,9 @@ carry_forward:
   subset_max_members: 25     # a cluster that only lost members inherits the verdict of an old one this small
 
 graph:
+  refresh: always            # always: `kg all` and `kg status` lead on to the docs-graph run after apply.
+                             # on_request: a routine refresh stops after apply (and `kg all` syncs the code
+                             # graph); run `kg graph prepare` only when someone asks for a docs-graph rebuild.
   cost_cap_tokens: 1500000   # an estimate above this needs a separate explicit yes
   agent_overhead_tokens: 60000  # fixed cost per extraction agent, added to the estimate
   citation_ids: [ADR]        # "ADR-005 ..." cited in one chunk is linked to the ADR-005 file's node (kg graph fixups)
@@ -303,6 +307,9 @@ def validate_config(cfg, path):
     gx = (cfg.get("graph") or {}).get("excludes")
     if gx is not None and (not isinstance(gx, list) or not all(isinstance(x, str) and x.strip() for x in gx)):
         die(f"{path}: graph.excludes must be a list of gitignore-style patterns (relative to staging/)")
+    rf = (cfg.get("graph") or {}).get("refresh")
+    if rf is not None and rf not in GRAPH_REFRESH:
+        die(f"{path}: graph.refresh must be one of: {', '.join(GRAPH_REFRESH)}")
     ci = (cfg.get("graph") or {}).get("citation_ids")
     if ci is not None and (not isinstance(ci, list) or not all(isinstance(x, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", x) for x in ci)):
         die(f"{path}: graph.citation_ids must be a list of identifier prefixes such as ADR or NCCM")
@@ -2372,6 +2379,14 @@ def cmd_install_shim(args):
     return 0
 
 
+GRAPH_REFRESH = ("always", "on_request")
+
+
+def graph_on_request(ctx):
+    """True when kg.yaml says the docs graph is rebuilt only when someone asks (graph.refresh: on_request)."""
+    return ctx.get("graph", "refresh", default="always") == "on_request"
+
+
 def next_step(ctx):
     """What the pipeline needs next, as (who, what)."""
     st = read_json(ctx.kgdir / "state.json", {})
@@ -2394,6 +2409,8 @@ def next_step(ctx):
         return ("kg", "apply")
     if (ctx.kgdir / "graph-plan.json").exists():
         return ("skill", "graphify run in progress (plan exists): ask, run graphify, kg graph check/labels/finish")
+    if graph_on_request(ctx) and (st.get("graphed_head") != head or st.get("graph_pending")):
+        return ("none", "up to date (docs graph on request: run `kg graph prepare` only when asked)")
     if st.get("graphed_head") != head:
         return ("kg", "graph prepare")
     if st.get("graph_pending"):
@@ -2415,6 +2432,8 @@ def cmd_status(args):
         print(f"{label:8} {(h or '-')[:10]} at {kst.get(key.replace('head', 'at'), '-')}{drift}")
     if kst.get("graph_pending"):
         print(f"queued   {len(kst['graph_pending'])} changed file(s) not yet extracted into the graph")
+    if graph_on_request(ctx):
+        print("refresh  docs graph on request (graph.refresh: on_request); routine runs stop after apply")
     rs = review_state(ctx)
     if rs["needs_labels"] or rs["labels_unapplied"]:
         print(f"classify {len(rs['needs_labels'])} batch(es) need labels, {len(rs['labels_unapplied'])} labelled and not yet applied")
@@ -2438,6 +2457,11 @@ def cmd_all(args):
         die("preflight failed; fix the problems above first")
     for _ in range(4):
         who, what = next_step(ctx)
+        if who == "none" and graph_on_request(ctx) and not args.dry_run and (ctx.repo / ".codegraph").is_dir():
+            print("all: docs graph is on request; syncing the code graph instead")
+            rc = cmd_code(args)
+            if rc:
+                return rc
         if who != "kg":
             print(f"all: stopping before '{what}'" + (" (needs a person)" if who == "skill" else ""))
             return 0 if who == "none" else EXIT_REVIEW

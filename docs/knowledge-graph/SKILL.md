@@ -2,7 +2,7 @@
 name: knowledge-graph
 description: Runs the repeatable knowledge-graph pipeline for a repository: curates its docs with docs-curator, builds or updates the docs graph with graphify, and syncs the code graph with codegraph, through one `kg` script that holds every workaround and safety check (branch and clean-tree gate, PHI hard stop, snapshots and restore, verdict and community-label carry-forward, node-loss check, token-cost estimate). Use when the user wants to rebuild, refresh, update or check the status of a repo's knowledge graphs, set one up for a new repo, or restore a previous graph, e.g. "refresh the graphs", "update the docs graph after the merge", "kg status", "set up the knowledge graph for this repo". Also curates another repo selectively, only as far as the primary repo's unanswered goal questions need (`kg needs`, `kg external`). Skip for a one-off question answered from an existing graph (use graphify query or code-graph), for curating a folder that is not a git repo (use docs-curator directly), and for querying another repo's read-only graph.
 metadata:
-  version: 1.6.3
+  version: 1.7.0
 ---
 
 # Knowledge Graph
@@ -41,7 +41,11 @@ Commits to the curated folder's own git repo are the user's to make. Mention unc
 
 Start with `kg status`. It shows the gate, drift since the last curate and graph, pending reviews, PHI findings, backups, and the **next** step.
 
-`kg all` runs the scripted steps in order and stops before the first one that needs a person. The full sequence:
+`kg all` runs the scripted steps in order and stops before the first one that needs a person.
+
+With `graph.refresh: on_request` in `kg.yaml`, a routine run stops after `kg apply`: `kg status` reports "up to date" and `kg all` syncs the code graph instead of moving on to the docs graph. Run `kg graph prepare` (steps 4 to 7) only when the user asks for a docs-graph rebuild in that turn. The default, `always`, leads on to the docs graph as below. See "When the docs graph pays" for when to choose which.
+
+The full sequence:
 
 1. **`kg curate`**: takes a snapshot, regenerates the overrides, runs docs-curator `update` (or `analyze` the first time) with each PHI glob as `--no-extract` so PHI text is never extracted, purges any PHI text left in the cache, carries verdicts forward, and archives stale ones. Exit 3 means a person is needed: classifier batches waiting for labels (below), or clusters waiting for review.
    - A cluster that only **lost** members keeps the old verdict, marked done, when the old cluster had at most `carry_forward.subset_max_members` (default 25) members and its verdict was not a partial read. Larger or partly read clusters come back for a full review, because a shallow review must not be inherited by every piece a large cluster splits into.
@@ -70,6 +74,22 @@ Start with `kg status`. It shows the gate, drift since the last curate and graph
    - **At Step 5 (labels)**, run `kg graph labels` and start `LABELS_DICT` from `carried` in `.kg/labels-proposed.json`. Name only the communities under `needs_name`, keeping labels unique. A community is carried only if at least `label_min_known` of its members had a label before, so a community made mostly of new material always gets a fresh name.
 7. **`kg graph finish`**: checks the new graph for PHI, records the run, and prunes old snapshots. Report the node, edge and community counts and the query line.
 8. **`kg code`**: runs `codegraph sync`. It works on any branch, because the code index follows the current checkout.
+
+## When the docs graph pays
+
+A benchmark on a real repository (18 developer questions, several setups, three runs each, graded blind, with false claims rechecked against the sources) found:
+
+- **The curated text did the work.** Sessions that could search `~/curated/<repo>/staging/` scored highest, mostly because Word, Excel, PDF and PowerPoint files become searchable text. The docs graph built from that same text added nothing on top, and its build cost several times the curation reviews.
+- **With a pointer to the curated text in the agent instructions, agents left the docs graph alone**, and lost no quality.
+- **A "query the graphs first" instruction made things worse:** about a quarter more tokens than plain search and the most false claims, because the agent queried the graph and then read the files anyway. A graph summary linked to the wrong document produced a wrong citation.
+- **The code graph helped on its own kind of question** (callers and change impact) and costs no model tokens to refresh.
+
+So:
+
+- Point agents at the staging folder for document questions, and at the code graph for callers and change impact. Never add a rule to query the graphs first.
+- Treat any graph result as a pointer: open the file it names and cite the line, not the graph. Never conclude something is absent because a graph lacks it; search for the exact identifier.
+- Consider `graph.refresh: on_request` once agents are pointed at the curated text. Keep curation and `kg code` running after merges.
+- A docs graph earns its cost when many questions are about links between documents (paths, citations, groups), or when the corpus is too large to search well. Before relying on it, test that on your own questions.
 
 ## Gating
 

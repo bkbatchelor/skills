@@ -590,6 +590,49 @@ def test_next_step_reports_queued_files(env, monkeypatch):
     assert who == "kg" and what.startswith("graph prepare") and "1 changed file(s) still queued" in what
 
 
+def staged_and_curated(ctx):
+    head = kg.git(ctx.repo, "rev-parse", "HEAD")
+    ctx.work.mkdir(parents=True, exist_ok=True)
+    kg.write_json(ctx.work / "analysis.json", {"files": [], "clusters": []})
+    (ctx.work / "decisions.jsonl").write_text("")
+    (ctx.out / "staging").mkdir(exist_ok=True)
+    kg.write_json(ctx.kgdir / "state.json", {"curated_head": head})
+
+
+def test_graph_refresh_on_request_stops_after_apply(env):
+    ctx = env.ctx()
+    staged_and_curated(ctx)
+    assert kg.next_step(ctx) == ("kg", "graph prepare")  # default: always
+    cfg = (env.out / "kg.yaml").read_text().replace("refresh: always", "refresh: on_request")
+    (env.out / "kg.yaml").write_text(cfg)
+    ctx = env.ctx()
+    who, what = kg.next_step(ctx)
+    assert who == "none" and "on request" in what
+    st = kg.read_json(ctx.kgdir / "state.json")
+    kg.write_json(ctx.kgdir / "state.json", {**st, "graphed_head": st["curated_head"], "graph_pending": ["docs/q.md"]})
+    assert kg.next_step(ctx)[0] == "none"
+    kg.write_json(ctx.kgdir / "graph-plan.json", {"snapshot": "x"})  # an asked-for run in progress still shows
+    assert kg.next_step(ctx)[0] == "skill"
+
+
+def test_all_on_request_syncs_code_graph(env, monkeypatch):
+    ctx = env.ctx()
+    staged_and_curated(ctx)
+    (env.out / "kg.yaml").write_text((env.out / "kg.yaml").read_text().replace("refresh: always", "refresh: on_request"))
+    (env.repo / ".codegraph").mkdir()
+    calls = []
+    monkeypatch.setattr(kg, "cmd_preflight", lambda a: 0)
+    monkeypatch.setattr(kg, "cmd_code", lambda a: calls.append("code") or 0)
+    rc = kg.cmd_all(argparse.Namespace(repo=str(env.repo), dry_run=False, allow_any_branch=False))
+    assert rc == 0 and calls == ["code"]
+
+
+def test_graph_refresh_rejects_unknown_value(env):
+    (env.out / "kg.yaml").write_text((env.out / "kg.yaml").read_text().replace("refresh: always", "refresh: weekly"))
+    with pytest.raises(SystemExit):
+        env.ctx()
+
+
 def test_estimate_counts_long_files(env, monkeypatch):
     ctx = env.ctx()
     st = ctx.out / "staging/docs"
