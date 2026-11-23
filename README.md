@@ -256,7 +256,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | page-testing-memory | 1.1.0 | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
 | browser-qa | 1.0.0 | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
 | plain-english-docs | 1.0.0 | Writes human-facing documentation in plain English: one documentation mode per section, terms defined where they first appear, steps as commands, failure coverage, a growing agent-English ban list, and a self-check with a script for em dashes and ban-list hits | `SKILL.md`, `README.md`, `banned-words.md`, `scripts/check.py` |
-| visible-delegation | 1.0.4 | Delegates work to another agent session in a watchable herdr pane | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/watch.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| visible-delegation | 2.0.0 | Delegates work to another agent session as a supervised Orca worker in a watchable terminal tab, then verifies it | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/status.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
 
 ---
 
@@ -772,27 +772,27 @@ python3 docs/plain-english-docs/scripts/check.py path/to/draft.md   # exit 0 whe
 
 ---
 
-Delegates a bounded task to another coding-agent session (Claude Code or opencode) running in a [herdr](https://herdr.dev) pane the user can watch. Inside herdr, the delegate gets a sibling pane in the supervisor's tab; outside herdr, it gets a workspace in a dedicated `delegates` session the user attaches to with `herdr session attach delegates`. The supervising agent launches, monitors, verifies, and cleans up the delegate.
+Delegates a bounded task to another coding-agent session (Claude Code or opencode) running in an Orca terminal tab the user can watch. The delegate is a supervised Orca worker: Orca wakes the supervising agent when it reports, asks a question, waits on an approval only a person can answer, or exits. The supervising agent launches, steers by Orca mail, verifies, and cleans up the delegate; the user answers the delegate's approval dialogs.
 
 **Key Components:**
-- `SKILL.md`: Skill definition with supervision workflow, approval policy, and reporting format
+- `SKILL.md`: Skill definition with supervision workflow, wake handling, approval policy, and reporting format
 - `references/delegate-addendum.md`: Supervision instructions appended to the delegate's goal prompt
-- `scripts/lib.sh`: Shared helpers sourced by the other scripts (run metadata, agent status, screen reading, event context)
-- `scripts/launch.sh`: Creates the pane, starts the agent with `herdr agent start`, and submits the goal prompt with `herdr agent prompt` (adds destructive-command deny rules and a fixed session id for Claude)
-- `scripts/watch.sh`: Background watcher that blocks on `herdr agent wait` and reports completion, prompts, risky commands, idling, heartbeats, and a vanished agent
-- `scripts/say.sh`: Sends messages, files, or keys to the delegate through herdr
-- `scripts/cleanup.sh`: Saves the screen and Claude transcript, exits the agent, closes its pane or workspace, and stops the delegates session when empty
+- `scripts/lib.sh`: Shared helpers sourced by the other scripts (run metadata, current Dispatch, worker state, screen reading, transcript path)
+- `scripts/launch.sh`: Opens a terminal tab in the workdir's Orca workspace, starts the agent (adds destructive-command deny rules, pre-approves Orca mail commands and a fixed session id for Claude), and assigns the goal with `orca orchestration worker-start --terminal`
+- `scripts/status.sh`: One-shot check of worker state, a pending person-only prompt, the screen, git status, and risky commands from Claude's transcript
+- `scripts/say.sh`: Sends the delegate a message (or a follow-up task) through Orca mail
+- `scripts/cleanup.sh`: Saves the screen and Claude transcript and closes the delegate's terminal; refuses while its task is open unless forced, then stops the worker first
 
 **Requirements:**
-- `herdr`: Terminal workspace manager that hosts the delegate
-- `jq`: Parses herdr's JSON output
+- Orca and its CLI (`ORCA_CLI_COMMAND` or `orca`)
+- `jq`: Parses Orca's JSON output
 
 **Features:**
-- Visible execution in a `deleg-<slug>` herdr pane, never a hidden background run
+- Visible execution in a `deleg-<slug>` Orca terminal tab, never a hidden background run
 - Supports Claude Code (default) and opencode delegates
-- Monitoring with clear intervene-vs-wait rules and an approval policy for delegate prompts
+- No polling: Orca wakes the supervisor, with clear intervene-vs-wait rules and an approval policy for the user
 - Independently re-runs every verification gate before reporting results
-- Refuses to close a session while the user is attached unless forced
+- Closes only the terminal it created; refuses to close an unfinished task unless forced
 
 ---
 
