@@ -252,7 +252,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 |-------|---------|-------------|-----------|
 | commit-staged-changes | 1.0.4 | Commits staged changes using conventional commit format | `SKILL.md`, `README.md`, `references/git-commit-template.md` |
 | generate-readme | 1.1.2 | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `README.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
-| goal-prompt-generator | 1.0.4 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
+| goal-prompt-generator | 1.0.6 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
 | current-info-search | 1.0.3 | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `README.md`, `config.env`, `scripts/search.py` |
 | media-transcription | 1.0.3 | Transcribes audio/video into a Markdown transcript, word timestamps, speakers, chapters, and captions with Gemini 3.5 Transcribe | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `references/format.md`, `scripts/transcribe.py` |
 | image-gateway | 1.0.4 | Generates or edits images with Google's Gemini API (Nano Banana Pro) using saved defaults | `SKILL.md`, `README.md`, `config.env`, `references/api.md`, `scripts/generate.sh` |
