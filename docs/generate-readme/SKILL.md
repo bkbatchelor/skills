@@ -1,13 +1,24 @@
 ---
 name: generate-readme
-description: Generates or updates a project's README.md at BASIC, STANDARD, or ADVANCE fidelity, with Mermaid diagrams at ADVANCE, backing up any existing README and respecting .gitignore. Use whenever the user asks to write, create, generate, draft, refresh, rewrite, or update a README, or says a repo "needs a README" or "project docs", even without naming a fidelity level. Not for API reference sites, changelogs, or tweaking one section of an existing README (edit it directly). Hand SVG output of diagrams to mermaid-to-image and banner or hero images to image-gateway.
+description: Writes or updates a project README.md at BASIC, STANDARD or ADVANCE level. Use when asked to write, refresh or rewrite a README or project docs. Not for changelogs, API sites or one-section edits.
 metadata:
-  version: 1.1.1
+  version: 1.1.2
+  author: Brian Batchelor
+  tags: [readme, documentation, mermaid, markdown]
 ---
 
 # Generate README Skill
 
 Writes `README.md` at one of three fidelity levels. Every statement in the output must come from a file you read in this project. All diagrams use Mermaid.
+
+## Purpose
+
+Produce an accurate README for any repository by reading its real files, at the depth the user asks for. Hand diagram images to `mermaid-to-image` and banner images to `image-gateway`.
+
+## Prerequisites
+
+- Read access to the project files. Git is optional but gives the best `.gitignore` handling and backup decisions.
+- Optional: `mmdc` (mermaid-cli) to render and validate Mermaid blocks. Without it, check syntax by eye.
 
 ## Triggers
 
@@ -65,3 +76,35 @@ Keep each diagram to 15 nodes or fewer, with descriptive labels.
 - Mermaid is the only diagram format.
 - No secrets (keys, passwords, tokens) in the output.
 - No invented content: if you did not read it, do not write it.
+
+## Example
+
+User: "Write a full README with diagrams for this repo."
+
+```text
+level: ADVANCE
+backup: none (README.md tracked and clean)
+verify: npm scripts and paths confirmed
+write: README.md
+```
+
+1. Level is ADVANCE ("full ... with diagrams").
+2. Read `package.json`, `LICENSE`, `.github/workflows/`, and the `git ls-files` listing.
+3. `README.md` is tracked and clean, so skip the backup. Draft from `references/advance-level-template.md`, and draw one `graph TD` of the real modules.
+4. Confirm each `npm run` script and path exists, then write `README.md`.
+5. Report: "ADVANCE, no backup needed, 1 TODO marker left."
+
+## Limitations
+
+- Writes only `README.md`. It does not produce API reference sites, changelogs or image files.
+- Output is only as complete as the files it can read. Sections with no source content are dropped, not guessed.
+- Mermaid is checked by `mmdc` only when installed; otherwise by eye.
+
+## Troubleshooting
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| A command in the draft is missing from the README | It could not be confirmed in a manifest or Makefile | Add the script to the project, or keep the `<!-- TODO: verify -->` marker and tell the user |
+| Mermaid block does not render | Syntax error or more than 15 nodes | Run `mmdc -i diagram.mmd -o /dev/null`, fix the error, split the diagram |
+| Old README was lost | It was untracked or uncommitted and no backup was made | Look for `README.{n}.md` in the project root; git cannot recover untracked files |
+| README lists ignored files | `.gitignore` was not applied | Rebuild the file list with `git ls-files --cached --others --exclude-standard` |
