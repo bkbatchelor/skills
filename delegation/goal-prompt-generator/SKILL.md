@@ -3,7 +3,7 @@ name: goal-prompt-generator
 description: >-
   Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously and be checked against: objective, definition of done, repo constraints, verification gates, and stop conditions. Use whenever the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, write a prompt for a subagent, cloud agent, or worktree session, or says "turn this plan into something another Claude can run" or "make this a task I can kick off later", even without saying "goal prompt". Only writes the prompt; to launch a watched delegate use visible-delegation.
 metadata:
-  version: 1.0.5
+  version: 1.0.6
 ---
 
 # Goal Prompt Generator
@@ -50,7 +50,7 @@ Every goal prompt uses the structure in `references/goal-prompt-template.md`. Re
 
 Guidance on the sections that are easiest to get wrong:
 
-**Definition of Done.** Every item must be a statement someone can check true/false by running a command or looking at a specific place — no judgment calls. "Error handling is robust" is not checkable; "`parseConfig()` in `src/config.ts` throws `ConfigError` when `port` is missing, covered by a test in `tests/config.test.ts`" is. Include the negative space when it matters ("no changes to the public API of `lib/index.ts`"). If an item can't be made checkable, it probably hides an undecided design question — resolve it with the user.
+**Definition of Done.** Every item must be a statement someone can check true/false by running a command or looking at a specific place — no judgment calls. "Error handling is robust" is not checkable; "`parseConfig()` in the config module throws `ConfigError` when `port` is missing, covered by a test in the config test file" is. Include the negative space when it matters ("no changes to the public API of the library entry point"). If an item can't be made checkable, it probably hides an undecided design question — resolve it with the user.
 
 **Repo Constraints.** List allowed areas as concrete paths or globs. List forbidden areas explicitly — lockfiles, generated code, migrations, CI config, vendored code, unrelated modules the agent might be tempted to "clean up". Say whether new dependencies are allowed (default: no).
 
