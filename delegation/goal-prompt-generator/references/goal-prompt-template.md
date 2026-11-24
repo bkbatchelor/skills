@@ -26,7 +26,7 @@ A reader should know after this paragraph what success means.>
 
 ## Definition of Done
 
-All of the following must be true. Each item is checkable without judgment.
+All of the following must be true. Each item can be checked true or false by running a command or inspecting a specific place.
 
 - [ ] <Verifiable statement — e.g. "`src/foo.ts` exports `bar(x: string): number`">
 - [ ] <Verifiable statement — e.g. "`tests/foo.test.ts` has a test for the empty-input case, and it passes">
