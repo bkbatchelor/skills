@@ -210,6 +210,19 @@ skills/
 │   └── browser-qa/               # Chrome DevTools MCP browser QA with evidence rule
 │       ├── SKILL.md              # Skill definition
 │       └── README.md             # Install and coverage
+├── jira/                     # Jira Cloud skills (Playwright, saved browser login)
+│   ├── jira-archive/             # Archive an issue to a local folder
+│   │   ├── SKILL.md              # Skill definition
+│   │   ├── README.md             # Install, usage, output layout
+│   │   └── scripts/              # Helper scripts
+│   │       └── archive.mjs
+│   └── jira-comment/             # Post one confirmed comment to an issue
+│       ├── SKILL.md              # Skill definition
+│       ├── README.md             # Install, usage, failure handling
+│       ├── templates/            # Comment templates
+│       │   └── bug-resolution.md
+│       └── scripts/              # Helper scripts
+│           └── comment.mjs
 └── delegation/               # Agent delegation skills
     ├── goal-prompt-generator/    # Goal prompt generation skill
     │   ├── SKILL.md              # Skill definition
@@ -257,6 +270,8 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | browser-qa | 1.0.0 | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
 | plain-english-docs | 1.0.0 | Writes human-facing documentation in plain English: one documentation mode per section, terms defined where they first appear, steps as commands, failure coverage, a growing agent-English ban list, and a self-check with a script for em dashes and ban-list hits | `SKILL.md`, `README.md`, `banned-words.md`, `scripts/check.py` |
 | visible-delegation | 2.0.0 | Delegates work to another agent session as a supervised Orca worker in a watchable terminal tab, then verifies it | `SKILL.md`, `README.md`, `references/delegate-addendum.md`, `scripts/lib.sh`, `scripts/launch.sh`, `scripts/status.sh`, `scripts/say.sh`, `scripts/cleanup.sh` |
+| jira-archive | 1.0.0 | Archives Jira Cloud issues to local folders (fields, comments, history, raw JSON, validation report, attachments) through Playwright and a saved browser login, with no API token; read-only | `SKILL.md`, `README.md`, `scripts/archive.mjs` |
+| jira-comment | 1.0.0 | Posts one comment to a Jira Cloud issue through the jira-archive browser login: verifies the issue, confirms the exact text, posts, then reads it back and compares | `SKILL.md`, `README.md`, `templates/bug-resolution.md`, `scripts/comment.mjs` |
 
 ---
 
@@ -793,6 +808,56 @@ Delegates a bounded task to another coding-agent session (Claude Code or opencod
 - No polling: Orca wakes the supervisor, with clear intervene-vs-wait rules and an approval policy for the user
 - Independently re-runs every verification gate before reporting results
 - Closes only the terminal it created; refuses to close an unfinished task unless forced
+
+#### jira-archive
+
+---
+
+Archives one or more Jira Cloud issues to `<KEY>/` folders. It reads Jira's REST API inside an authenticated Playwright browser context, so it needs no API token and never sees the password.
+
+**Key Components:**
+- `SKILL.md`: Inputs, steps, exit codes, output layout and rules (untrusted ticket content, profile secrecy, read-only)
+- `scripts/archive.mjs`: Login flow, paged fetch of the issue, comments and changelog, ADF-to-Markdown conversion, attachment download and the validation report
+
+**Requirements:**
+- Node.js and Playwright (`npm i -g playwright && npx playwright install chromium`); falls back to the system Edge, then Chrome
+- A Jira Cloud site you can sign in to
+
+**Features:**
+- Batch of keys with one login; existing folders skipped unless `--force`
+- First run opens a headed browser for a manual sign-in (SSO/MFA); the login is kept in `~/.config/jira-archive/edge-profile`
+- `issue.md`, `comments.md`, `history.md`, raw `issue.json`, `validation.md` and `attachments/`
+- DOM text fallback only when the API returns 401 or 403, reported in `validation.md`
+
+**Usage:**
+```bash
+ln -s "$PWD/jira/jira-archive" ~/.claude/skills/jira-archive
+```
+
+#### jira-comment
+
+---
+
+Posts one comment to a Jira Cloud issue by key or URL, reusing the jira-archive browser login. Posting is visible to others, so the skill verifies the issue, confirms the exact text with the user, and reads the comment back after posting.
+
+**Key Components:**
+- `SKILL.md`: Inputs, steps (verify, confirm, post, report), exit codes and rules
+- `scripts/comment.mjs`: `verify` and `post` modes, Markdown-to-ADF conversion, same-origin POST (passes Jira's XSRF check) and read-back comparison
+- `templates/bug-resolution.md`: Four-section format for comments that report how a bug was fixed
+
+**Requirements:**
+- Node.js and Playwright, as for jira-archive
+- `plain-english-docs` for writing the comment text
+
+**Features:**
+- `--expect` stops the post unless the issue title contains the given text
+- Clear "comment NOT posted" reporting; exit 12 flags a post whose read-back differs, so it is not posted twice
+- One comment per run; never edits or deletes comments
+
+**Usage:**
+```bash
+ln -s "$PWD/jira/jira-comment" ~/.claude/skills/jira-comment
+```
 
 ---
 
