@@ -1,6 +1,6 @@
 # STANDARD Level Template
 
-Everything in [BASIC](basic-level-template.md), plus the sections below. Include a section only if the project has real content for it.
+Everything in BASIC (`basic-level-template.md`), plus the sections below. Include a section only if the project has real content for it.
 
 ## Added sections
 

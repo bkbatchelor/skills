@@ -1,6 +1,6 @@
 # ADVANCE Level Template
 
-Everything in [STANDARD](standard-level-template.md), plus the sections below. Include a section only if the project has real content for it. Diagram rules are in SKILL.md: draw only what the code supports, at most 15 nodes, every node a real file, module or service.
+Everything in STANDARD (`standard-level-template.md`), plus the sections below. Include a section only if the project has real content for it. Diagram rules are in SKILL.md: draw only what the code supports, at most 15 nodes, every node a real file, module or service.
 
 ## Added sections
 
