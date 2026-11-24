@@ -1,9 +1,10 @@
 ---
 name: goal-prompt-generator
 description: >-
-  Turns an implementation plan or task description into a bounded, self-contained goal prompt that a fresh agent session can execute autonomously and be checked against: objective, definition of done, repo constraints, verification gates, and stop conditions. Use whenever the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, write a prompt for a subagent, cloud agent, or worktree session, or says "turn this plan into something another Claude can run" or "make this a task I can kick off later", even without saying "goal prompt". Only writes the prompt; to launch a watched delegate use visible-delegation.
+  Use when handing a plan or task to another agent session: writes a bounded goal prompt with done criteria, constraints, gates, stop conditions. Prompt only; to launch, use visible-delegation.
 metadata:
-  version: 1.0.6
+  author: Brian Batchelor
+  version: 1.0.7
 ---
 
 # Goal Prompt Generator
@@ -20,7 +21,7 @@ Skip when:
 - The user wants the task done in this session.
 - They want a delegate launched and watched. Use `visible-delegation`, which calls for a goal prompt first.
 
-## Workflow
+## Instructions
 
 ### 1. Pin down the source
 
@@ -97,3 +98,30 @@ If either question gets a "no", fix the prompt before delivering — don't deliv
 Output the goal prompt in a single fenced markdown block so it can be copied whole. Before the block, add at most two or three lines for the user: anything you assumed, the baseline state you observed, or an open question you'd like them to confirm. If the user asks for a file, write it where they say (otherwise suggest a path like `<repo>/.goals/<slug>.md` and confirm before writing into the repo).
 
 Don't start executing the task yourself — packaging it is the job.
+
+## Examples
+
+**Vague request, ask first.** The user says "hand off the auth cleanup". The plan has no checkable outcome, so ask the one or two questions that pin it down (which module, what counts as finished) before drafting.
+
+**Clear request, deliver the prompt.** The user says "package the plan to add a `--dry-run` flag to the export command so a background session can do it". After checking the repo, reply with a short note and one fenced block:
+
+> Assumed the flag is CLI-only. Baseline: the test suite passes (42 tests).
+
+```markdown
+## Objective
+Add a `--dry-run` flag to the `export` command that prints what would be written and writes nothing.
+
+## Definition of Done
+- [ ] `export --dry-run` exits 0 and creates no files.
+- [ ] A test covers the flag and passes.
+- [ ] No changes outside the export command and its tests.
+
+## Verification Gates
+1. `npm test` from the repo root: exit 0, 43 tests pass.
+
+## Stop Conditions
+- The export command does not exist where the plan says it does.
+- Three fix attempts fail on the same gate.
+```
+
+The real prompt also fills in Background, Repo Constraints and Completion Report from `references/goal-prompt-template.md`.
