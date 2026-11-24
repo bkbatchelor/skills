@@ -4,3 +4,7 @@ __pycache__/
 
 # Graphify output (a directory, or the symlink that docs-curator creates)
 graphify-out
+
+# SkillEvaluator reports
+reports/
+delegation/goal-prompt-generator-reports/
