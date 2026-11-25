@@ -2,7 +2,7 @@
 name: media-transcription
 description: Transcribes a local audio or video file into a transcription package (Markdown transcript, word-level timestamp JSON, speaker labels, chapters, SRT/VTT captions) with Gemini 3.5 Transcribe and ffmpeg. Use whenever the user gives a media file (mp3, wav, m4a, flac, ogg, mp4, mov, mkv, webm, a voice memo, podcast, meeting or Zoom recording, interview, lecture) and asks for a transcript, captions, subtitles, chapters, timestamps, "who said what", meeting notes or a summary that needs the words first, or to make it searchable. Also use when another skill needs the words or timings of a recording; read the package instead of calling a speech API. Not for live dictation, text-to-speech, or files that already have a transcript package next to them.
 metadata:
-  version: 1.0.4
+  version: 1.0.5
 ---
 
 # Media Transcription
@@ -84,7 +84,7 @@ Summary line on success:
 
 ## How to handle a request
 
-1. **Run it once** on the path the user gave. Don't ask them to confirm routine runs. A minute of audio costs about half a cent, so an hour costs about $0.30. Mention the estimate before running anything over 2 hours or a batch of files. Add `-l` only when the user names the language or the audio clearly isn't in the language auto-detection would guess.
+1. **Run it once** on the path the user gave. Don't ask them to confirm routine runs. A minute of audio costs about half a cent, so an hour costs about 30 cents. Mention the estimate before running anything over 2 hours or a batch of files. Add `-l` only when the user names the language or the audio clearly isn't in the language auto-detection would guess.
 2. **Name the speakers if you can.** The API labels speakers by voice, not by name. Read the start of `<stem>.transcript.md`. If the conversation makes names obvious ("Thanks, Sam"), or the user tells you them, run `--rerender --speakers 'S1=…,S2=…'`. That's free, and it updates every file. If you're guessing, tell the user who you think S1 and S2 are rather than applying names silently.
 3. **Answer what they asked.** For a transcript, give the path to the `.md` and a short excerpt or summary. For captions, give the `.srt`/`.vtt` paths. For chapters, give the chapter list with timestamps. For "searchable", point to `words.json` for exact timestamps and the `.md` for grep and reading. Always give the package folder path.
 4. **Surface warnings.** If `warnings` is non-empty, say so: speakers may swap where long media was split, or chapter generation failed and can be retried with `--rerender --rechapter`.

@@ -2,7 +2,7 @@
 name: image-gateway
 description: Generates or edits raster images through Google's Gemini API (Nano Banana Pro) with one command and saved defaults. Use whenever the user asks to generate, create, draw, render, illustrate, or make an image, picture, photo, icon, logo, banner, hero image, thumbnail, mockup, sticker, wallpaper, or artwork, or to edit, restyle, recolor, extend, or remove things from an existing image. Also use when another skill (slides, READMEs, docs, websites, social posts) needs a raster image, instead of writing its own image API code. Not for charts, diagrams, or SVG drawn from code (render those directly; use mermaid-to-image for Mermaid).
 metadata:
-  version: 1.0.5
+  version: 1.0.6
 ---
 
 # Image Gateway
@@ -84,7 +84,7 @@ $G -m gemini-nano-banana-2.1 "rough storyboard frame: a kid finding a map in an 
 
 1. **Write a good prompt.** Expand a short request into a concrete description covering the subject, setting, style or medium, lighting, composition, and any exact text to render (in quotes). For edits, say what changes *and* what must stay the same. Don't ask the user to approve the prompt for routine requests. Just generate.
 2. **Pick the flags only when they matter.** Without `-a`, the model chooses the shape: Pro returned a landscape 1408×768 for a scene prompt in testing. Output is **JPEG by default**. Pass `-f png` (or an `-o` path ending in `.png`) when the user needs lossless output or will edit the image further. Pass `-a 1:1` for icons and avatars, `-a 9:16` for phone screens, and `-a 16:9` for slides and heroes. On Pro, 2K costs the same as 1K, so use `-r 2K` for anything that will be displayed large. If the user names a file or the image belongs to a project, use `-o` with that path. Otherwise leave the default folder.
-3. **Run it once.** Each Pro image costs about $0.14, so don't make extra variations unless asked, and mention the total before running a batch (`-c 4` ≈ $0.55). Never loop on retries yourself: the script already retries 429/5xx errors with backoff and falls back once.
+3. **Run it once.** Each Pro image costs about 14 cents, so don't make extra variations unless asked, and mention the total before running a batch (`-c 4` ≈ 55 cents). Never loop on retries yourself: the script already retries 429/5xx errors with backoff and falls back once.
 4. **Look at the result.** Open the file with your image-reading tool and check it matches the request (subject, text spelling, aspect ratio). If something is clearly wrong, say what's off and offer one re-run with a tightened prompt rather than silently spending more.
 5. **Report back** with the file path, the model used, and `cost_usd` (an estimate from token counts). If `fell_back` is true, say Nano Banana 2.1 was used instead of Pro.
 
@@ -94,10 +94,10 @@ These are Google's Standard paid-tier prices, checked 2026-10-19. The API return
 
 | Model | Per image |
 |---|---|
-| **Nano Banana Pro** (default) | **≈ $0.138** at 1K or 2K: $0.134 for the image (1,120 tokens at $120/M) plus ≈ $0.004 for thinking (~180 tokens) and a short caption (~100 tokens) at the text rate. Measured in testing on 2026-10-20. **≈ $0.24** at 4K (2,000 tokens). Each input image adds ≈ $0.001 |
-| Nano Banana 2.1 (fallback) | $0.034 at 1K, $0.050 at 2K, $0.113 at 4K |
+| **Nano Banana Pro** (default) | **≈ 13.8 cents** at 1K or 2K: 13.4 cents for the image (1,120 tokens at 120 USD per million) plus ≈ 0.4 cents for thinking (~180 tokens) and a short caption (~100 tokens) at the text rate. Measured in testing on 2026-10-20. **≈ 24 cents** at 4K (2,000 tokens). Each input image adds ≈ 0.1 cents |
+| Nano Banana 2.1 (fallback) | 3.4 cents at 1K, 5 cents at 2K, 11.3 cents at 4K |
 
-Mention the cost when it's above about $0.25, or when the user asks for several images. For many images at half price, Google's Batch API exists, but this script doesn't use it.
+Mention the cost when it's above about 25 cents, or when the user asks for several images. For many images at half price, Google's Batch API exists, but this script doesn't use it.
 
 ## Known behavior and troubleshooting
 
