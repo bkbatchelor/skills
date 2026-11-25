@@ -59,7 +59,8 @@ skills/
 │   └── post-commit           # Sets skill versions and amends them in
 ├── scripts/
 │   ├── bump-version.sh       # Version bump logic and manual bumps
-│   └── similarity-check.sh   # Tier 2 similarity check over all skills (OpenRouter)
+│   ├── similarity-check.sh   # Tier 2 similarity check over all skills (OpenRouter)
+│   └── harness-check.sh      # Tier 1 harness check (Claude, Copilot; Gemini n/a) for chosen skills
 ├── git/                      # Git workflow skills
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition
@@ -962,6 +963,16 @@ Update the **Version** column in [Available Skills](#available-skills) when a sk
 ```bash
 scripts/similarity-check.sh                    # default report folder
 scripts/similarity-check.sh -o ~/reports/tier2 # another folder, outside the repo
+```
+
+### Checking which agent harnesses load a skill
+
+`scripts/harness-check.sh` runs SkillEvaluator's Tier 1 `harness-check` (advisory, no API key) for Claude Code and GitHub Copilot CLI, then prints a summary table. SkillEvaluator ships no Gemini profile, so Gemini shows as `n/a` and is not checked. Skills can be names or paths, several at once, or `--all`. Per-skill JSON goes to `../skills-reports/harness-check`.
+
+```bash
+scripts/harness-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
+scripts/harness-check.sh --all --strict                      # exit 1 if any skill is dropped or degraded
+scripts/harness-check.sh --all -- --headless                 # flags after -- go to skillevaluator
 ```
 
 ---
