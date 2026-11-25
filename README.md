@@ -58,7 +58,8 @@ skills/
 │   ├── commit-msg            # Validates the message, records a pending bump
 │   └── post-commit           # Sets skill versions and amends them in
 ├── scripts/
-│   └── bump-version.sh       # Version bump logic and manual bumps
+│   ├── bump-version.sh       # Version bump logic and manual bumps
+│   └── similarity-check.sh   # Tier 2 similarity check over all skills (OpenRouter)
 ├── git/                      # Git workflow skills
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition
@@ -953,6 +954,15 @@ scripts/bump-version.sh <skill> <major|minor|patch>   # <skill> is a name or a p
 ```
 
 Update the **Version** column in [Available Skills](#available-skills) when a skill's version changes.
+
+### Checking the collection for duplicates
+
+`scripts/similarity-check.sh` runs `skillevaluator similarity-check` over every skill in the repo with OpenRouter embeddings. It reads the key from `ORCA_OPENROUTER_API_KEY` (or `OPENROUTER_API_KEY`) and never prints it. Reports (CLI, JSON, HTML) go to `../skills-reports/tier2-collection`, because SkillEvaluator rejects a report folder inside the folder it scans.
+
+```bash
+scripts/similarity-check.sh                    # default report folder
+scripts/similarity-check.sh -o ~/reports/tier2 # another folder, outside the repo
+```
 
 ---
 
