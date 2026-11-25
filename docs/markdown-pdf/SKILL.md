@@ -1,8 +1,9 @@
 ---
 name: markdown-pdf
-description: Converts Markdown files to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension "Markdown PDF" (yzane/vscode-markdown-pdf) - syntax highlighting, emoji, task checkboxes, ::: containers, :[x](file.md) includes, KaTeX math, locally drawn Mermaid diagrams, front matter, custom CSS, page size, margins, orientation, page ranges, header and footer templates, PNG/JPEG clip and quality, raw-HTML sanitizing. Use whenever the user asks to convert, export, render or print a Markdown file to PDF, HTML, PNG or JPEG, to make a PDF of a README or doc, or to batch-convert Markdown. Not for Mermaid-only diagram export (use mermaid-to-image), PDF or Office to Markdown (use heavy-file-ingestion), or Word files (use a docx skill).
+description: >-
+  Converts Markdown files to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension "Markdown PDF" (yzane/vscode-markdown-pdf) - syntax highlighting, emoji, task checkboxes, ::: containers, :[x](file.md) includes, KaTeX math, locally drawn Mermaid diagrams, front matter, custom CSS, page size, margins, orientation, page ranges, header and footer templates, PNG/JPEG clip and quality, raw-HTML sanitizing. Use whenever the user asks to convert, export, render or print a Markdown file to PDF, HTML, PNG or JPEG, to make a PDF of a README or doc, or to batch-convert Markdown. Not for Mermaid-only diagram export (use mermaid-to-image), PDF or Office to Markdown (use heavy-file-ingestion), or Word files (use a docx skill).
 metadata:
-  version: 1.0.2
+  version: 1.0.3
 ---
 
 # Markdown to PDF, HTML, PNG, JPEG
