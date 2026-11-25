@@ -4,7 +4,8 @@ description: >-
   Use when handing a plan or task to another agent session: writes a bounded goal prompt with done criteria, constraints, gates, stop conditions. Prompt only; to launch, use visible-delegation.
 metadata:
   author: Brian Batchelor
-  version: 1.0.7
+  version: 1.0.8
+  tags: [delegation, handoff, prompt-writing, autonomous-agents]
 ---
 
 # Goal Prompt Generator
@@ -13,9 +14,19 @@ Convert a plan or task into a **goal prompt**: a document another agent session 
 
 The receiving session has **none of this conversation's context**. It cannot see the plan you discussed, the files you read, the decisions you made, or what "the bug" refers to. Everything it needs must be in the prompt. Everything the user needs to check the result must be in the prompt too.
 
+## Purpose
+
+A goal prompt lets one agent session hand work to another and lets the user grade the result without re-reading the plan. This skill writes that prompt and nothing else.
+
+## Prerequisites
+
+- Read access to the target repository, so paths and commands can be checked before they go into the prompt.
+- A plan or task to package: an earlier plan in the conversation, a plan file, an issue, or a description the user gives.
+- `references/goal-prompt-template.md`, which holds the required structure.
+
 ## Triggers
 
-Use when the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, or write a prompt for a subagent, cloud agent, or worktree session. Also use for "turn this plan into something another Claude can run" or "make this a task I can kick off later".
+Use when the user asks to package work for another session or agent, write a goal prompt, hand off a task, prepare a task for autonomous or background execution, or write a prompt for a subagent, cloud agent, or worktree session. Also use for "turn this plan into something another Claude can run", "make this a task I can kick off later", "prepare this for background execution", or "write a subagent prompt for this".
 
 Skip when:
 - The user wants the task done in this session.
@@ -125,3 +136,22 @@ Add a `--dry-run` flag to the `export` command that prints what would be written
 ```
 
 The real prompt also fills in Background, Repo Constraints and Completion Report from `references/goal-prompt-template.md`.
+
+**Background or subagent handoff.** The user says "prepare the migration plan for background execution". The plan names a destructive step (dropping a table). Put that step under Stop Conditions as a halt-and-ask trigger, not in the Definition of Done, and tell the user you did so in the note before the block.
+
+## Limitations
+
+- It writes the prompt only. It does not launch, watch or verify the receiving session; use `visible-delegation` for that.
+- The prompt is only as accurate as the repo check. Without repo access, mark every path and command as unverified in the note.
+- One goal per prompt. A plan that reads like several projects is split, and the run order is stated.
+- It cannot make an undecided design question checkable. Those go back to the user.
+
+## Troubleshooting
+
+| Problem | Cause | Fix |
+| --- | --- | --- |
+| A Definition of Done item reads "robust" or "clean" | The outcome is a judgment call | Rewrite it as a command or a specific place to check; if it will not reduce, ask the user which behavior counts |
+| A gate command fails when you run it now | Wrong command for this repo, or the baseline is already red | Find the real command in CI config or the build file; record pre-existing failures in the prompt |
+| The prompt says "the bug" or "as discussed" | It leans on this conversation | Replace each reference with its actual content in the self-containment pass |
+| The plan is too vague to verify | Open design decisions remain | Ask the user the one or two questions that settle them before drafting |
+| The draft reads like three projects | Scope is too wide | Split into separate prompts and state their order |
