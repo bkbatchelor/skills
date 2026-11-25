@@ -60,7 +60,8 @@ skills/
 ├── scripts/
 │   ├── bump-version.sh       # Version bump logic and manual bumps
 │   ├── similarity-check.sh   # Tier 2 similarity check over all skills (OpenRouter)
-│   └── harness-check.sh      # Tier 1 harness check (Claude, Copilot; Gemini n/a) for chosen skills
+│   ├── harness-check.sh      # Tier 1 harness check (Claude, Copilot; Gemini n/a) for chosen skills
+│   └── validation-check.sh   # Tier 1 static validation, no LLM, for chosen skills
 ├── git/                      # Git workflow skills
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition
@@ -973,6 +974,16 @@ scripts/similarity-check.sh -o ~/reports/tier2 # another folder, outside the rep
 scripts/harness-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
 scripts/harness-check.sh --all --strict                      # exit 1 if any skill is dropped or degraded
 scripts/harness-check.sh --all -- --headless                 # flags after -- go to skillevaluator
+```
+
+### Running Tier 1 validation without an LLM
+
+`scripts/validation-check.sh` runs `skillevaluator tier1 --no-llm` (structure, quality score, security, PII, secrets, license, script lint and harness checks) on one or more skills. It needs no API key and spends no model tokens. It runs every selected skill, prints a summary table (quality score and grade, gate result, count of high and critical findings), and exits 1 if any skill fails or is `INCOMPLETE`. Reports go to `../skills-reports/validation/<skill>/`.
+
+```bash
+scripts/validation-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
+scripts/validation-check.sh --all                               # every skill
+scripts/validation-check.sh --all -- --min-score 80             # flags after -- go to skillevaluator
 ```
 
 ---
