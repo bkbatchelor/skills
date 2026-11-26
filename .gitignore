@@ -8,3 +8,7 @@ graphify-out
 # SkillEvaluator reports
 reports/
 delegation/goal-prompt-generator-reports/
+
+# Skills installed by agentic-library (copies of skills tracked elsewhere in this repo)
+.agents/
+.claude/skills/
