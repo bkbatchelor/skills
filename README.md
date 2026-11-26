@@ -251,7 +251,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 
 | Skill | Version | Description | Key Files |
 |-------|---------|-------------|-----------|
-| commit-staged-changes | 1.0.4 | Commits staged changes using conventional commit format | `SKILL.md`, `README.md` |
+| commit-staged-changes | 1.0.6 | Commits staged changes using conventional commit format | `SKILL.md`, `README.md` |
 | generate-readme | 1.1.2 | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `README.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | 1.0.8 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
 | current-info-search | 1.0.3 | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `README.md`, `config.env`, `scripts/search.py` |
