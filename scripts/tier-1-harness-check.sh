@@ -3,8 +3,8 @@
 # Gemini and Copilot harnesses on one or more skills.
 #
 # Usage:
-#   scripts/harness-check.sh [options] <skill>... [-- <harness-check args>]
-#   scripts/harness-check.sh [options] --all [-- <harness-check args>]
+#   scripts/tier-1-harness-check.sh [options] <skill>... [-- <harness-check args>]
+#   scripts/tier-1-harness-check.sh [options] --all [-- <harness-check args>]
 #
 #   <skill>        a skill name (generate-readme) or a path (docs/generate-readme)
 #   --all          check every folder in the repo that holds a SKILL.md
@@ -31,7 +31,7 @@ HARNESSES="claude-code,copilot-cli"
 all=0 strict=0
 skills=() passthru=()
 
-usage_err() { echo "error: $*" >&2; echo "try: scripts/harness-check.sh --help" >&2; exit 2; }
+usage_err() { echo "error: $*" >&2; echo "try: scripts/tier-1-harness-check.sh --help" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
   case $1 in

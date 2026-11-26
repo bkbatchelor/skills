@@ -3,8 +3,8 @@
 # model spend) on one or more skills.
 #
 # Usage:
-#   scripts/validation-check.sh [options] <skill>... [-- <tier1 args>]
-#   scripts/validation-check.sh [options] --all [-- <tier1 args>]
+#   scripts/tier-1-validation-check.sh [options] <skill>... [-- <tier1 args>]
+#   scripts/tier-1-validation-check.sh [options] --all [-- <tier1 args>]
 #
 #   <skill>        a skill name (generate-readme) or a path (docs/generate-readme)
 #   --all          check every folder in the repo that holds a SKILL.md
@@ -27,7 +27,7 @@ out="$repo/../skills-reports/validation"
 all=0
 skills=() passthru=()
 
-usage_err() { echo "error: $*" >&2; echo "try: scripts/validation-check.sh --help" >&2; exit 2; }
+usage_err() { echo "error: $*" >&2; echo "try: scripts/tier-1-validation-check.sh --help" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
   case $1 in
