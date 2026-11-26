@@ -3,7 +3,7 @@
 # using OpenRouter for embeddings.
 #
 # Usage:
-#   scripts/similarity-check.sh [-o <report-dir>] [-r <formats>] [extra args]
+#   scripts/tier-2-similarity-check.sh [-o <report-dir>] [-r <formats>] [extra args]
 #
 # Defaults:
 #   -o  <repo>/../skills-reports/tier2-collection  (SkillEvaluator rejects a
