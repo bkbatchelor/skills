@@ -3,7 +3,7 @@
 # using OpenRouter for embeddings.
 #
 # Usage:
-#   scripts/tier-2-similarity-check.sh [-o <report-dir>] [-r <formats>] [extra args]
+#   efficiency/skill-audit/scripts/tier-2-similarity-check.sh [-o <report-dir>] [-r <formats>] [extra args]
 #
 # Defaults:
 #   -o  <repo>/../skills-reports/tier2-collection  (SkillEvaluator rejects a
@@ -18,7 +18,7 @@
 # The key is read from the environment and is never printed.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 out="$repo/../skills-reports/tier2-collection"
 formats="cli,json,html"
 extra=()

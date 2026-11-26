@@ -20,7 +20,7 @@ Run these in a terminal. They download (clone) the repo with git, then create a 
 
 ```bash
 # Clone the repository
-git clone git@github.com:bkbatchelor/skills.git
+git clone https://github.com/bkbatchelor/skills.git
 cd skills
 
 # Link the skill where your harness loads skills
@@ -40,7 +40,7 @@ Then ask Claude to use token-saver, or say you want to save tokens.
 
 1. Clone the repository:
    ```bash
-   git clone git@github.com:bkbatchelor/skills.git
+   git clone https://github.com/bkbatchelor/skills.git
    ```
 
 2. Change into the repo folder:

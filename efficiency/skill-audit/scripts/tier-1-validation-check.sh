@@ -3,8 +3,8 @@
 # model spend) on one or more skills.
 #
 # Usage:
-#   scripts/tier-1-validation-check.sh [options] <skill>... [-- <tier1 args>]
-#   scripts/tier-1-validation-check.sh [options] --all [-- <tier1 args>]
+#   efficiency/skill-audit/scripts/tier-1-validation-check.sh [options] <skill>... [-- <tier1 args>]
+#   efficiency/skill-audit/scripts/tier-1-validation-check.sh [options] --all [-- <tier1 args>]
 #
 #   <skill>        a skill name (generate-readme) or a path (docs/generate-readme)
 #   --all          check every folder in the repo that holds a SKILL.md
@@ -22,12 +22,12 @@
 # scanner missing.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 out="$repo/../skills-reports/validation"
 all=0
 skills=() passthru=()
 
-usage_err() { echo "error: $*" >&2; echo "try: scripts/tier-1-validation-check.sh --help" >&2; exit 2; }
+usage_err() { echo "error: $*" >&2; echo "try: efficiency/skill-audit/scripts/tier-1-validation-check.sh --help" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
   case $1 in
