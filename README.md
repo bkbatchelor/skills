@@ -58,11 +58,7 @@ skills/
 │   ├── commit-msg            # Validates the message, records a pending bump
 │   └── post-commit           # Sets skill versions and amends them in
 ├── scripts/
-│   ├── bump-version.sh                        # Version bump logic and manual bumps
-│   ├── tier-1-harness-check.sh                # Tier 1 harness check (Claude, Copilot; Gemini n/a) for chosen skills
-│   ├── tier-1-validation-check.sh             # Tier 1 static validation, no LLM, for chosen skills
-│   ├── tier-2-context-optimization-check.sh   # Tier 2 redundancy check inside each chosen skill (OpenRouter)
-│   └── tier-2-similarity-check.sh             # Tier 2 similarity check over all skills (OpenRouter)
+│   └── bump-version.sh           # Version bump logic and manual bumps
 ├── git/                      # Git workflow skills
 │   └── commit-staged-changes/    # Git commit skill
 │       ├── SKILL.md              # Skill definition, with the commit message rules
@@ -202,6 +198,15 @@ skills/
 │       ├── README.md             # Install, usage, helper commands, state location
 │       └── scripts/              # Helper scripts
 │           └── tokensaver.py     # search, count, fields, dates, diff, accept, current
+│   └── skill-audit/              # Read-only skill and harness config audit with one HTML report
+│       ├── SKILL.md              # Skill definition: targets, checks, report layout
+│       ├── README.md             # Install, usage, checks, output
+│       └── scripts/              # SkillEvaluator wrapper scripts
+│           ├── local-checks.py                        # Context cost and broken references, no key
+│           ├── tier-1-harness-check.sh                # Tier 1 harness check (Claude, Copilot; Gemini n/a)
+│           ├── tier-1-validation-check.sh             # Tier 1 static validation, no LLM
+│           ├── tier-2-context-optimization-check.sh   # Tier 2 redundancy check inside each skill (OpenRouter)
+│           └── tier-2-similarity-check.sh             # Tier 2 similarity check over all skills (OpenRouter)
 ├── testing/                  # Testing and verification skills
 │   ├── testing-runbook-creator/  # Repo-local testing runbook skill
 │   │   ├── SKILL.md              # Skill definition
@@ -267,6 +272,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 | mermaid-to-image | 1.2.0 | Renders Mermaid diagrams to validated SVG, PNG, or PDF files, with an optional modern Archify-style look (rounded frame, background canvases), using mermaid-cli | `SKILL.md`, `README.md`, `references/troubleshooting.md`, `scripts/render.sh`, `styles/modern-{dark,light}.json`, `styles/canvases.json` |
 | markdown-pdf | 1.0.3 | Converts Markdown to PDF, HTML, PNG or JPEG with the feature set of the VS Code extension Markdown PDF: highlighting, emoji, task lists, containers, includes, KaTeX math, locally drawn Mermaid, front matter, custom CSS, page size, margins, header and footer templates, clip and quality, raw-HTML sanitizing | `SKILL.md`, `README.md`, `package.json`, `package-lock.json`, `scripts/convert.sh`, `scripts/convert.mjs`, `styles/default.css`, `tests/convert.test.mjs` |
 | token-saver | 1.0.1 | Keeps the rest of a job cheap: local code before a model, bounded passage search, one accepted result to revise from, minimal tools, answers sized to the request | `SKILL.md`, `README.md`, `scripts/tokensaver.py` |
+| skill-audit | 1.0.0 | Read-only audit of one, several or all skills plus harness config (settings, hooks, MCP servers, permissions, CLAUDE.md): loading per harness, validation, broken references, duplicates, repeated content, context cost, ranked fixes, all in one HTML report | `SKILL.md`, `README.md`, `scripts/local-checks.py`, `scripts/tier-1-harness-check.sh`, `scripts/tier-1-validation-check.sh`, `scripts/tier-2-context-optimization-check.sh`, `scripts/tier-2-similarity-check.sh` |
 | testing-runbook-creator | 1.1.0 | Keeps a repo-local testing runbook (`docs/testing-runbook.md` by default): read before any testing, record discoveries as you go, fix the entry when reality differs; entries hold steps, safe vs destructive actions, seed, cleanup and exact verification commands | `SKILL.md`, `README.md` |
 | page-testing-memory | 1.1.0 | Teaches the general web page QA process (states, forms, auth boundaries, breakpoints, screenshot evidence) and keeps every page-specific fact in the repo's testing runbook, partnering with testing-runbook-creator | `SKILL.md`, `README.md` |
 | browser-qa | 1.0.0 | Drives a real browser via Chrome DevTools MCP: breakpoint screenshots, Core Web Vitals traces against thresholds, console and network checks during a walkthrough; every finding needs evidence; fixed report format; findings feed the repo runbook | `SKILL.md`, `README.md` |
@@ -680,6 +686,38 @@ Token discipline for the rest of a job. It cannot erase the call it was loaded i
 - Reports usage numbers only when the harness provides them, otherwise `unavailable`
 - The skill picks the job slug and runs the script itself, so the user manages no state file or paths
 
+#### skill-audit
+
+---
+
+Audits skills and harness configuration and writes one HTML report. It is read-only: it never edits a skill or a config file, and every fix is listed for you to apply.
+
+**Key Components:**
+- `SKILL.md`: Target modes (single, multiple, all), per-skill checks, the once-per-run config audit, and the report layout
+- `README.md`: Install, usage, checks and output
+- `scripts/local-checks.py`: Keyless context-cost estimate (listing tokens, description length, `SKILL.md` lines) and broken-reference and unknown-MCP check, as JSON; Python standard library only
+- `scripts/tier-1-harness-check.sh`, `scripts/tier-1-validation-check.sh`, `scripts/tier-2-context-optimization-check.sh`, `scripts/tier-2-similarity-check.sh`: SkillEvaluator wrappers, described under [Checking the collection for duplicates](#checking-the-collection-for-duplicates) and the sections after it
+
+**Requirements:**
+- `skillevaluator` on your `PATH`
+- `python3` (standard library only) for `scripts/local-checks.py`
+- The `html-artifacts` skill
+- An OpenRouter key for the two Tier 2 checks (optional; they are skipped and marked "not run" without one)
+
+**Features:**
+- Targets one skill, several skills, or all skills; asks which when none is given and never defaults to all
+- Audits `settings.json` drift, permissions, hooks, MCP servers and `CLAUDE.md` once per run
+- Estimates context cost locally and ranks optimizations by severity
+- Saves `../skills-reports/audit-<date>.html`, screenshot-verified
+
+**Usage:**
+
+```text
+/skill-audit generate-readme
+/skill-audit generate-readme commit-staged-changes
+/skill-audit --all
+```
+
 #### testing-runbook-creator
 
 ---
@@ -957,45 +995,45 @@ Update the **Version** column in [Available Skills](#available-skills) when a sk
 
 ### Checking the collection for duplicates
 
-`scripts/tier-2-similarity-check.sh` runs `skillevaluator similarity-check` over every skill in the repo with OpenRouter embeddings. It reads the key from `ORCA_OPENROUTER_API_KEY` (or `OPENROUTER_API_KEY`) and never prints it. Reports (CLI, JSON, HTML) go to `../skills-reports/tier2-collection`, because SkillEvaluator rejects a report folder inside the folder it scans.
+`efficiency/skill-audit/scripts/tier-2-similarity-check.sh` runs `skillevaluator similarity-check` over every skill in the repo with OpenRouter embeddings. It reads the key from `ORCA_OPENROUTER_API_KEY` (or `OPENROUTER_API_KEY`) and never prints it. Reports (CLI, JSON, HTML) go to `../skills-reports/tier2-collection`, because SkillEvaluator rejects a report folder inside the folder it scans.
 
 ```bash
-scripts/tier-2-similarity-check.sh                    # default report folder
-scripts/tier-2-similarity-check.sh -o ~/reports/tier2 # another folder, outside the repo
+efficiency/skill-audit/scripts/tier-2-similarity-check.sh                    # default report folder
+efficiency/skill-audit/scripts/tier-2-similarity-check.sh -o ~/reports/tier2 # another folder, outside the repo
 ```
 
 ### Checking a skill for repeated content
 
-`scripts/tier-2-context-optimization-check.sh` runs SkillEvaluator's Tier 2 `context-optimization-check` on one or more skills. It finds sections that say the same thing twice inside one skill, for example a table copied from `SKILL.md` into a reference file. The check reads only the skill's own files, so one result covers Claude Code, Codex and GitHub Copilot.
+`efficiency/skill-audit/scripts/tier-2-context-optimization-check.sh` runs SkillEvaluator's Tier 2 `context-optimization-check` on one or more skills. It finds sections that say the same thing twice inside one skill, for example a table copied from `SKILL.md` into a reference file. The check reads only the skill's own files, so one result covers Claude Code, Codex and GitHub Copilot.
 
 Skills can be names or paths, several at once, or `--all`. When a skill fails, is not found, or the check errors, the script logs why and moves on to the next skill. At the end it prints a summary table (skill, status, reason) and exits 1 if any skill did not pass, 2 for a usage error, a missing `skillevaluator`, or a missing key.
 
 It needs an OpenRouter key in `ORCA_OPENROUTER_API_KEY` or `OPENROUTER_API_KEY` (or the variable named by `OPENROUTER_KEY_VAR`) and never prints it. It uses OpenRouter for embeddings (`SKILL_EVAL_EMBEDDING_MODEL`, default `openai/text-embedding-3-small`) and for the LLM review of each repeated section (`SKILL_EVAL_LLM_MODEL`, default `anthropic/claude-haiku-4.5`). Reports (CLI, JSON, HTML) go to `../skills-reports/context-optimization/<skill>/`. Each run also writes `run-<timestamp>.log` in that folder.
 
 ```bash
-scripts/tier-2-context-optimization-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
-scripts/tier-2-context-optimization-check.sh --all                               # every skill
-scripts/tier-2-context-optimization-check.sh --all -- --threshold 0.85           # flags after -- go to skillevaluator
+efficiency/skill-audit/scripts/tier-2-context-optimization-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
+efficiency/skill-audit/scripts/tier-2-context-optimization-check.sh --all                               # every skill
+efficiency/skill-audit/scripts/tier-2-context-optimization-check.sh --all -- --threshold 0.85           # flags after -- go to skillevaluator
 ```
 
 ### Checking which agent harnesses load a skill
 
-`scripts/tier-1-harness-check.sh` runs SkillEvaluator's Tier 1 `harness-check` (advisory, no API key) for Claude Code and GitHub Copilot CLI, then prints a summary table. SkillEvaluator ships no Gemini profile, so Gemini shows as `n/a` and is not checked. Skills can be names or paths, several at once, or `--all`. Per-skill JSON goes to `../skills-reports/harness-check`.
+`efficiency/skill-audit/scripts/tier-1-harness-check.sh` runs SkillEvaluator's Tier 1 `harness-check` (advisory, no API key) for Claude Code and GitHub Copilot CLI, then prints a summary table. SkillEvaluator ships no Gemini profile, so Gemini shows as `n/a` and is not checked. Skills can be names or paths, several at once, or `--all`. Per-skill JSON goes to `../skills-reports/harness-check`.
 
 ```bash
-scripts/tier-1-harness-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
-scripts/tier-1-harness-check.sh --all --strict                      # exit 1 if any skill is dropped or degraded
-scripts/tier-1-harness-check.sh --all -- --headless                 # flags after -- go to skillevaluator
+efficiency/skill-audit/scripts/tier-1-harness-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
+efficiency/skill-audit/scripts/tier-1-harness-check.sh --all --strict                      # exit 1 if any skill is dropped or degraded
+efficiency/skill-audit/scripts/tier-1-harness-check.sh --all -- --headless                 # flags after -- go to skillevaluator
 ```
 
 ### Running Tier 1 validation without an LLM
 
-`scripts/tier-1-validation-check.sh` runs `skillevaluator tier1 --no-llm` (structure, quality score, security, PII, secrets, license, script lint and harness checks) on one or more skills. It needs no API key and spends no model tokens. It runs every selected skill, prints a summary table (quality score and grade, gate result, count of high and critical findings), and exits 1 if any skill fails or is `INCOMPLETE`. Reports go to `../skills-reports/validation/<skill>/`.
+`efficiency/skill-audit/scripts/tier-1-validation-check.sh` runs `skillevaluator tier1 --no-llm` (structure, quality score, security, PII, secrets, license, script lint and harness checks) on one or more skills. It needs no API key and spends no model tokens. It runs every selected skill, prints a summary table (quality score and grade, gate result, count of high and critical findings), and exits 1 if any skill fails or is `INCOMPLETE`. Reports go to `../skills-reports/validation/<skill>/`.
 
 ```bash
-scripts/tier-1-validation-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
-scripts/tier-1-validation-check.sh --all                               # every skill
-scripts/tier-1-validation-check.sh --all -- --min-score 80             # flags after -- go to skillevaluator
+efficiency/skill-audit/scripts/tier-1-validation-check.sh generate-readme docs/markdown-pdf   # names and paths, mixed
+efficiency/skill-audit/scripts/tier-1-validation-check.sh --all                               # every skill
+efficiency/skill-audit/scripts/tier-1-validation-check.sh --all -- --min-score 80             # flags after -- go to skillevaluator
 ```
 
 ---

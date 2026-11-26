@@ -4,8 +4,8 @@
 # the LLM review of each cluster.
 #
 # Usage:
-#   scripts/tier-2-context-optimization-check.sh [options] <skill>... [-- <check args>]
-#   scripts/tier-2-context-optimization-check.sh [options] --all [-- <check args>]
+#   efficiency/skill-audit/scripts/tier-2-context-optimization-check.sh [options] <skill>... [-- <check args>]
+#   efficiency/skill-audit/scripts/tier-2-context-optimization-check.sh [options] --all [-- <check args>]
 #
 #   <skill>        a skill name (generate-readme) or a path (docs/generate-readme)
 #   --all          check every folder in the repo that holds a SKILL.md
@@ -35,8 +35,8 @@
 # found; 2 usage error, skillevaluator missing or no OpenRouter key.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-me="scripts/$(basename "${BASH_SOURCE[0]}")"
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+me="efficiency/skill-audit/scripts/$(basename "${BASH_SOURCE[0]}")"
 out="$repo/../skills-reports/context-optimization"
 all=0
 skills=() passthru=()

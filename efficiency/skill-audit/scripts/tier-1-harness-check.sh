@@ -3,8 +3,8 @@
 # Gemini and Copilot harnesses on one or more skills.
 #
 # Usage:
-#   scripts/tier-1-harness-check.sh [options] <skill>... [-- <harness-check args>]
-#   scripts/tier-1-harness-check.sh [options] --all [-- <harness-check args>]
+#   efficiency/skill-audit/scripts/tier-1-harness-check.sh [options] <skill>... [-- <harness-check args>]
+#   efficiency/skill-audit/scripts/tier-1-harness-check.sh [options] --all [-- <harness-check args>]
 #
 #   <skill>        a skill name (generate-readme) or a path (docs/generate-readme)
 #   --all          check every folder in the repo that holds a SKILL.md
@@ -25,13 +25,13 @@
 # 2 usage error or skillevaluator missing.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 out="$repo/../skills-reports/harness-check"
 HARNESSES="claude-code,copilot-cli"
 all=0 strict=0
 skills=() passthru=()
 
-usage_err() { echo "error: $*" >&2; echo "try: scripts/tier-1-harness-check.sh --help" >&2; exit 2; }
+usage_err() { echo "error: $*" >&2; echo "try: efficiency/skill-audit/scripts/tier-1-harness-check.sh --help" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
   case $1 in
