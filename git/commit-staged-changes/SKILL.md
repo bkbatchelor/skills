@@ -3,7 +3,7 @@ name: commit-staged-changes
 description: >-
   Commits only the already-staged changes with a conventional message (Type(Scope): Summary), never staging files itself. Use only when the user explicitly asks to commit what is staged: "commit my staged changes", "commit what I've staged", "commit this with a good message" after they staged files. Never trigger proactively or after finishing work unprompted. Not for staging files, `git commit -a`, amending, pushing, or opening a PR (use commit-commands:commit or commit-commands:commit-push-pr when the user wants those).
 metadata:
-  version: 1.0.5
+  version: 1.0.6
 ---
 
 # Commit Staged Changes Skill
@@ -22,24 +22,21 @@ Skip when:
 - The user has not asked to commit. Never commit proactively after finishing work.
 - They want files staged, `git commit -a`, an amend, a push, or a PR. Use `commit-commands:commit` or `commit-commands:commit-push-pr` for stage-and-commit or PR flows.
 
-## Reference
-See [git-commit-template.md](references/git-commit-template.md) for the complete template.
-
-## Key Rules Summary
+## Commit Message Rules
 
 ### Subject Line Format
 `<Type>(<Scope>): <Summary>` (Scope is optional)
 
 Rules:
 - Start with uppercase letter
-- Use imperative mood
+- Use imperative mood ("Add", not "Added")
 - No period at end
 - Maximum 50 characters
 
 ### Body Rules
 - Explain *what* and *why* (not *how*)
 - Wrap at 72 characters
-- Separate from subject line with blank line
+- Separate from subject line with a blank line
 
 ## Commit Types
 | Type | Description |
@@ -47,7 +44,7 @@ Rules:
 | feat | Introduces a new feature |
 | fix | Patches a bug in the codebase |
 | docs | Changes related to documentation |
-| style | Formatting changes |
+| style | Formatting changes (whitespace, formatting, etc.) |
 | refactor | Code changes that neither fix bugs nor add features |
 | perf | Performance improvements |
 | test | Adding or correcting tests |

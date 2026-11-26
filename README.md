@@ -64,10 +64,8 @@ skills/
 │   └── validation-check.sh   # Tier 1 static validation, no LLM, for chosen skills
 ├── git/                      # Git workflow skills
 │   └── commit-staged-changes/    # Git commit skill
-│       ├── SKILL.md              # Skill definition
-│       ├── README.md             # Install and usage
-│       └── references/           # Reference materials
-│           └── git-commit-template.md
+│       ├── SKILL.md              # Skill definition, with the commit message rules
+│       └── README.md             # Install and usage
 ├── docs/                     # Documentation skills
 │   ├── generate-readme/          # README generation skill
 │   │   ├── SKILL.md              # Skill definition
@@ -253,7 +251,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 
 | Skill | Version | Description | Key Files |
 |-------|---------|-------------|-----------|
-| commit-staged-changes | 1.0.4 | Commits staged changes using conventional commit format | `SKILL.md`, `README.md`, `references/git-commit-template.md` |
+| commit-staged-changes | 1.0.4 | Commits staged changes using conventional commit format | `SKILL.md`, `README.md` |
 | generate-readme | 1.1.2 | Generates or updates README files at three fidelity levels, verifying commands and diagrams against the repo | `SKILL.md`, `README.md`, `references/basic-level-template.md`, `references/standard-level-template.md`, `references/advance-level-template.md` |
 | goal-prompt-generator | 1.0.8 | Turns a plan or task into a self-contained, verifiable goal prompt | `SKILL.md`, `README.md`, `references/goal-prompt-template.md` |
 | current-info-search | 1.0.3 | Answers questions about fast-changing facts from live Google Search (Gemini grounding) and NotebookLM web research, with dated, primary-source citations | `SKILL.md`, `README.md`, `config.env`, `scripts/search.py` |
@@ -287,8 +285,7 @@ Each skill's `SKILL.md` description and `## Triggers` section define when it act
 Commits only staged changes using a specific commit message template. Never stages new files or modifies the working directory.
 
 **Key Components:**
-- `SKILL.md`: Skill definition with commit message rules and workflow
-- `references/git-commit-template.md`: Complete commit message template
+- `SKILL.md`: Skill definition with the commit message rules, commit types, examples and workflow
 
 **Features:**
 - Enforces Conventional Commits format

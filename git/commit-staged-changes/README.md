@@ -30,5 +30,4 @@ ln -s ~/Projects/skills/git/commit-staged-changes ~/.claude/skills/commit-staged
 
 | Path | Purpose |
 |------|---------|
-| `SKILL.md` | The instructions: the workflow, commit types, examples, limits, and how it handles repository hooks (scripts that git runs at set points, such as before a commit) |
-| `references/git-commit-template.md` | The commit message template the skill follows |
+| `SKILL.md` | The instructions: the commit message rules, the workflow, commit types, examples, limits, and how it handles repository hooks (scripts that git runs at set points, such as before a commit) |
