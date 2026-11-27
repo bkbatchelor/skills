@@ -995,7 +995,7 @@ Update the **Version** column in [Available Skills](#available-skills) when a sk
 
 ### Checking the collection for duplicates
 
-`efficiency/skill-audit/scripts/tier-2-similarity-check.sh` runs `skillevaluator similarity-check` over every skill in the repo with OpenRouter embeddings. It reads the key from `ORCA_OPENROUTER_API_KEY` (or `OPENROUTER_API_KEY`) and never prints it. Reports (CLI, JSON, HTML) go to `../skills-reports/tier2-collection`, because SkillEvaluator rejects a report folder inside the folder it scans.
+`efficiency/skill-audit/scripts/tier-2-similarity-check.sh` runs `skillevaluator similarity-check` over every skill in the repo with OpenRouter embeddings. It reads the key from `ORCA_OPENROUTER_API_KEY` (or `OPENROUTER_API_KEY`) and never prints it. Reports (CLI, JSON, HTML) go to `../skills-reports/tier2-collection`, because SkillEvaluator rejects a report folder inside the folder it scans. SkillEvaluator has no exclude option and refuses symlinks, so the script scans a filtered copy of the repo that leaves out hidden folders (such as `.agents` installs), `node_modules` and `__pycache__`; the other `skill-audit` scripts skip hidden folders too. All four scripts audit the git repo you run them from, so they also work through a symlinked install, and fall back to their own location outside a git repo.
 
 ```bash
 efficiency/skill-audit/scripts/tier-2-similarity-check.sh                    # default report folder

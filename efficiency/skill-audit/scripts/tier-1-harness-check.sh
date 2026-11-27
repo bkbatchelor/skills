@@ -25,7 +25,9 @@
 # 2 usage error or skillevaluator missing.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+# Audit the repo you run from, so a symlinked install (.claude/skills/...) works.
+# Fall back to this script's own location when not inside a git repo.
+repo=$(git rev-parse --show-toplevel 2>/dev/null || { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd; })
 out="$repo/../skills-reports/harness-check"
 HARNESSES="claude-code,copilot-cli"
 all=0 strict=0
@@ -49,7 +51,7 @@ command -v skillevaluator >/dev/null || { echo "error: skillevaluator is not ins
 
 if [ "$all" = 1 ]; then
   [ ${#skills[@]} -eq 0 ] || usage_err "--all cannot be combined with skill names"
-  mapfile -t paths < <(cd "$repo" && find . -name SKILL.md -not -path './.git/*' -not -path '*/node_modules/*' \
+  mapfile -t paths < <(cd "$repo" && find . -name SKILL.md -not -path './.*/*' -not -path '*/node_modules/*' \
     | sed 's|^\./||; s|/SKILL.md$||' | sort)
 else
   [ ${#skills[@]} -gt 0 ] || usage_err "give at least one skill, or --all"
@@ -58,7 +60,7 @@ else
     if [ -f "$repo/$s/SKILL.md" ]; then
       paths+=("$s")
     else
-      mapfile -t hit < <(cd "$repo" && find . -type d -name "$s" -not -path './.git/*' -not -path '*/node_modules/*' \
+      mapfile -t hit < <(cd "$repo" && find . -type d -name "$s" -not -path './.*/*' -not -path '*/node_modules/*' \
         -exec test -f '{}/SKILL.md' ';' -print | sed 's|^\./||')
       case ${#hit[@]} in
         0) usage_err "no skill named or at '$s'" ;;

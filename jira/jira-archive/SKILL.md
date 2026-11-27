@@ -1,6 +1,6 @@
 ---
 name: jira-archive
-description: Scrape a Jira Cloud issue (Story, Bug, any type) into a self-contained local folder <KEY>/ with issue.md, comments.md, history.md, raw issue.json, validation.md and the original attachments, using Playwright with a saved browser login session (no API token). Use when the user gives a Jira key and asks to archive, scrape, export, download or snapshot a ticket.
+description: Scrape a Jira Cloud issue (Story, Bug, any type) into a self-contained local folder named after the issue key with issue.md, comments.md, history.md, raw issue.json, validation.md and the original attachments, using Playwright with a saved browser login session (no API token). Use when the user gives a Jira key and asks to archive, scrape, export, download or snapshot a ticket.
 metadata:
   version: 1.0.0
 ---
