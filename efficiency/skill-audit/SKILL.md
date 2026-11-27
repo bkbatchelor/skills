@@ -2,7 +2,7 @@
 name: skill-audit
 description: Read-only audit of agent skills and harness configuration that ends in one self-contained HTML report. Checks how Claude Code and Copilot CLI load each chosen skill, validates structure, finds broken references, duplicates and repeated content, measures the token cost of the skill listing, audits settings.json, CLAUDE.md, hooks, MCP servers and permissions, and ranks optimizations. Targets one skill, several skills, or all skills in a repo. Use when the user asks to audit skills or harness config, check skill integrity, optimize skill context, or find why skills load badly or cost too much context. Skip for fixing the findings (this skill never edits), for writing a new skill, and for benchmarking answer quality (use kg-benchmark).
 metadata:
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # Skill Audit

@@ -18,7 +18,9 @@
 # The key is read from the environment and is never printed.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+# Audit the repo you run from, so a symlinked install (.claude/skills/...) works.
+# Fall back to this script's own location when not inside a git repo.
+repo=$(git rev-parse --show-toplevel 2>/dev/null || { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd; })
 out="$repo/../skills-reports/tier2-collection"
 formats="cli,json,html"
 extra=()
@@ -53,4 +55,8 @@ export SKILL_EVAL_EMBEDDING_MODEL=${SKILL_EVAL_EMBEDDING_MODEL:-openai/text-embe
 
 out=$(realpath -m "$out")
 mkdir -p "$out"
-exec skillevaluator similarity-check "$repo" --type skill -r "$formats" -o "$out" ${extra[@]+"${extra[@]}"}
+# skillevaluator has no exclude option and refuses symlinks, so scan a filtered copy
+# of the repo without hidden folders (such as .agents installs), caches and vendored code.
+scan=$(mktemp -d); trap 'rm -rf "$scan"' EXIT
+rsync -a --exclude='.*' --exclude=node_modules --exclude=__pycache__ --exclude=.venv --exclude=venv "$repo/" "$scan/"
+skillevaluator similarity-check "$scan" --type skill -r "$formats" -o "$out" ${extra[@]+"${extra[@]}"}

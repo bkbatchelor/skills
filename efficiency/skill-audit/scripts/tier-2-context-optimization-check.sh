@@ -35,7 +35,9 @@
 # found; 2 usage error, skillevaluator missing or no OpenRouter key.
 set -euo pipefail
 
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+# Audit the repo you run from, so a symlinked install (.claude/skills/...) works.
+# Fall back to this script's own location when not inside a git repo.
+repo=$(git rev-parse --show-toplevel 2>/dev/null || { cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd; })
 me="efficiency/skill-audit/scripts/$(basename "${BASH_SOURCE[0]}")"
 out="$repo/../skills-reports/context-optimization"
 all=0
@@ -100,7 +102,7 @@ record() {  # name status reason
 # Build the list of skill paths. A name that does not match is logged and skipped.
 paths=()
 if [ "$all" = 1 ]; then
-  mapfile -t paths < <(cd "$repo" && find . -name SKILL.md -not -path './.git/*' -not -path '*/node_modules/*' \
+  mapfile -t paths < <(cd "$repo" && find . -name SKILL.md -not -path './.*/*' -not -path '*/node_modules/*' \
     | sed 's|^\./||; s|/SKILL.md$||' | sort)
 else
   for s in "${skills[@]}"; do
@@ -108,7 +110,7 @@ else
     if [ -f "$repo/$s/SKILL.md" ]; then
       paths+=("$s")
     else
-      mapfile -t hit < <(cd "$repo" && find . -type d -name "$(basename "$s")" -not -path './.git/*' \
+      mapfile -t hit < <(cd "$repo" && find . -type d -name "$(basename "$s")" -not -path './.*/*' \
         -not -path '*/node_modules/*' -exec test -f '{}/SKILL.md' ';' -print | sed 's|^\./||')
       case ${#hit[@]} in
         0) echo "skip: no skill named or at '$s'" >&2; record "$s" NOT-FOUND "no skill named or at '$s'" ;;

@@ -158,13 +158,7 @@ If the user says no, stop. Do not run graphify.
 
 ### Step 6. Run graphify (agent)
 
-Run the `graphify_command` printed in `.kg/graph-plan.json`, from the repo root. Follow the graphify skill and its `references/update.md`. Add these instructions.
-
-- Give each `big_files` and `long_files` entry its own extraction chunk. `long_files` are files over 2,000 lines. Tell that agent to parse the file with `python3 -I` instead of Read.
-- Tell every extraction agent to read `graphify-out/graph.json` read-only and reuse the existing node IDs for its files.
-- Tell every extraction agent what to do when a file cites a document by an identifier in `graph.citation_ids` (default `ADR`). Add a node whose label starts with that identifier, such as `ADR-005 PDF overlay`. Do this even when the cited document is in another chunk.
-- In the merge step, pass `prune_sources` from `.kg/graph-plan.json` to `build_merge`.
-- If the plan has `excluded` files but nothing changed or was deleted, graphify reports "No files changed" and stops. Continue anyway. Write the empty extraction from `references/update.md`, then run the merge with the plan's `prune_sources`.
+Run the `graphify_command` printed in `.kg/graph-plan.json`, from the repo root. Follow the graphify skill and its update procedure, and pass its extraction agents the five extra instructions listed under step 6 of `SKILL.md` (chunking of big files, reusing node IDs, citation nodes, `prune_sources`, and the "No files changed" case).
 
 Then run these three commands in order.
 
@@ -197,9 +191,7 @@ Run `kg code`. It runs `codegraph sync`. It works on any branch.
 
 ### Branch check
 
-`curate`, `apply`, `graph prepare` and `all` run only on the branches listed in `kg.yaml` (default `main`, `develop`, `develop-*`), and only with a clean working tree. `kg code`, `status`, `review`, `preflight` and `restore` have no branch check.
-
-If one of them refuses (exit 2), tell the user why and stop. Pass `--allow-any-branch` only when the user explicitly asks for it in that turn. The override is logged in `.kg/runs.jsonl`.
+The commands that change a graph or the curated folder refuse to run off the branches set in `kg.yaml`, or with uncommitted changes. They stop with exit 2. The exact command list and the `--allow-any-branch` override are in the Gating section of `SKILL.md`.
 
 ### Adding a PHI folder to an existing repo
 
@@ -227,7 +219,7 @@ If a graphify run fails partway, restore before you retry. Run `kg graph prepare
 
 ## 4. Curate an external repo for your goals
 
-**Mode: how-to, with background blocks.** Use this when the primary repo's goals need facts that only another repo holds. Curate the primary repo first. Curate the external repo only as far as its open questions require, because curating all of it is the cost to avoid. Do the steps in order. Each step that says "ask the user" waits for the answer.
+**Mode: how-to, with background blocks.** The steps below follow the goal-scoped procedure in `SKILL.md`. Each step that says "ask the user" waits for the answer.
 
 1. **Know the goals.** With the primary curated and graphed, run `kg needs init`. Propose goals from the curated docs and the graph with `kg needs add-goal "<text>"`. Show them to the user. After their yes, run `kg needs approve-goals`.
 2. **Write questions.** Run `kg needs add-question "<text>" --goal gN --expects <kind of fact>`. The kind of fact can be a contract, an API or a policy. Each question serves a goal and asks for something that would live in another repo.
@@ -327,10 +319,4 @@ Do not query a graph before every question, and do not add a "query the graphs f
 
 ## Reference: hard rules
 
-- Never run graphify without the user's yes for this run, with the cost estimate in the question.
-- Never pass `force=True` while `kg graph check` reports unexplained losses that the user has not accepted.
-- Exit 4 stops the run. Never stage, extract or graph a path that matches `phi_globs`. Never add an include override for one.
-- Never commit to the user's repos, including the curated folder's git repository.
-- Never edit `overrides.yaml` by hand, because it is regenerated. Put hand decisions in `overrides.manual.yaml`.
-- Never write to, fetch into, clone, link into or run `codegraph init` on an external repo. Never curate an external file that no `external-only` question asked for.
-- Never install tools or skills. `kg preflight` names what is missing.
+The hard rules live in one place, the Hard rules section of `SKILL.md`. Read them there before any run.
